@@ -15,7 +15,7 @@ export default function Home() {
     setError(null);
 
     if (!supabase) {
-      setError('System is loading...');
+      setError('System is loading.....');
       setLoading(false);
       return;
     }
