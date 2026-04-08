@@ -13,7 +13,11 @@ export default function Home() {
     e.preventDefault();
     setLoading(true);
     setError(null);
-
+    if (!supabase) {
+      setError('System is loading, please try again in a few seconds.');
+      setLoading(false);
+      return;
+    }
     const { error } = await supabase.auth.signInWithPassword({
       email: email,
       password: password,
