@@ -15,7 +15,7 @@ export default function Home() {
     setError(null);
 
     if (!supabase) {
-      setError('System is loading, please try again in a few seconds.');
+      setError('System is loading...');
       setLoading(false);
       return;
     }
@@ -26,10 +26,10 @@ export default function Home() {
     });
 
     if (error) {
-      setError('Invalid email or password. Please try again.');
+      setError('Invalid email or password.');
       setLoading(false);
     } else {
-      alert('Login successful! Redirecting to Dashboard...');
+      alert('Login successful!');
     }
   };
 
