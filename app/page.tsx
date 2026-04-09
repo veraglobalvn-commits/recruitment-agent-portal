@@ -128,7 +128,7 @@ export default function Home() {
             <div className="space-y-4">
               {orders.length === 0 ? <p className="text-gray-500 text-sm">No orders found.</p> : 
                orders.map((order: any, idx: number) => (
-                <Link key={idx} className="border p-4 rounded-lg hover:bg-gray-50">
+                <Link href={/order/${order.order_id}} key={idx} className="border p-4 rounded-lg hover:bg-gray-50">
                   <div className="flex justify-between items-start mb-2">
                     <h3 className="font-bold text-gray-800">{order.order_id}</h3>
                     <span className={`px-2 py-1 text-xs rounded ${order.status === 'N/A' ? 'bg-gray-200 text-gray-600' : 'bg-yellow-100 text-yellow-700'}`}>{order.status}</span>
