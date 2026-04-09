@@ -39,115 +39,44 @@ export default function OrderDetail() {
     setIsUploading(true);
     setUploadMsg(null);
 
-    const reader = new FileReader();
+        const reader = new FileReader();
     reader.onloadend = async () => {
-      // Cắt bỏ phần tiền tố "data:image/jpeg;base64," chỉ giữ lại chuỗi base64 thuần túy
-      const base64String = (reader.result as string).split(',')[1]; 
-
-      try {
-        const res = await fetch(process.env.NEXT_PUBLIC_N8N_UPLOAD_URL || '', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ order_id: orderId, image_base64: base64String })
-        });
-        const result = await res.json();
+      // BƯỚC NÉN ẢNH TRƯỚC KHI GỬI ĐI ĐỂ KHÔNG LỖI ĐƯỜNG TRUYỀN
+      const img = new Image();
+      img.onload = async () => {
+        const canvas = document.createElement('canvas');
+        const maxWidth = 1500; // Giới hạn chiều rộng tối đa
+        const scale = Math.min(1, maxWidth / img.width);
+        canvas.width = img.width * scale;
+        canvas.height = img.height * scale;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
         
-        if (result.success) {
-          setUploadMsg('✅ Passport processed successfully!');
-          fetchCandidates(); // Tải lại danh sách để hiện ứng viên mới
-        } else {
-          setUploadMsg('❌ Failed to process passport.');
+        // Lấy lại dữ liệu base64 ĐÃ ĐƯỢC NÉN
+        const compressedBase64 = canvas.toDataURL('image/jpeg', 0.8).split(',')[1]; 
+
+        try {
+          const res = await fetch(process.env.NEXT_PUBLIC_N8N_UPLOAD_URL || '', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ order_id: orderId, image_base64: compressedBase64 })
+          });
+          const result = await res.json();
+          
+          if (result.success) {
+            setUploadMsg('✅ Passport processed successfully!');
+            fetchCandidates();
+          } else {
+            setUploadMsg('❌ Failed to process passport.');
+          }
+        } catch (err) {
+          setUploadMsg('❌ Upload failed. Network error.');
+        } finally {
+          setIsUploading(false);
+          if (fileInputRef.current) fileInputRef.current.value = '';
         }
-      } catch (err) {
-        setUploadMsg('❌ Upload failed. Network error.');
-      } finally {
-        setIsUploading(false);
-        if (fileInputRef.current) fileInputRef.current.value = ''; // Reset ô chọn file
-      }
+      };
+        img.src = reader.result as string;
+      };
+      reader.readAsDataURL(file);
     };
-    reader.readAsDataURL(file);
-  };
-
-  if (loading) return <div className="min-h-screen flex items-center justify-center bg-gray-100"><p>Loading candidates...</p></div>;
-
-  return (
-    <div className="min-h-screen bg-gray-100 p-4 md:p-8">
-      <div className="max-w-5xl mx-auto">
-        <button onClick={() => router.back()} className="mb-6 text-blue-600 hover:underline font-semibold flex items-center gap-2">
-          {'<-'} Back to Dashboard
-        </button>
-
-        <div className="bg-white p-6 rounded-lg shadow mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <h1 className="text-xl md:text-2xl font-bold text-gray-800">{orderId}</h1>
-          <div className="flex gap-2 items-center">
-            <button className="text-sm bg-blue-100 text-blue-700 px-3 py-1 rounded hover:bg-blue-200">📄 Demand Letter</button>
-            <button className="text-sm bg-blue-100 text-blue-700 px-3 py-1 rounded hover:bg-blue-200">📋 List</button>
-            
-            {/* Nút ẩn để kích hoạt camera/chọn ảnh */}
-            <input
-              type="file"
-              accept="image/*"
-              ref={fileInputRef}
-              onChange={handleFileChange}
-              className="hidden"
-            />
-            
-            {/* Nút bấm thực tế */}
-            <button 
-              onClick={() => fileInputRef.current?.click()} 
-              disabled={isUploading}
-              className="text-sm bg-green-100 text-green-700 px-3 py-1 rounded hover:bg-green-200 disabled:opacity-50"
-            >
-              {isUploading ? 'Processing...' : '📤 Submit Passport'}
-            </button>
-          </div>
-        </div>
-
-        {/* Thông báo trạng thái Upload */}
-        {uploadMsg && (
-          <div className="mb-4 p-3 bg-white border border-gray-200 rounded-lg shadow-sm text-center text-sm font-medium">
-            {uploadMsg}
-          </div>
-        )}
-
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h2 className="text-lg font-semibold text-gray-700 mb-4">👥 CANDIDATES IN THIS ORDER</h2>
-          {candidates.length === 0 ? (
-            <p className="text-gray-500 text-sm">No candidates found for this order.</p>
-          ) : (
-            <div className="space-y-4">
-              {candidates.map((c: any, idx: number) => (
-                <div key={idx} className="border p-4 rounded-lg hover:bg-gray-50">
-                  <div className="flex justify-between items-start mb-2">
-                    <h3 className="font-bold text-gray-800">{c.full_name}</h3>
-                    <span className="text-xs bg-gray-200 text-gray-600 px-2 py-1 rounded">{c.id_ld}</span>
-                  </div>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm text-gray-600">
-                    <p>PP No: <span className="font-semibold text-gray-800">{c.pp_no || 'N/A'}</span></p>
-                    <p>DOB: <span className="font-semibold text-gray-800">{c.dob || 'N/A'}</span></p>
-                    <p>DOI: <span className="font-semibold text-gray-800">{c.pp_doi || 'N/A'}</span></p>
-                    <p>DOE: <span className="font-semibold text-gray-800">{c.pp_doe || 'N/A'}</span></p>
-                    <p>POB: <span className="font-semibold text-gray-800">{c.pob || 'N/A'}</span></p>
-                    <p>Phone: <span className="font-semibold text-gray-800">{c.phone || 'N/A'}</span></p>
-                  </div>
-                  <div className="mt-3 flex flex-wrap items-center gap-3">
-                    {c.passport_link ? (
-                      <a href={c.passport_link} target="_blank" className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded hover:bg-gray-200">📷 View Passport</a>
-                    ) : (
-                      <span className="text-xs bg-gray-50 text-gray-400 px-2 py-1 rounded">No Passport</span>
-                    )}
-                    <span className="text-xs text-gray-500">Visa: {c.visa_status || 'Pending'}</span>
-                    <div className="flex gap-1">
-                      <button className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded hover:bg-green-200">Passed</button>
-                      <button className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded hover:bg-red-200">Failed</button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
