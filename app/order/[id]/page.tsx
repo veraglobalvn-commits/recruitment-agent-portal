@@ -6,7 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 export default function OrderDetail() {
   const params = useParams();
   const router = useRouter();
-  const orderId = params.id as string;
+  const orderId = decodeURIComponent(params.id as string);
 
   const [candidates, setCandidates] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
