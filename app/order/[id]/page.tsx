@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 
 export default function OrderDetail() {
@@ -10,23 +10,63 @@ export default function OrderDetail() {
 
   const [candidates, setCandidates] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadMsg, setUploadMsg] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const fetchCandidates = async () => {
+    try {
+      const res = await fetch(process.env.NEXT_PUBLIC_N8N_CANDIDATES_URL || '', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order_id: orderId })
+      });
+      const result = await res.json();
+      setCandidates(result.candidates || []);
+    } catch (err) { console.error(err); } 
+    finally { setLoading(false); }
+  };
 
   useEffect(() => {
     if (!orderId) return;
-    const fetchCandidates = async () => {
-      try {
-        const res = await fetch(process.env.NEXT_PUBLIC_N8N_CANDIDATES_URL || '', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ order_id: orderId })
-        });
-        const result = await res.json();
-        setCandidates(result.candidates || []);
-      } catch (err) { console.error(err); } 
-      finally { setLoading(false); }
-    };
     fetchCandidates();
   }, [orderId]);
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    setUploadMsg(null);
+
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      // Cắt bỏ phần tiền tố "data:image/jpeg;base64," chỉ giữ lại chuỗi base64 thuần túy
+      const base64String = (reader.result as string).split(',')[1]; 
+
+      try {
+        const res = await fetch(process.env.NEXT_PUBLIC_N8N_UPLOAD_URL || '', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ order_id: orderId, image_base64: base64String })
+        });
+        const result = await res.json();
+        
+        if (result.success) {
+          setUploadMsg('✅ Passport processed successfully!');
+          fetchCandidates(); // Tải lại danh sách để hiện ứng viên mới
+        } else {
+          setUploadMsg('❌ Failed to process passport.');
+        }
+      } catch (err) {
+        setUploadMsg('❌ Upload failed. Network error.');
+      } finally {
+        setIsUploading(false);
+        if (fileInputRef.current) fileInputRef.current.value = ''; // Reset ô chọn file
+      }
+    };
+    reader.readAsDataURL(file);
+  };
 
   if (loading) return <div className="min-h-screen flex items-center justify-center bg-gray-100"><p>Loading candidates...</p></div>;
 
@@ -39,12 +79,36 @@ export default function OrderDetail() {
 
         <div className="bg-white p-6 rounded-lg shadow mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <h1 className="text-xl md:text-2xl font-bold text-gray-800">{orderId}</h1>
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center">
             <button className="text-sm bg-blue-100 text-blue-700 px-3 py-1 rounded hover:bg-blue-200">📄 Demand Letter</button>
             <button className="text-sm bg-blue-100 text-blue-700 px-3 py-1 rounded hover:bg-blue-200">📋 List</button>
-            <button className="text-sm bg-green-100 text-green-700 px-3 py-1 rounded hover:bg-green-200">📤 Submit Passport</button>
+            
+            {/* Nút ẩn để kích hoạt camera/chọn ảnh */}
+            <input
+              type="file"
+              accept="image/*"
+              ref={fileInputRef}
+              onChange={handleFileChange}
+              className="hidden"
+            />
+            
+            {/* Nút bấm thực tế */}
+            <button 
+              onClick={() => fileInputRef.current?.click()} 
+              disabled={isUploading}
+              className="text-sm bg-green-100 text-green-700 px-3 py-1 rounded hover:bg-green-200 disabled:opacity-50"
+            >
+              {isUploading ? 'Processing...' : '📤 Submit Passport'}
+            </button>
           </div>
         </div>
+
+        {/* Thông báo trạng thái Upload */}
+        {uploadMsg && (
+          <div className="mb-4 p-3 bg-white border border-gray-200 rounded-lg shadow-sm text-center text-sm font-medium">
+            {uploadMsg}
+          </div>
+        )}
 
         <div className="bg-white p-6 rounded-lg shadow">
           <h2 className="text-lg font-semibold text-gray-700 mb-4">👥 CANDIDATES IN THIS ORDER</h2>
