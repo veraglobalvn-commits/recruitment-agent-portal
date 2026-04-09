@@ -120,7 +120,7 @@ export default function Home() {
                 </div>
               </div>
             </div>
-            <div className="text-right"><button className="text-blue-600 hover:underline text-sm">View All Candidates -></button></div>
+            <div className="text-right"><button className="text-blue-600 hover:underline text-sm">View All Candidates {'->'}</button></div>
           </div>
           <div className="bg-white p-6 rounded-lg shadow">
             <h2 className="text-lg font-semibold text-gray-700 mb-4">📦 YOUR ORDERS</h2>
