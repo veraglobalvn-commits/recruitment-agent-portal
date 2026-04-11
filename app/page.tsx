@@ -108,7 +108,7 @@ export default function Home() {
         try {
           const agentRes = await supabase
             .from('agents')
-            .select('id, full_name, short_name, avatar_url')
+            .select('id, full_name, short_name')
             .eq('supabase_uid', uid)
             .maybeSingle();
           agentData = agentRes.data;
@@ -185,7 +185,7 @@ export default function Home() {
         const result = {
           agent_name: agentData.short_name || agentData.full_name,
           agent_id: agentData.id,
-          avatar_url: agentData.avatar_url,
+          avatar_url: null,
           stats,
           orders,
         };
