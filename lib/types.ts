@@ -1,0 +1,125 @@
+export interface DashboardStats {
+  Tong_Lao_Dong: number | string;
+  Trung_Tuyen: number | string;
+  Con_Thieu: number | string;
+  Tong_Tien_Can_TT: number | string;
+  Tong_Tien_Da_TT: number | string;
+  Tong_Tien_Chua_TT: number | string;
+  [key: string]: unknown;
+}
+
+export interface Order {
+  order_id: string;
+  company: string | null;
+  total_labor: number | string;
+  missing: number | string;
+  status: string;
+  url_demand_letter: string | null;
+  job_type: string | null;
+  salary_usd: number | null;
+  url_order: string | null;
+}
+
+export interface Candidate {
+  id_ld: string;
+  full_name: string | null;
+  pp_no: string | null;
+  dob: string | null;
+  pp_doi: string | null;
+  pp_doe: string | null;
+  pob: string | null;
+  address: string | null;
+  phone: string | null;
+  visa_status: string | null;
+  passport_link: string | null;
+  video_link: string | null;
+  photo_link: string | null;
+  height_ft: number | null;
+  weight_kg: number | null;
+  pcc_health_cert_link: string | null;
+  interview_status: string | null;
+}
+
+export interface DashboardData {
+  agent_id?: string;
+  agent_name: string;
+  stats: DashboardStats | null;
+  orders: Order[];
+  error?: string;
+}
+
+export interface CandidatesResponse {
+  candidates: Candidate[];
+  order_id: string;
+  error?: string;
+}
+
+export interface DocLink {
+  name: string;
+  url: string;
+  type: 'pdf' | 'image' | 'doc' | 'other';
+  uploaded_at: string;
+}
+
+export interface Company {
+  id: string;
+  company_name: string;
+  short_name: string | null;
+  tax_code: string | null;
+  legal_rep: string | null;
+  legal_rep_title: string | null;
+  address: string | null;
+  phone: string | null;
+  email: string | null;
+  industry: string | null;
+  business_reg_authority: string | null;
+  business_reg_date: string | null;
+  business_reg_img: string | null;
+  company_media: string[];
+  avatar_url: string | null;
+  video_url: string | null;
+  doc_links: DocLink[];
+  en_company_name: string | null;
+  en_legal_rep: string | null;
+  en_address: string | null;
+  en_title: string | null;
+  created_at: string;
+}
+
+export interface CompanyOrderStat {
+  id: string;
+  company_id: string | null;
+  job_type: string | null;
+  total_labor: number | null;
+  labor_missing: number | null;
+  status: string | null;
+  total_fee_vn: number | null;
+  payment_status_vn: string | null;
+  service_fee_per_person: number | null;
+}
+
+export interface AdminOrder {
+  id: string;
+  company_id: string | null;
+  company_name: string | null;
+  job_type: string | null;
+  total_labor: number | null;
+  labor_missing: number | null;
+  status: string | null;
+  total_fee_vn: number | null;
+  payment_status_vn: string | null;
+  service_fee_per_person: number | null;
+  agent_ids: string[] | null;
+  url_demand_letter: string | null;
+  salary_usd: number | null;
+  url_order: string | null;
+  legal_status: string | null;
+  created_at: string;
+}
+
+export interface AgentOption {
+  id: string;
+  full_name: string | null;
+  short_name: string | null;
+}
+

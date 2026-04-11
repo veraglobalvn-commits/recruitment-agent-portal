@@ -1,36 +1,140 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { useParams, useSearchParams, useRouter } from 'next/navigation';
+import { supabase } from '@/lib/supabase';
+import type { Candidate, Order } from '@/lib/types';
+import CandidateCard from '@/components/CandidateCard';
+import LoadingSkeleton from '@/components/LoadingSkeleton';
 
 export default function OrderDetail() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const router = useRouter();
   const orderId = decodeURIComponent(params.id as string);
+  const demandLetterUrl = searchParams.get('dl')
+    ? decodeURIComponent(searchParams.get('dl')!)
+    : null;
 
-  const [candidates, setCandidates] = useState<any[]>([]);
+  const [candidates, setCandidates] = useState<Candidate[]>([]);
+  const [orderData, setOrderData] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadMsg, setUploadMsg] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [videoUploadingCandidate, setVideoUploadingCandidate] = useState<string | null>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
 
-  const fetchCandidates = async () => {
+  const fetchCandidates = useCallback(async () => {
     try {
-      const res = await fetch(process.env.NEXT_PUBLIC_N8N_CANDIDATES_URL || '', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ order_id: orderId })
-      });
-      const result = await res.json();
-      setCandidates(result.candidates || []);
-    } catch (err) { console.error(err); } 
-    finally { setLoading(false); }
-  };
+      const cacheKey = `c_url_${orderId}`;
+      const cached = sessionStorage.getItem(cacheKey);
+      if (cached) {
+        try {
+          setCandidates(JSON.parse(cached));
+          setLoading(false);
+        } catch (e) { /* ignore */ }
+      }
+
+      const [candRes, orderRes] = await Promise.all([
+        supabase.from('candidates').select('*').eq('order_id', orderId),
+        supabase.from('orders').select('*').eq('id', orderId).single(),
+      ]);
+
+      if (candRes.error) throw candRes.error;
+
+      if (orderRes.data) {
+        setOrderData({
+          order_id: orderRes.data.id,
+          company: orderRes.data.company_name,
+          total_labor: orderRes.data.total_labor,
+          missing: orderRes.data.labor_missing,
+          status: orderRes.data.status || 'N/A',
+          url_demand_letter: orderRes.data.url_demand_letter,
+          job_type: orderRes.data.job_type,
+          salary_usd: orderRes.data.salary_usd,
+          url_order: orderRes.data.url_order,
+        });
+      }
+
+      const newCandidates: Candidate[] = (candRes.data || []).map((r: any) => ({
+        id_ld: r.id_ld,
+        full_name: r.full_name,
+        pp_no: r.pp_no,
+        dob: r.dob,
+        pp_doi: r.pp_doi,
+        pp_doe: r.pp_doe,
+        pob: r.pob,
+        address: r.address,
+        phone: r.phone,
+        visa_status: r.visa_status,
+        passport_link: r.passport_link,
+        video_link: r.video_link,
+        photo_link: r.photo_link,
+        height_ft: r.height_ft,
+        weight_kg: r.weight_kg,
+        pcc_health_cert_link: r.pcc_health_cert_link,
+        interview_status: r.interview_status,
+      }));
+
+      setCandidates(newCandidates);
+      sessionStorage.setItem(cacheKey, JSON.stringify(newCandidates));
+    } catch (err) {
+      console.error('Failed to fetch candidates:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [orderId]);
 
   useEffect(() => {
     if (!orderId) return;
     fetchCandidates();
+  }, [orderId, fetchCandidates]);
+
+  const handleCandidateUpdate = useCallback((id: string, updates: Partial<Candidate>) => {
+    setCandidates((prev) => {
+      const updated = prev.map((c) => (c.id_ld === id ? { ...c, ...updates } : c));
+      sessionStorage.setItem(`c_url_${orderId}`, JSON.stringify(updated));
+      return updated;
+    });
   }, [orderId]);
+
+  const handleStatusChange = useCallback(
+    async (candidateId: string, status: 'Passed' | 'Failed') => {
+      const newCandidates = candidates.map((c) =>
+        c.id_ld === candidateId ? { ...c, interview_status: status } : c,
+      );
+      setCandidates(newCandidates);
+      sessionStorage.setItem(`c_url_${orderId}`, JSON.stringify(newCandidates));
+      setUploadMsg('Đang cập nhật...');
+
+      try {
+        const { error } = await supabase
+          .from('candidates')
+          .update({ interview_status: status })
+          .eq('id_ld', candidateId);
+        if (error) throw new Error(error.message);
+
+        // Sync to Lark — fire-and-forget
+        const n8nUrl = process.env.NEXT_PUBLIC_N8N_VIDEO_UPDATE_URL;
+        if (n8nUrl) fetch(n8nUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ candidate_id: candidateId, interview_status: status }),
+        }).catch(() => {});
+
+        setUploadMsg(`✅ Đã cập nhật: ${status}`);
+      } catch (err) {
+        // Revert optimistic update on failure
+        setCandidates(candidates);
+        sessionStorage.setItem(`c_url_${orderId}`, JSON.stringify(candidates));
+        setUploadMsg(`❌ Lỗi: ${err instanceof Error ? err.message : String(err)}`);
+      } finally {
+        setTimeout(() => setUploadMsg(null), 3000);
+      }
+    },
+    [candidates, orderId],
+  );
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -40,7 +144,7 @@ export default function OrderDetail() {
     setUploadMsg(null);
 
     const reader = new FileReader();
-    reader.onloadend = async () => {
+    reader.onloadend = () => {
       const img = new Image();
       img.onload = async () => {
         const canvas = document.createElement('canvas');
@@ -50,24 +154,34 @@ export default function OrderDetail() {
         canvas.height = img.height * scale;
         const ctx = canvas.getContext('2d')!;
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        const compressedBase64 = canvas.toDataURL('image/jpeg', 0.8).split(',')[1]; 
+        const compressedBase64 = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
 
         try {
-          const res = await fetch(process.env.NEXT_PUBLIC_N8N_UPLOAD_URL || '', {
+          const apiUrl = process.env.NEXT_PUBLIC_N8N_UPLOAD_URL;
+          if (!apiUrl) throw new Error('API URL not configured');
+          const { data: { user } } = await supabase.auth.getUser();
+          if (!user) throw new Error('Not authenticated');
+
+          const res = await fetch(apiUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ order_id: orderId, image_base64: compressedBase64 })
+            body: JSON.stringify({
+              supabase_user_id: user.id,
+              order_id: orderId,
+              image_base64: compressedBase64,
+            }),
           });
+
+          if (!res.ok) { setUploadMsg(`Upload failed: HTTP ${res.status}`); return; }
           const result = await res.json();
-          
           if (result.success) {
             setUploadMsg('✅ Passport processed successfully!');
             fetchCandidates();
           } else {
-            setUploadMsg('❌ Failed to process passport.');
+            setUploadMsg(`Upload failed: ${JSON.stringify(result)}`);
           }
         } catch (err) {
-          setUploadMsg('❌ Upload failed. Network error.');
+          setUploadMsg(`Upload error: ${err instanceof Error ? err.message : String(err)}`);
         } finally {
           setIsUploading(false);
           if (fileInputRef.current) fileInputRef.current.value = '';
@@ -78,72 +192,162 @@ export default function OrderDetail() {
     reader.readAsDataURL(file);
   };
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center bg-gray-100"><p>Loading candidates...</p></div>;
+  const handleVideoUploadClick = useCallback((candidateId: string) => {
+    setVideoUploadingCandidate(candidateId);
+    if (videoInputRef.current) videoInputRef.current.click();
+  }, []);
+
+  const handleVideoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !videoUploadingCandidate) return;
+
+    setUploadMsg(`⏳ Uploading video... Please don't close the browser.`);
+
+    const fileExt = file.name.split('.').pop();
+    const safeOrderId = orderId.replace(/[^a-zA-Z0-9-]/g, '_');
+    const safeCandidateId = videoUploadingCandidate.replace(/[^a-zA-Z0-9-]/g, '_');
+    const filePath = `${safeOrderId}/${safeCandidateId}/${Date.now()}.${fileExt}`;
+
+    try {
+      const { error } = await supabase.storage
+        .from('agent-media')
+        .upload(filePath, file, { cacheControl: '3600', upsert: false });
+      if (error) throw error;
+
+      const { data: publicUrlData } = supabase.storage.from('agent-media').getPublicUrl(filePath);
+      const videoUrl = publicUrlData.publicUrl;
+
+      // Update Supabase directly
+      await supabase.from('candidates').update({ video_link: videoUrl }).eq('id_ld', videoUploadingCandidate);
+
+      // Sync to Lark
+      const n8nUrl = process.env.NEXT_PUBLIC_N8N_VIDEO_UPDATE_URL;
+      if (n8nUrl) {
+        await fetch(n8nUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ candidate_id: videoUploadingCandidate, video_link: videoUrl }),
+        });
+      }
+
+      setUploadMsg(`✅ Video uploaded successfully!`);
+      handleCandidateUpdate(videoUploadingCandidate, { video_link: videoUrl });
+      setTimeout(() => setUploadMsg(null), 5000);
+    } catch (err) {
+      setUploadMsg(`❌ Video Upload Error: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      if (videoInputRef.current) videoInputRef.current.value = '';
+      setVideoUploadingCandidate(null);
+    }
+  };
+
+  if (loading) return <LoadingSkeleton type="order" />;
 
   return (
-    <div className="min-h-screen bg-gray-100 p-4 md:p-8">
-      <div className="max-w-5xl mx-auto">
-        <button onClick={() => router.back()} className="mb-6 text-blue-600 hover:underline font-semibold flex items-center gap-2">
-          {'<-'} Back to Dashboard
-        </button>
+    <div className="min-h-screen bg-gray-50">
+      {/* Hidden inputs */}
+      <input type="file" accept="video/*" ref={videoInputRef} onChange={handleVideoChange} className="hidden" />
+      <input type="file" accept="image/*" ref={fileInputRef} onChange={handleFileChange} className="hidden" />
 
-        <div className="bg-white p-6 rounded-lg shadow mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <h1 className="text-xl md:text-2xl font-bold text-gray-800">{orderId}</h1>
-          <div className="flex gap-2 items-center">
-            <button className="text-sm bg-blue-100 text-blue-700 px-3 py-1 rounded hover:bg-blue-200">📄 Demand Letter</button>
-            <button className="text-sm bg-blue-100 text-blue-700 px-3 py-1 rounded hover:bg-blue-200">📋 List</button>
-            
-            <input type="file" accept="image/*" ref={fileInputRef} onChange={handleFileChange} className="hidden" />
-            
-            <button onClick={() => fileInputRef.current?.click()} disabled={isUploading} className="text-sm bg-green-100 text-green-700 px-3 py-1 rounded hover:bg-green-200 disabled:opacity-50">
-              {isUploading ? 'Processing...' : '📤 Submit Passport'}
-            </button>
+      {/* Sticky top bar */}
+      <header className="bg-white border-b border-gray-200 px-4 py-3 sticky top-0 z-20">
+        <div className="max-w-3xl mx-auto flex items-center gap-3">
+          <button
+            onClick={() => router.back()}
+            className="min-h-[44px] min-w-[44px] flex items-center justify-center text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+          >
+            ←
+          </button>
+          <div className="flex-1 min-w-0">
+            <h1 className="text-sm font-bold text-gray-800 truncate">{orderId}</h1>
+            {orderData?.company && (
+              <p className="text-xs text-gray-500 truncate">{orderData.company}</p>
+            )}
           </div>
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isUploading}
+            className="flex-shrink-0 text-xs bg-green-600 text-white px-3 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50 min-h-[44px] flex items-center"
+          >
+            {isUploading ? '⏳' : '+ Passport'}
+          </button>
         </div>
+      </header>
 
+      <div className="max-w-3xl mx-auto px-4 py-4 space-y-4">
+
+        {/* Order Details */}
+        {orderData && (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="px-4 py-3 bg-gray-50 border-b border-gray-100 flex flex-wrap gap-2">
+              {(demandLetterUrl || orderData.url_demand_letter) && (
+                <a
+                  href={demandLetterUrl || orderData.url_demand_letter || '#'}
+                  target="_blank" rel="noopener noreferrer"
+                  className="text-xs bg-blue-100 text-blue-700 px-3 py-2 rounded-lg hover:bg-blue-200 min-h-[36px] flex items-center"
+                >
+                  Demand Letter ↗
+                </a>
+              )}
+              {orderData.url_order && (
+                <a
+                  href={orderData.url_order}
+                  target="_blank" rel="noopener noreferrer"
+                  className="text-xs bg-gray-200 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-300 min-h-[36px] flex items-center"
+                >
+                  Recruitment File ↗
+                </a>
+              )}
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-px bg-gray-100">
+              {[
+                { label: 'Company', value: orderData.company },
+                { label: 'Total Labor', value: orderData.total_labor },
+                { label: 'Job Type', value: orderData.job_type },
+                { label: 'Salary (USD)', value: orderData.salary_usd ? `$${orderData.salary_usd.toLocaleString()}` : null },
+                { label: 'Status', value: orderData.status },
+              ].map(({ label, value }) => (
+                <div key={label} className="bg-white px-4 py-3">
+                  <p className="text-gray-400 text-xs uppercase tracking-wider">{label}</p>
+                  <p className="font-semibold text-gray-800 text-sm mt-0.5">{value || 'N/A'}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Upload message */}
         {uploadMsg && (
-          <div className="mb-4 p-3 bg-white border border-gray-200 rounded-lg shadow-sm text-center text-sm font-medium">
+          <div className="p-3 bg-white border border-gray-200 rounded-xl shadow-sm text-center text-sm font-medium">
             {uploadMsg}
           </div>
         )}
 
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h2 className="text-lg font-semibold text-gray-700 mb-4">👥 CANDIDATES IN THIS ORDER</h2>
+        {/* Candidates */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+          <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">
+            Candidates ({candidates.length})
+          </h2>
           {candidates.length === 0 ? (
-            <p className="text-gray-500 text-sm">No candidates found for this order.</p>
+            <p className="text-gray-400 text-sm text-center py-4">No candidates found for this order.</p>
           ) : (
-            <div className="space-y-4">
-              {candidates.map((c: any, idx: number) => (
-                <div key={idx} className="border p-4 rounded-lg hover:bg-gray-50">
-                  <div className="flex justify-between items-start mb-2">
-                    <h3 className="font-bold text-gray-800">{c.full_name}</h3>
-                    <span className="text-xs bg-gray-200 text-gray-600 px-2 py-1 rounded">{c.id_ld}</span>
-                  </div>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm text-gray-600">
-                    <p>PP No: <span className="font-semibold text-gray-800">{c.pp_no || 'N/A'}</span></p>
-                    <p>DOB: <span className="font-semibold text-gray-800">{c.dob || 'N/A'}</span></p>
-                    <p>DOI: <span className="font-semibold text-gray-800">{c.pp_doi || 'N/A'}</span></p>
-                    <p>DOE: <span className="font-semibold text-gray-800">{c.pp_doe || 'N/A'}</span></p>
-                    <p>POB: <span className="font-semibold text-gray-800">{c.pob || 'N/A'}</span></p>
-                    <p>Phone: <span className="font-semibold text-gray-800">{c.phone || 'N/A'}</span></p>
-                  </div>
-                  <div className="mt-3 flex flex-wrap items-center gap-3">
-                    {c.passport_link ? (
-                      <a href={c.passport_link} target="_blank" className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded hover:bg-gray-200">📷 View Passport</a>
-                    ) : (
-                      <span className="text-xs bg-gray-50 text-gray-400 px-2 py-1 rounded">No Passport</span>
-                    )}
-                    <span className="text-xs text-gray-500">Visa: {c.visa_status || 'Pending'}</span>
-                    <div className="flex gap-1">
-                      <button className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded hover:bg-green-200">Passed</button>
-                      <button className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded hover:bg-red-200">Failed</button>
-                    </div>
-                  </div>
-                </div>
+            <div className="space-y-3">
+              {candidates.map((c) => (
+                <CandidateCard
+                  key={c.id_ld}
+                  candidate={c}
+                  orderId={orderId}
+                  onStatusChange={handleStatusChange}
+                  onVideoUploadClick={handleVideoUploadClick}
+                  onCandidateUpdate={handleCandidateUpdate}
+                  isVideoUploading={videoUploadingCandidate === c.id_ld}
+                  currentStatus={c.interview_status}
+                />
               ))}
             </div>
           )}
         </div>
+
       </div>
     </div>
   );

@@ -1,9 +1,9 @@
-import type { Metadata } from "next";
-import "./globals.css";
+import type { Metadata } from 'next';
+import './globals.css';
 
 export const metadata: Metadata = {
-  title: "Bangladesh Agent Portal - Vietnam Recruitment",
-  description: "Vera Global Agent Portal",
+  title: 'Bangladesh Agent Portal - Vietnam Recruitment',
+  description: 'Vera Global Agent Portal',
 };
 
 export default function RootLayout({
@@ -13,7 +13,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body className="antialiased">{children}</body>
     </html>
   );
 }
