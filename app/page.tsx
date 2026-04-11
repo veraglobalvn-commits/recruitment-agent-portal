@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import type { DashboardStats, Order } from '@/lib/types';
@@ -18,11 +18,15 @@ export default function Home() {
 
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
+  const [agentId, setAgentId] = useState<string | null>(null);
   const [agentName, setAgentName] = useState<string | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [loadingData, setLoadingData] = useState(true);
   const [checkingSession, setCheckingSession] = useState(true);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
 
   const handleLogout = useCallback(async () => {
     await supabase?.auth.signOut();
@@ -102,9 +106,9 @@ export default function Home() {
         // Read directly from Supabase (bypasses n8n, ~50ms)
         const { data: agentData, error: agentErr } = await supabase
           .from('agents')
-          .select('id, full_name, short_name, recruitment_stats(*), orders(*)')
+          .select('id, full_name, short_name, avatar_url')
           .eq('supabase_uid', uid)
-          .single();
+          .maybeSingle();
 
         if (agentErr || !agentData) {
           setError('Agent not found. Please contact admin.');
@@ -112,18 +116,29 @@ export default function Home() {
           return;
         }
 
-        const statsRaw = (agentData as any).recruitment_stats;
-        const stats: DashboardStats | null = statsRaw ? {
-          Tong_Lao_Dong: statsRaw.tong_lao_dong,
-          Trung_Tuyen: statsRaw.trung_tuyen,
-          Con_Thieu: statsRaw.con_thieu,
-          Tong_Tien_Can_TT: statsRaw.tong_tien_can_tt,
-          Tong_Tien_Da_TT: statsRaw.tong_tien_da_tt,
-          Tong_Tien_Chua_TT: statsRaw.tong_tien_chua_tt,
+        // Fetch recruitment stats separately
+        const { data: statsData } = await supabase
+          .from('recruitment_stats')
+          .select('*')
+          .eq('agent_id', agentData.id)
+          .maybeSingle();
+
+        const stats: DashboardStats | null = statsData ? {
+          Tong_Lao_Dong: statsData.tong_lao_dong,
+          Trung_Tuyen: statsData.trung_tuyen,
+          Con_Thieu: statsData.con_thieu,
+          Tong_Tien_Can_TT: statsData.tong_tien_can_tt,
+          Tong_Tien_Da_TT: statsData.tong_tien_da_tt,
+          Tong_Tien_Chua_TT: statsData.tong_tien_chua_tt,
         } : null;
 
-        const ordersRaw: any[] = (agentData as any).orders || [];
-        const orders: Order[] = ordersRaw.map((o: any) => ({
+        // Fetch orders separately
+        const { data: ordersData } = await supabase
+          .from('orders')
+          .select('*')
+          .contains('agent_ids', [agentData.id]);
+
+        const orders: Order[] = (ordersData || []).map((o: any) => ({
           order_id: o.id,
           company: o.company_name,
           total_labor: o.total_labor,
@@ -134,16 +149,22 @@ export default function Home() {
           job_type_en: o.job_type_en,
           salary_usd: o.salary_usd,
           url_order: o.url_order,
+          meal: o.meal,
+          dormitory: o.dormitory,
+          recruitment_info: o.recruitment_info,
         }));
 
         const result = {
           agent_name: agentData.short_name || agentData.full_name,
           agent_id: agentData.id,
+          avatar_url: agentData.avatar_url,
           stats,
           orders,
         };
 
         setAgentName(result.agent_name);
+        setAgentId(result.agent_id);
+        setAvatarUrl(result.avatar_url);
         setStats(result.stats);
         setOrders(result.orders);
         if (result.agent_id) localStorage.setItem('agent_id', result.agent_id);
@@ -203,6 +224,37 @@ export default function Home() {
     }
   };
 
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !agentId) return;
+
+    setAvatarUploading(true);
+    try {
+      const ext = file.name.split('.').pop();
+      const filePath = `agents/${agentId}/avatar_${Date.now()}.${ext}`;
+      const { error: storageErr } = await supabase.storage
+        .from('agent-media')
+        .upload(filePath, file, { cacheControl: '3600', upsert: true });
+      if (storageErr) throw new Error(`Storage: ${storageErr.message}`);
+
+      const { data: urlData } = supabase.storage.from('agent-media').getPublicUrl(filePath);
+      const publicUrl = urlData.publicUrl;
+
+      const { error: dbErr } = await supabase
+        .from('agents')
+        .update({ avatar_url: publicUrl })
+        .eq('id', agentId);
+      if (dbErr) throw new Error(`DB: ${dbErr.message}`);
+
+      setAvatarUrl(publicUrl);
+    } catch (err) {
+      alert(`Avatar upload failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setAvatarUploading(false);
+      if (avatarInputRef.current) avatarInputRef.current.value = '';
+    }
+  };
+
   if (checkingSession) {
     return <LoadingSkeleton type="dashboard" />;
   }
@@ -223,12 +275,31 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Hidden input for avatar upload */}
+      <input type="file" accept="image/*" ref={avatarInputRef} onChange={handleAvatarUpload} className="hidden" />
+
       {/* Top nav */}
       <header className="bg-white border-b border-gray-200 px-4 py-3 sticky top-0 z-20">
         <div className="max-w-3xl mx-auto flex justify-between items-center">
-          <div>
-            <h1 className="text-base md:text-lg font-bold text-gray-800">Agent Portal</h1>
-            <p className="text-xs text-blue-600 font-medium">Hi, {agentName}</p>
+          <div className="flex items-center gap-3">
+            <div className="relative flex-shrink-0">
+              {avatarUrl ? (
+                <img src={avatarUrl} alt="Avatar" className="w-10 h-10 rounded-full object-cover border-2 border-gray-200" />
+              ) : (
+                <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center border-2 border-dashed border-gray-300">
+                  <span className="text-gray-400 text-xs">No</span>
+                </div>
+              )}
+              <button onClick={() => avatarInputRef.current?.click()} disabled={avatarUploading}
+                title="Upload avatar"
+                className="absolute -bottom-1 -right-1 w-5 h-5 bg-blue-600 text-white rounded-full text-xs flex items-center justify-center hover:bg-blue-700 disabled:opacity-50">
+                {avatarUploading ? '…' : '📷'}
+              </button>
+            </div>
+            <div>
+              <h1 className="text-base md:text-lg font-bold text-gray-800">Agent Portal</h1>
+              <p className="text-xs text-blue-600 font-medium">Hi, {agentName}</p>
+            </div>
           </div>
           <button
             onClick={handleLogout}

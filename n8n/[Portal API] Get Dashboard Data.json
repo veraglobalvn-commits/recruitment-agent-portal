@@ -1,0 +1,225 @@
+{
+  "name": "[Portal API] Get Dashboard Data",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "get-dashboard-data",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -144,
+        -16
+      ],
+      "id": "94f1108f-ef38-46d2-aa6e-8ca843e75292",
+      "name": "Webhook",
+      "webhookId": "get-dashboard-data"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://open.larksuite.com/open-apis/auth/v3/tenant_access_token/internal",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"app_id\": \"cli_a79ddc7fa8f8d010\",\n  \"app_secret\": \"V8DaC5mUwBdDcJcYo7q7mcpJobjgk3C6\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        80,
+        -16
+      ],
+      "id": "1d15a41f-43d8-4d03-8ee9-78ac71986f43",
+      "name": "Get Lark Token"
+    },
+    {
+      "parameters": {
+        "url": "=https://open.larksuite.com/open-apis/bitable/v1/apps/CI8CwHwNuinVHskMDQAlN6Elgyf/tables/tblNAYG4BefGcJEv/records",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.tenant_access_token }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        304,
+        -16
+      ],
+      "id": "f50be29d-dc25-4aee-a857-780ed42a01d0",
+      "name": "L\u1ea5y Agents"
+    },
+    {
+      "parameters": {
+        "url": "=https://open.larksuite.com/open-apis/bitable/v1/apps/CI8CwHwNuinVHskMDQAlN6Elgyf/tables/tblNhFMClo0Oih3H/records",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Get Lark Token').item.json.tenant_access_token }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        528,
+        -16
+      ],
+      "id": "f1238388-8844-4bd2-a0e8-c80f3af5a01a",
+      "name": "L\u1ea5y Summary"
+    },
+    {
+      "parameters": {
+        "url": "=https://open.larksuite.com/open-apis/bitable/v1/apps/CI8CwHwNuinVHskMDQAlN6Elgyf/tables/tbl3fyDEBbVkpmiq/records",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Get Lark Token').item.json.tenant_access_token }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        736,
+        -16
+      ],
+      "id": "1456fb8b-1796-410e-9722-d5e023e19f0e",
+      "name": "L\u1ea5y \u0110\u01a1n h\u00e0ng"
+    },
+    {
+      "parameters": {
+        "jsCode": "const uid = $('Webhook').item.json.body.supabase_user_id;\nconst agentsData = $('L\u1ea5y Agents').first().json.data.items || [];\nconst summaryData = $('L\u1ea5y Summary').first().json.data.items || [];\nconst ordersData = $('L\u1ea5y \u0110\u01a1n h\u00e0ng').first().json.data.items || [];\n\nconst getText = (val) => {\n  if (!val) return null;\n  if (typeof val === 'string') return val;\n  if (Array.isArray(val) && val.length > 0 && val[0].text) return val[0].text;\n  return null;\n};\n\nlet agentId = null;\nlet agentName = null;\n\nfor (let a of agentsData) {\n  if (a.fields.Supabase_ID === uid) {\n    agentId = getText(a.fields.ID_AgentBD);\n    agentName = a.fields['Short Name Agent BD'];\n    break;\n  }\n}\n\nif (!agentId) return [{ json: { error: 'Agent not found' }}];\n\nlet stats = null;\nfor (let s of summaryData) {\n  if (s.fields.ID_AgentBD === agentId) {\n    stats = s.fields;\n    break;\n  }\n}\n\nlet orderList = [];\nfor (let o of ordersData) {\n  let odId = getText(o.fields.ID_AgentBD);\n  if (odId === agentId) {\n    let urlDl = o.fields.URL_DL;\n    orderList.push({\n      order_id: getText(o.fields.ID_DonHang),\n      company: getText(o.fields.ShortComapnyName),\n      total_labor: o.fields.TongSoLaoDong,\n      missing: o.fields.SoLaoDong_ConThieu,\n      status: getText(o.fields.TrangThai_TuyenDung) || 'N/A',\n      url_demand_letter: urlDl ? urlDl.link : null\n    });\n  }\n}\n\nreturn [{ json: { agent_id: agentId, agent_name: agentName, stats: stats, orders: orderList }}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        -16
+      ],
+      "id": "98839e75-f97b-4824-b2d5-21545644a414",
+      "name": "X\u1eed l\u00fd & L\u1ecdc d\u1eef li\u1ec7u"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1184,
+        -16
+      ],
+      "id": "45f443ff-417b-4a29-846c-48d678100531",
+      "name": "Tr\u1ea3 v\u1ec1 cho Web"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Get Lark Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Lark Token": {
+      "main": [
+        [
+          {
+            "node": "L\u1ea5y Agents",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "L\u1ea5y Agents": {
+      "main": [
+        [
+          {
+            "node": "L\u1ea5y Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "L\u1ea5y Summary": {
+      "main": [
+        [
+          {
+            "node": "L\u1ea5y \u0110\u01a1n h\u00e0ng",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "L\u1ea5y \u0110\u01a1n h\u00e0ng": {
+      "main": [
+        [
+          {
+            "node": "X\u1eed l\u00fd & L\u1ecdc d\u1eef li\u1ec7u",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "X\u1eed l\u00fd & L\u1ecdc d\u1eef li\u1ec7u": {
+      "main": [
+        [
+          {
+            "node": "Tr\u1ea3 v\u1ec1 cho Web",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "7205c83d-093b-4a82-b004-675bfcb27cbb",
+  "meta": {
+    "instanceId": "a41e7c642cf4595af91c3d0d5b5ab6ba94d7ea27d8f89ebe97e774c719177a50"
+  },
+  "id": "qRXiORbzdsXJl0M9",
+  "tags": []
+}

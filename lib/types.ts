@@ -19,10 +19,15 @@ export interface Order {
   job_type_en: string | null;
   salary_usd: number | null;
   url_order: string | null;
+  meal: string | null;
+  dormitory: string | null;
+  recruitment_info: string | null;
 }
 
 export interface Candidate {
   id_ld: string;
+  order_id: string | null;
+  agent_id: string | null;
   full_name: string | null;
   pp_no: string | null;
   dob: string | null;
@@ -37,7 +42,8 @@ export interface Candidate {
   photo_link: string | null;
   height_ft: number | null;
   weight_kg: number | null;
-  pcc_health_cert_link: string | null;
+  pcc_link: string | null;
+  health_cert_link: string | null;
   interview_status: string | null;
 }
 
@@ -122,5 +128,15 @@ export interface AgentOption {
   id: string;
   full_name: string | null;
   short_name: string | null;
+}
+
+export interface Agent {
+  id: string;
+  supabase_uid: string | null;
+  full_name: string | null;
+  short_name: string | null;
+  role: string | null;
+  avatar_url: string | null;
+  labor_percentage: number | null;
 }
 

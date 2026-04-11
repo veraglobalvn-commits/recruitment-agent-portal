@@ -260,7 +260,10 @@ export default function AdminDashboard() {
 
         {/* Hoạt động agent */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-          <SectionHeader title="Hoạt động Agent" />
+          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+            <h2 className="text-sm font-semibold text-slate-700">Hoạt động Agent</h2>
+            <Link href="/admin/agents" className="text-xs text-blue-600 hover:underline font-medium">Xem tất cả →</Link>
+          </div>
           {data.agents.length === 0 ? (
             <p className="text-center text-gray-300 text-sm py-8">Chưa có agent</p>
           ) : (

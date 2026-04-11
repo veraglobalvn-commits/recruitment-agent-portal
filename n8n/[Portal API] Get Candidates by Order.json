@@ -1,0 +1,165 @@
+{
+  "name": "[Portal API] Get Candidates by Order",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "get-candidates-by-order",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        80,
+        -96
+      ],
+      "id": "06b1050e-75cf-463e-bde2-4692971d0298",
+      "name": "Webhook",
+      "webhookId": "get-candidates-by-order"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://open.larksuite.com/open-apis/auth/v3/tenant_access_token/internal",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"app_id\": \"cli_a79ddc7fa8f8d010\",\n  \"app_secret\": \"V8DaC5mUwBdDcJcYo7q7mcpJobjgk3C6\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        304,
+        -96
+      ],
+      "id": "73a3530d-1476-45e1-94e4-8e0a9ebd9cc3",
+      "name": "Get Lark Token"
+    },
+    {
+      "parameters": {
+        "url": "=https://open.larksuite.com/open-apis/bitable/v1/apps/CI8CwHwNuinVHskMDQAlN6Elgyf/tables/tblfz2yYviPS6dBp/records",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.tenant_access_token }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        528,
+        -96
+      ],
+      "id": "6433e628-eaac-485d-8824-1a865aa180e0",
+      "name": "L\u1ea5y T\u1ea5t C\u1ea3 \u1ee8ng Vi\u00ean"
+    },
+    {
+      "parameters": {
+        "jsCode": "const orderId = $('Webhook').item.json.body.order_id;\nconst candidatesData = $input.first().json.data.items || [];\n\nconst getText = (val) => {\n  if (!val) return null;\n  if (typeof val === 'string') return val;\n  if (Array.isArray(val) && val.length > 0 && val[0].text) return val[0].text;\n  return null;\n};\nconst getLink = (val) => {\n  if (!val) return null;\n  if (Array.isArray(val) && val.length > 0 && val[0].link) return val[0].link;\n  return null;\n};\n\nlet filteredCandidates = [];\n\nfor (let c of candidatesData) {\n  const f = c.fields;\n  const cOrderId = getText(f.Input_ID_DonHang);\n  if (cOrderId && cOrderId.includes(orderId)) {\n    filteredCandidates.push({\n      id_ld: getText(f.ID_LD),\n      full_name: getText(f['Full Name']),\n      pp_no: getText(f['PP No']),\n      dob: getText(f.DOB),\n      pp_doi: getText(f['PP DOI']),\n      pp_doe: getText(f['PP DOE']),\n      pob: getText(f.POB),\n      address: getText(f.Address),\n      phone: getText(f['Phone Number']),\n      visa_status: getText(f['TT Visa']),\n      passport_link: getLink(f.Upload_Passport),\n      video_link: getLink(f.Video_Link) || getText(f.Video_Link),\n      interview_status: getText(f['Passed/Failed'])\n    });\n  }\n}\n\nreturn [{ json: { candidates: filteredCandidates, order_id: orderId } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        752,
+        -96
+      ],
+      "id": "d275a3d2-3983-4c35-9a05-18def36c22f4",
+      "name": "L\u1ecdc \u1ee8ng Vi\u00ean theo \u0110\u01a1n H\u00e0ng"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Headers",
+                "value": "Content-Type"
+              },
+              {
+                "name": "Access-Control-Allow-Methods",
+                "value": "POST, GET, OPTIONS"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        960,
+        -96
+      ],
+      "id": "fab5c60d-f2a8-4490-bb05-c7127bd3ad3a",
+      "name": "Tr\u1ea3 v\u1ec1 cho Web"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Get Lark Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Lark Token": {
+      "main": [
+        [
+          {
+            "node": "L\u1ea5y T\u1ea5t C\u1ea3 \u1ee8ng Vi\u00ean",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "L\u1ea5y T\u1ea5t C\u1ea3 \u1ee8ng Vi\u00ean": {
+      "main": [
+        [
+          {
+            "node": "L\u1ecdc \u1ee8ng Vi\u00ean theo \u0110\u01a1n H\u00e0ng",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "L\u1ecdc \u1ee8ng Vi\u00ean theo \u0110\u01a1n H\u00e0ng": {
+      "main": [
+        [
+          {
+            "node": "Tr\u1ea3 v\u1ec1 cho Web",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "82e3656b-5936-49f5-81f7-d5fc33b53a14",
+  "meta": {
+    "instanceId": "a41e7c642cf4595af91c3d0d5b5ab6ba94d7ea27d8f89ebe97e774c719177a50"
+  },
+  "id": "5RkrpkLW2KY4uWr7",
+  "tags": []
+}

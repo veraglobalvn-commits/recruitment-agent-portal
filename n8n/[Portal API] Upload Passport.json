@@ -1,0 +1,315 @@
+{
+  "name": "[Portal API] Upload Passport",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "upload-passport",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -1200,
+        -240
+      ],
+      "id": "b6eafac5-38a2-440d-b680-2dcefc75720d",
+      "name": "Webhook",
+      "webhookId": "upload-passport"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://open.larksuite.com/open-apis/auth/v3/tenant_access_token/internal",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"app_id\": \"cli_a79ddc7fa8f8d010\",\n  \"app_secret\": \"V8DaC5mUwBdDcJcYo7q7mcpJobjgk3C6\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -976,
+        -240
+      ],
+      "id": "5d7f0ff5-581f-42ac-a43f-46387c31107b",
+      "name": "Get Lark Token"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $('Webhook').first().json.body || {};\nconst rawData = body.image_base64 || '';\nif (!rawData) return [{ json: { error: 'No image found', clean_base64: '', body: {} } }];\n\nconst cleanBase64 = rawData.replace(/[\\s\\n]+/g, '');\nreturn [{ json: { clean_base64: cleanBase64, body: body } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -528,
+        -240
+      ],
+      "id": "92c62f54-9286-4bbd-ad9f-620820f6a138",
+      "name": "L\u00e0m s\u1ea1ch Base64"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://vision.googleapis.com/v1/images:annotate?key=AIzaSyDLNk_13tqmJ718_77Bljcqb0WxEgJCQPg",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"requests\": [\n    {\n      \"image\": {\n        \"content\": \"{{ $json.clean_base64 }}\"\n      },\n      \"features\": [\n        {\n          \"type\": \"DOCUMENT_TEXT_DETECTION\"\n        }\n      ]\n    }\n  ]\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -304,
+        -240
+      ],
+      "id": "ff78c471-e0f3-4529-a7c3-f3cd615622d3",
+      "name": "Google Vision OCR"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=B\u1ea1n l\u00e0 m\u1ed9t chuy\u00ean gia x\u1eed l\u00fd d\u1eef li\u1ec7u. D\u01b0\u1edbi \u0111\u00e2y l\u00e0 v\u0103n b\u1ea3n OCR \u0111\u01b0\u1ee3c qu\u00e9t t\u1eeb m\u1ed9t cu\u1ed1n h\u1ed9 chi\u1ebfu. \nNhi\u1ec7m v\u1ee5 c\u1ee7a b\u1ea1n l\u00e0 tr\u00edch xu\u1ea5t c\u00e1c th\u00f4ng tin v\u00e0 tr\u1ea3 v\u1ec1 DUY NH\u1ea4T m\u1ed9t c\u1ee5c JSON thu\u1ea7n t\u00fay. \nTUY\u1ec6T \u0110\u1ed0I KH\u00d4NG gi\u1ea3i th\u00edch, KH\u00d4NG th\u00eam markdown (nh\u01b0 ```json).\n\nC\u1ea5u tr\u00fac JSON y\u00eau c\u1ea7u:\n{\n  \"Full_Name\": \"H\u1ecd v\u00e0 t\u00ean \u0111\u1ea7y \u0111\u1ee7\",\n  \"PP_No\": \"S\u1ed1 Passport Number\",\n  \"DOB\": \"Ng\u00e0y sinh (\u0111\u1ecbnh d\u1ea1ng DD/MM/YYYY)\",\n  \"PP_DOI\": \"Ng\u00e0y c\u1ea5p - Date of Issue (\u0111\u1ecbnh d\u1ea1ng DD/MM/YYYY)\",\n  \"PP_DOE\": \"Ng\u00e0y h\u1ebft h\u1ea1n - Date of Expiry (\u0111\u1ecbnh d\u1ea1ng DD/MM/YYYY)\",\n  \"POB\": \"N\u01a1i sinh - Place of Birth\",\n  \"Address\": \"\u0110\u1ecba ch\u1ec9 Permanent Address\",\n  \"Phone_Number\": \"Telephone No\"\n}\n\nV\u0103n b\u1ea3n OCR c\u1ea7n x\u1eed l\u00fd:\n{{ $('Google Vision OCR').item.json.responses[0].textAnnotations[0].description }}",
+        "hasOutputParser": true,
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.7,
+      "position": [
+        -96,
+        -240
+      ],
+      "id": "89635222-1681-41a2-9c71-5f0bd2576087",
+      "name": "AI Parse JSON"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://open.larksuite.com/open-apis/bitable/v1/apps/CI8CwHwNuinVHskMDQAlN6Elgyf/tables/tblfz2yYviPS6dBp/records",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Get Lark Token').first().json.tenant_access_token }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"fields\": {\n    \"Input_ID_DonHang\": \"{{ $json.order_id }}\",\n    \"ID_AgentBD\": \"{{ $json.agent_id }}\",\n    \"ID_LD\": \"{{ $json.parsed.PP_No }}_{{ $json.parsed.Full_Name }}\",\n    \"Full Name\": \"{{ $json.parsed.Full_Name }}\",\n    \"PP No\": \"{{ $json.parsed.PP_No }}\",\n    \"DOB\": \"{{ $json.parsed.DOB }}\",\n    \"PP DOI\": \"{{ $json.parsed.PP_DOI }}\",\n    \"PP DOE\": \"{{ $json.parsed.PP_DOE }}\",\n    \"POB\": \"{{ $json.parsed.POB }}\",\n    \"Address\": \"{{ $json.parsed.Address }}\",\n    \"Phone Number\": \"{{ $json.parsed.Phone_Number }}\"\n  }\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        384,
+        -240
+      ],
+      "id": "a33e93b4-8022-468d-af02-fb44a0719ec1",
+      "name": "Save to Lark"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"success\": true, \"message\": \"Candidate added successfully\"}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Headers",
+                "value": "Content-Type"
+              },
+              {
+                "name": "Access-Control-Allow-Methods",
+                "value": "POST, GET, OPTIONS"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        608,
+        -240
+      ],
+      "id": "3cc8353f-bb0e-4cdd-b043-537cbbdfdfbe",
+      "name": "Tr\u1ea3 v\u1ec1 cho Web"
+    },
+    {
+      "parameters": {
+        "model": "google/gemini-2.5-flash",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        -208,
+        -32
+      ],
+      "id": "238efb30-689d-475e-9fdd-d614aecf1bd7",
+      "name": "OpenRouter Chat Model",
+      "credentials": {
+        "openRouterApi": {
+          "id": "Zhut7pPRnjQ6cUQn",
+          "name": "OpenRouter account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://open.larksuite.com/open-apis/bitable/v1/apps/CI8CwHwNuinVHskMDQAlN6Elgyf/tables/tblNAYG4BefGcJEv/records",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.tenant_access_token }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -750,
+        -240
+      ],
+      "id": "bbb33333-new-agent-http",
+      "name": "L\u1ea5y Agent ID"
+    },
+    {
+      "parameters": {
+        "jsCode": "const uid = $('Webhook').first().json.body.supabase_user_id;\nconst agentsData = $('L\u1ea5y Agent ID').first().json.data.items || [];\nconst parsedText = $json.text;\n\nconst getText = (val) => {\n  if (!val) return '';\n  if (typeof val === 'string') return val;\n  if (Array.isArray(val) && val.length > 0 && val[0].text) return val[0].text;\n  return '';\n};\n\nlet agentId = '';\nfor (let a of agentsData) {\n  if (a.fields.Supabase_ID === uid) {\n    agentId = getText(a.fields.ID_AgentBD);\n    break;\n  }\n}\n\nlet parsed = {};\ntry {\n  parsed = JSON.parse(parsedText);\n} catch (e) {\n  parsed = { Full_Name: \"\", PP_No: \"\" };\n}\n\nreturn [{\n  json: {\n    agent_id: agentId,\n    order_id: $('Webhook').first().json.body.order_id,\n    parsed: parsed\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        160,
+        -240
+      ],
+      "id": "ccc44444-new-agent-code",
+      "name": "T\u00ecm Agent"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Get Lark Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Lark Token": {
+      "main": [
+        [
+          {
+            "node": "L\u1ea5y Agent ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "L\u00e0m s\u1ea1ch Base64": {
+      "main": [
+        [
+          {
+            "node": "Google Vision OCR",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Vision OCR": {
+      "main": [
+        [
+          {
+            "node": "AI Parse JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Parse JSON": {
+      "main": [
+        [
+          {
+            "node": "T\u00ecm Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save to Lark": {
+      "main": [
+        [
+          {
+            "node": "Tr\u1ea3 v\u1ec1 cho Web",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Parse JSON",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "L\u1ea5y Agent ID": {
+      "main": [
+        [
+          {
+            "node": "L\u00e0m s\u1ea1ch Base64",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "T\u00ecm Agent": {
+      "main": [
+        [
+          {
+            "node": "Save to Lark",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "58776089-cdca-4bf6-b06a-f9ead6f17c82",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "a41e7c642cf4595af91c3d0d5b5ab6ba94d7ea27d8f89ebe97e774c719177a50"
+  },
+  "id": "n278fv6bfpLGPKYC",
+  "tags": []
+}

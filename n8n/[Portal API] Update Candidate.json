@@ -1,0 +1,129 @@
+{
+  "name": "[Portal API] Update Candidate",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "update-candidate",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [0, 0],
+      "id": "webhook-update-cand",
+      "name": "Webhook",
+      "webhookId": "update-candidate"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://open.larksuite.com/open-apis/auth/v3/tenant_access_token/internal",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"app_id\": \"cli_a79ddc7fa8f8d010\",\n  \"app_secret\": \"V8DaC5mUwBdDcJcYo7q7mcpJobjgk3C6\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [200, 0],
+      "id": "get-token",
+      "name": "Get Lark Token"
+    },
+    {
+      "parameters": {
+        "url": "=https://open.larksuite.com/open-apis/bitable/v1/apps/CI8CwHwNuinVHskMDQAlN6Elgyf/tables/tblfz2yYviPS6dBp/records?filter={{ encodeURIComponent(`CurrentValue.[ID_LD]=\"${$('Webhook').first().json.body.candidate_id}\"`) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Get Lark Token').item.json.tenant_access_token }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [400, 0],
+      "id": "search-candidate",
+      "name": "Tìm Record Ứng Viên"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $('Tìm Record Ứng Viên').first().json.data.items;\nif (!items || items.length === 0) return [{ json: { error: 'Candidate not found' } }];\n\nconst record_id = items[0].record_id;\nconst payload = $('Webhook').first().json.body;\n\nlet fieldsToUpdate = {};\nif (payload.video_link) {\n  // Lark URL field requires {link, text} object format\n  fieldsToUpdate['Video_Link'] = { link: payload.video_link, text: 'Watch Video' };\n}\nif (payload.interview_status) fieldsToUpdate['Passed/Failed'] = payload.interview_status;\n\nreturn [{ json: { record_id, fields: fieldsToUpdate, token: $('Get Lark Token').first().json.tenant_access_token } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [600, 0],
+      "id": "prep-update",
+      "name": "Chuẩn bị Data Update"
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "=https://open.larksuite.com/open-apis/bitable/v1/apps/CI8CwHwNuinVHskMDQAlN6Elgyf/tables/tblfz2yYviPS6dBp/records/{{ $json.record_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.token }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ fields: $json.fields }) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [800, 0],
+      "id": "do-update",
+      "name": "Update Lark Record"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true, updated: $('Chuẩn bị Data Update').first().json.fields }) }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              { "name": "Access-Control-Allow-Origin", "value": "*" },
+              { "name": "Access-Control-Allow-Headers", "value": "Content-Type" },
+              { "name": "Access-Control-Allow-Methods", "value": "POST, GET, OPTIONS" }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1000, 0],
+      "id": "respond-web",
+      "name": "Trả về cho Web"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [[{ "node": "Get Lark Token", "type": "main", "index": 0 }]]
+    },
+    "Get Lark Token": {
+      "main": [[{ "node": "Tìm Record Ứng Viên", "type": "main", "index": 0 }]]
+    },
+    "Tìm Record Ứng Viên": {
+      "main": [[{ "node": "Chuẩn bị Data Update", "type": "main", "index": 0 }]]
+    },
+    "Chuẩn bị Data Update": {
+      "main": [[{ "node": "Update Lark Record", "type": "main", "index": 0 }]]
+    },
+    "Update Lark Record": {
+      "main": [[{ "node": "Trả về cho Web", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": true,
+  "settings": { "executionOrder": "v1" },
+  "tags": []
+}

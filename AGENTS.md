@@ -38,9 +38,10 @@ npx tsc --noEmit  # TypeScript type check (always run after edits)
 | Company Detail | `/admin/companies/[id]` | ✅ Done | Edit form (auto-save), orders, payment, media, docs, soft delete |
 | Add Company Modal | — | ✅ Done | 2-tab (manual + OCR scan), duplicate check |
 | OCR API | `/api/ocr` | ✅ Done | OCR.space → GPT-4o-mini structured extraction |
+| Passport Upload API | `/api/passport` | ✅ Done | OCR.space → GPT-4o-mini → Supabase DB → Storage → n8n/Lark |
 | Orders Admin | `/admin/orders/[id]` | ✅ Done | Order list, detail, edit, candidates, payment |
+| Candidates Admin | `/admin/candidates` | ✅ Done | List all candidates with filters, edit, delete |
 | Agents Admin | `/admin/agents/[id]` | ❌ Not built | Page linked from dashboard but route doesn't exist yet |
-| Candidates Admin | `/admin/candidates` | ❌ Not built | Nav item exists, page doesn't |
 | Reports | `/admin/reports` | ❌ Not built | Nav item exists, page doesn't |
 
 ---
@@ -65,6 +66,7 @@ app/
       [id]/page.tsx                   # Order detail: edit info, agent, payment, docs, candidates
   api/
     ocr/route.ts                      # POST: base64 → OCR.space → GPT-4o-mini → parsed fields
+    passport/route.ts                 # POST: base64 → OCR.space → GPT-4o-mini → Supabase DB → Storage → n8n/Lark
 
 components/
   LoginForm.tsx                       # Agent login form (email + password)
@@ -95,10 +97,10 @@ n8n/                                  # n8n workflow JSON files (sanitized, no s
 
 | Table | Key Columns | Notes |
 |-------|-------------|-------|
-| `agents` | `id, supabase_uid, role(admin/agent), full_name, short_name` | Auth mapped via `supabase_uid = auth.uid()` |
+| `agents` | `id, supabase_uid, role(admin/agent), full_name, short_name, avatar_url, labor_percentage` | Auth mapped via `supabase_uid = auth.uid()`. `labor_percentage` for multi-agent orders (0-100, manually set by admin) |
 | `companies` | `id, company_name, short_name, tax_code, legal_rep, legal_rep_title, address, phone, email, industry, business_reg_authority, business_reg_date, company_media(JSONB[]), avatar_url, video_url, doc_links(JSONB[]), deleted_at, en_company_name, en_legal_rep, en_address, en_title` | Soft delete via `deleted_at` |
-| `orders` | `id(ORD-xxx), company_id(FK→companies), company_name, job_type, total_labor, labor_missing, status, total_fee_vn, payment_status_vn, service_fee_per_person, agent_id, url_demand_letter, salary_usd, url_order, legal_status` | FK: `orders_company_id_fkey` |
-| `candidates` | `id_ld, order_id, agent_id, full_name, pp_no, dob, pp_doi, pp_doe, pob, address, phone, visa_status, passport_link, video_link, photo_link, height_ft, weight_kg, pcc_health_cert_link, interview_status` | Agent can UPDATE own candidates |
+| `orders` | `id(ORD-xxx), company_id(FK→companies), company_name, job_type, job_type_en, total_labor, labor_missing, status, total_fee_vn, payment_status_vn, service_fee_per_person, agent_id, url_demand_letter, salary_usd, url_order, legal_status, meal, dormitory, recruitment_info` | FK: `orders_company_id_fkey` |
+| `candidates` | `id_ld, order_id, agent_id, full_name, pp_no, dob, pp_doi, pp_doe, pob, address, phone, visa_status, passport_link, video_link, photo_link, height_ft, weight_kg, pcc_link, health_cert_link, interview_status` | Agent can UPDATE own candidates. Delete only when no files + no pass/fail. |
 
 ### Supabase Storage
 - **Bucket:** `agent-media`
@@ -175,11 +177,42 @@ n8n/                                  # n8n workflow JSON files (sanitized, no s
 - **Check for dangling code** after large edits (read end of file to confirm no orphaned code).
 - **UI text vs data value:** Hard-coded labels/buttons/headings = follow language rule. DB values (status, names) = display as-is, never translate.
 - **Never define components inside render:** Defining a component (function) inside another component's render body causes React to remount it on every re-render, breaking input focus. Move to module scope or use inline JSX instead.
+- **Responsive is mandatory for all UI work:** Before coding any new page or UI-related task, ensure the design works on mobile (375px) and desktop (1280px). Use mobile cards + desktop tables pattern. Touch targets must be `min-h-[44px] min-w-[44px]`.
 
 ---
 
 ## Environment Variables
 See `.env.example`. Key vars:
 - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` — Supabase
+- `SUPABASE_SERVICE_ROLE_KEY` — Service role key for server-side API routes (bypass RLS)
 - `OCR_SPACE_API_KEY` — OCR.space API
 - `OPENAI_API_KEY` — GPT-4o-mini for OCR field extraction
+
+---
+
+## Recent Changes (2026-04)
+
+### Agent Portal Updates
+- **Hidden fields for agents:** Order status, job file, PaymentChart, and visa status are now hidden from agent view
+- **Job Type display:** Uses `job_type_en` (English) instead of `job_type` for better readability
+- **Pass/Fail status:** Display-only for agents (badge), admin still has action buttons
+- **Passport upload:** New `/api/passport` route handles OCR (OCR.space) → AI parse (GPT-4o-mini) → Supabase DB → Storage → n8n/Lark sync
+- **Candidate editing:** Agents can edit passport info fields (name, PP No, DOB, dates, POB, address, phone)
+- **Candidate deletion:** Agents can delete candidates only when no files uploaded + no pass/fail status
+- **Auto-save measurements:** Height/weight auto-save with 1.5s debounce, no manual save button
+- **Empty field highlighting:** All empty fields display in red to indicate missing data
+- **PCC & Health Cert split:** Separated into two distinct upload buttons with consistent color coding (red=missing, green=uploaded, yellow=uploading)
+- **Video upload fix:** Fixed spinning button issue when user cancels file dialog
+- **Agent avatar upload:** Agents can now upload their own avatar from the dashboard header
+- **Recruitment efficiency:** Added progress bar showing hired candidates vs total labor on order detail page
+- **Order detail enhancements:** Added Meal, Dormitory, and Recruitment Info fields to order detail page
+- **Multi-agent labor division:** Added per-agent progress bars for orders with 2+ agents. Admin can set labor_percentage (0-100) for each agent. Progress calculated as passed candidates / allocated labor. Shows error if percentages don't sum to 100% or if any agent has null percentage.
+
+### Database Schema Changes Required
+- **orders table:** Add column `job_type_en` (text, nullable) for English job type display
+- **candidates table:**
+  - Rename column `pcc_health_cert_link` → `pcc_link`
+  - Add column `health_cert_link` (text, nullable)
+- **agents table:** Add column `avatar_url` (text, nullable) for agent avatar
+- **agents table:** Add column `labor_percentage` (integer, nullable) for multi-agent labor division
+- **orders table:** Add columns `meal` (text, nullable), `dormitory` (text, nullable), `recruitment_info` (text, nullable)

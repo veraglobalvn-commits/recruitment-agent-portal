@@ -1,0 +1,227 @@
+{
+  "name": "Scan passport & Fill thông tin",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "b7f1373f-4559-4dc8-9523-9d4e62516a43",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -96,
+        -16
+      ],
+      "id": "75d84e36-7a66-4f94-863f-87c7e8aa29d4",
+      "name": "Webhook",
+      "webhookId": "b7f1373f-4559-4dc8-9523-9d4e62516a43"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://open.larksuite.com/open-apis/auth/v3/tenant_access_token/internal",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"app_id\": \"cli_a79ddc7fa8f8d010\",\n  \"app_secret\": \"V8DaC5mUwBdDcJcYo7q7mcpJobjgk3C6\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        128,
+        -16
+      ],
+      "id": "2f1436c0-7196-4e64-8654-1a424b6c869e",
+      "name": "Get Lark Token"
+    },
+    {
+      "parameters": {
+        "url": "=https://open.larksuite.com/open-apis/drive/v1/medias/{{ $('Webhook').item.json.body.file_ID }}/download",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Get Lark Token').item.json.tenant_access_token }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        352,
+        -16
+      ],
+      "id": "f5f825ef-97cb-46bb-923d-70d52463ba9b",
+      "name": "Download Passport Image"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://vision.googleapis.com/v1/images:annotate?key=AIzaSyDLNk_13tqmJ718_77Bljcqb0WxEgJCQPg",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"requests\": [\n    {\n      \"image\": {\n        \"content\": \"{{ $('Download Passport Image').item.binary.data.data }}\"\n      },\n      \"features\": [\n        {\n          \"type\": \"DOCUMENT_TEXT_DETECTION\"\n        }\n      ]\n    }\n  ]\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        576,
+        -16
+      ],
+      "id": "5f2dd6b6-1b98-4c41-a6fb-27669fd21342",
+      "name": "Google Vision OCR"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Bạn là một chuyên gia xử lý dữ liệu. Dưới đây là văn bản OCR được quét từ một cuốn hộ chiếu. \nNhiệm vụ của bạn là trích xuất các thông tin và trả về DUY NHẤT một cục JSON thuần túy. \nTUYỆT ĐỐI KHÔNG giải thích, KHÔNG thêm markdown (như ```json).\n\nCấu trúc JSON yêu cầu:\n{\n  \"Full_Name\": \"Họ và tên đầy đủ\",\n  \"PP_No\": \"Số Passport Number\",\n  \"DOB\": \"Ngày sinh (định dạng DD/MM/YYYY)\",\n  \"PP_DOI\": \"Ngày cấp - Date of Issue (định dạng DD/MM/YYYY)\",\n  \"PP_DOE\": \"Ngày hết hạn - Date of Expiry (định dạng DD/MM/YYYY)\",\n  \"POB\": \"Nơi sinh - Place of Birth\",\n  \"Address\": \"Địa chỉ Permanent Address\",\n  \"Phone_Number\": \"Telephone No\"\n}\n\nVăn bản OCR cần xử lý:\n{{ $('Google Vision OCR').item.json.responses[0].textAnnotations[0].description }}",
+        "hasOutputParser": true,
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.7,
+      "position": [
+        784,
+        -16
+      ],
+      "id": "992a1784-1f0f-4c52-b398-4ee60054a956",
+      "name": "AI Parse JSON"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        784,
+        192
+      ],
+      "id": "1a6c9eaa-e934-4b1f-8267-4954b439bc7f",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "tyk9cMjPh7QP9rUZ",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "=https://open.larksuite.com/open-apis/bitable/v1/apps/CI8CwHwNuinVHskMDQAlN6Elgyf/tables/tblfz2yYviPS6dBp/records/{{ $('Webhook').item.json.body.record_ID }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Get Lark Token').item.json.tenant_access_token }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"fields\": {\n    \"Full Name\": \"{{ JSON.parse($json.text).Full_Name }}\",\n    \"PP No\": \"{{ JSON.parse($json.text).PP_No }}\",\n    \"DOB\": \"{{ JSON.parse($json.text).DOB }}\",\n    \"PP DOI\": \"{{ JSON.parse($json.text).PP_DOI }}\",\n    \"PP DOE\": \"{{ JSON.parse($json.text).PP_DOE }}\",\n    \"POB\": \"{{ JSON.parse($json.text).POB }}\",\n    \"Address\": \"{{ JSON.parse($json.text).Address }}\",\n    \"Phone Number\": \"{{ JSON.parse($json.text).Phone_Number }}\"\n  }\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1008,
+        -16
+      ],
+      "id": "0242564c-4ea8-4a00-8c6d-58a2b3a0334f",
+      "name": "Save to Lark"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Get Lark Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Lark Token": {
+      "main": [
+        [
+          {
+            "node": "Download Passport Image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Passport Image": {
+      "main": [
+        [
+          {
+            "node": "Google Vision OCR",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Vision OCR": {
+      "main": [
+        [
+          {
+            "node": "AI Parse JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Parse JSON",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Parse JSON": {
+      "main": [
+        [
+          {
+            "node": "Save to Lark",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "4117c485-0fb5-4b24-a472-f163302722d3",
+  "meta": {
+    "instanceId": "a41e7c642cf4595af91c3d0d5b5ab6ba94d7ea27d8f89ebe97e774c719177a50"
+  },
+  "id": "UQq9i7JEIIcNfByf",
+  "tags": []
+}

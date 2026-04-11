@@ -18,6 +18,7 @@ export default function OrderDetail() {
 
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [orderData, setOrderData] = useState<Order | null>(null);
+  const [agents, setAgents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadMsg, setUploadMsg] = useState<string | null>(null);
@@ -43,6 +44,7 @@ export default function OrderDetail() {
 
       if (candRes.error) throw candRes.error;
 
+      let agentIds: string[] = [];
       if (orderRes.data) {
         setOrderData({
           order_id: orderRes.data.id,
@@ -55,11 +57,17 @@ export default function OrderDetail() {
           job_type_en: orderRes.data.job_type_en,
           salary_usd: orderRes.data.salary_usd,
           url_order: orderRes.data.url_order,
+          meal: orderRes.data.meal,
+          dormitory: orderRes.data.dormitory,
+          recruitment_info: orderRes.data.recruitment_info,
         });
+        agentIds = (orderRes.data as any).agent_ids || [];
       }
 
       const newCandidates: Candidate[] = (candRes.data || []).map((r: any) => ({
         id_ld: r.id_ld,
+        order_id: r.order_id,
+        agent_id: r.agent_id,
         full_name: r.full_name,
         pp_no: r.pp_no,
         dob: r.dob,
@@ -74,12 +82,23 @@ export default function OrderDetail() {
         photo_link: r.photo_link,
         height_ft: r.height_ft,
         weight_kg: r.weight_kg,
-        pcc_health_cert_link: r.pcc_health_cert_link,
+        pcc_link: r.pcc_link,
+        health_cert_link: r.health_cert_link,
         interview_status: r.interview_status,
       }));
 
       setCandidates(newCandidates);
       sessionStorage.setItem(cacheKey, JSON.stringify(newCandidates));
+
+      if (agentIds.length > 0) {
+        const agentsRes = await supabase
+          .from('agents')
+          .select('id, full_name, short_name, avatar_url, labor_percentage')
+          .in('id', agentIds);
+        if (agentsRes.data) {
+          setAgents(agentsRes.data);
+        }
+      }
     } catch (err) {
       console.error('Failed to fetch candidates:', err);
     } finally {
@@ -98,6 +117,24 @@ export default function OrderDetail() {
       sessionStorage.setItem(`c_url_${orderId}`, JSON.stringify(updated));
       return updated;
     });
+  }, [orderId]);
+
+  const handleCandidateDelete = useCallback(async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('candidates')
+        .delete()
+        .eq('id_ld', id);
+      if (error) throw error;
+
+      setCandidates((prev) => {
+        const updated = prev.filter((c) => c.id_ld !== id);
+        sessionStorage.setItem(`c_url_${orderId}`, JSON.stringify(updated));
+        return updated;
+      });
+    } catch (err) {
+      alert(`Xoá thất bại: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }, [orderId]);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -125,13 +162,15 @@ export default function OrderDetail() {
           const { data: { user } } = await supabase.auth.getUser();
           if (!user) throw new Error('Not authenticated');
 
+          const agentId = localStorage.getItem('agent_id');
+
           const res = await fetch('/api/passport', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               image_base64: compressedBase64,
               order_id: orderId,
-              supabase_user_id: user.id,
+              agent_id: agentId,
             }),
           });
 
@@ -144,6 +183,7 @@ export default function OrderDetail() {
           if (result.success) {
             sessionStorage.removeItem(`c_url_${orderId}`);
             setUploadMsg('✅ Passport uploaded successfully!');
+            setTimeout(() => setUploadMsg(null), 3000);
             fetchCandidates();
           } else {
             setUploadMsg(`Upload failed: ${result.error || 'Unknown error'}`);
@@ -167,7 +207,11 @@ export default function OrderDetail() {
 
   const handleVideoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !videoUploadingCandidate) return;
+    if (!file) {
+      setVideoUploadingCandidate(null);
+      return;
+    }
+    if (!videoUploadingCandidate) return;
 
     setUploadMsg(`⏳ Uploading video... Please don't close the browser.`);
 
@@ -185,10 +229,8 @@ export default function OrderDetail() {
       const { data: publicUrlData } = supabase.storage.from('agent-media').getPublicUrl(filePath);
       const videoUrl = publicUrlData.publicUrl;
 
-      // Update Supabase directly
       await supabase.from('candidates').update({ video_link: videoUrl }).eq('id_ld', videoUploadingCandidate);
 
-      // Sync to Lark
       const n8nUrl = process.env.NEXT_PUBLIC_N8N_VIDEO_UPDATE_URL;
       if (n8nUrl) {
         await fetch(n8nUrl, {
@@ -264,6 +306,8 @@ export default function OrderDetail() {
                 { label: 'Total Labor', value: orderData.total_labor },
                 { label: 'Job Type', value: orderData.job_type_en },
                 { label: 'Salary (USD)', value: orderData.salary_usd ? `$${orderData.salary_usd.toLocaleString()}` : null },
+                { label: 'Meal', value: orderData.meal },
+                { label: 'Dormitory', value: orderData.dormitory },
               ].map(({ label, value }) => (
                 <div key={label} className="bg-white px-4 py-3">
                   <p className="text-gray-400 text-xs uppercase tracking-wider">{label}</p>
@@ -271,6 +315,112 @@ export default function OrderDetail() {
                 </div>
               ))}
             </div>
+            {orderData.recruitment_info && (
+              <div className="px-4 py-3 bg-gray-50 border-t border-gray-100">
+                <p className="text-gray-400 text-xs uppercase tracking-wider mb-1">Recruitment Info</p>
+                <p className="text-sm text-gray-800 whitespace-pre-wrap">{orderData.recruitment_info}</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Recruitment Efficiency */}
+        {orderData && (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+            <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">Hiệu quả tuyển dụng</h3>
+            {agents.length === 0 ? (
+              <p className="text-gray-400 text-sm text-center py-4">Chưa có agent nào được phân công</p>
+            ) : agents.length === 1 ? (
+              <div className="flex items-center gap-4">
+                <div className="flex-1">
+                  <div className="flex justify-between text-xs mb-1">
+                    <span className="text-gray-600">Tiến độ</span>
+                    <span className="font-semibold text-gray-800">
+                      {candidates.filter(c => c.interview_status === 'Passed').length} / {orderData.total_labor}
+                    </span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2.5">
+                    <div
+                      className="bg-blue-600 h-2.5 rounded-full transition-all duration-300"
+                      style={{
+                        width: `${orderData.total_labor ? Math.min(100, (candidates.filter(c => c.interview_status === 'Passed').length / Number(orderData.total_labor)) * 100) : 0}%`
+                      }}
+                    />
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-2xl font-bold text-gray-800">
+                    {orderData.total_labor ? ((candidates.filter(c => c.interview_status === 'Passed').length / Number(orderData.total_labor)) * 100).toFixed(1) : 0}%
+                  </p>
+                  <p className="text-xs text-gray-500">Hoàn thành</p>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {(() => {
+                  const hasNullPercentage = agents.some(a => a.labor_percentage === null);
+                  const totalPercentage = agents.reduce((sum, a) => sum + (a.labor_percentage || 0), 0);
+
+                  if (hasNullPercentage) {
+                    return (
+                      <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg text-center">
+                        ⚠️ Vui lòng nhập % lao động cho tất cả agent
+                      </div>
+                    );
+                  }
+
+                  if (totalPercentage !== 100) {
+                    return (
+                      <div className="p-3 bg-yellow-50 border border-yellow-200 text-yellow-700 text-sm rounded-lg text-center">
+                        ⚠️ Tổng % lao động không bằng 100% (hiện tại: {totalPercentage}%)
+                      </div>
+                    );
+                  }
+
+                  return agents.map((agent) => {
+                    const allocatedLabor = agent.labor_percentage
+                      ? Math.round((agent.labor_percentage / 100) * Number(orderData.total_labor))
+                      : 0;
+                    const passedCount = candidates.filter(
+                      c => c.agent_id === agent.id && c.interview_status === 'Passed'
+                    ).length;
+                    const percentage = allocatedLabor > 0
+                      ? Math.min(100, (passedCount / allocatedLabor) * 100)
+                      : 0;
+
+                    return (
+                      <div key={agent.id} className="space-y-2">
+                        <div className="flex items-center gap-3">
+                          {agent.avatar_url ? (
+                            <img src={agent.avatar_url} alt={agent.short_name || agent.full_name || 'Agent'} className="w-10 h-10 rounded-full object-cover border-2 border-gray-200" />
+                          ) : (
+                            <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-sm">
+                              {(agent.short_name || agent.full_name || 'A')[0].toUpperCase()}
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="font-semibold text-gray-800 text-sm">{agent.short_name || agent.full_name || 'Agent'}</p>
+                            <p className="text-xs text-gray-500">
+                              Phân công: {allocatedLabor} người ({agent.labor_percentage}%)
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-lg font-bold text-gray-800">{passedCount} / {allocatedLabor}</p>
+                            <p className="text-xs text-gray-500">{percentage.toFixed(1)}%</p>
+                          </div>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-2.5">
+                          <div
+                            className="bg-blue-600 h-2.5 rounded-full transition-all duration-300"
+                            style={{ width: `${percentage}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  });
+                })()}
+              </div>
+            )}
           </div>
         )}
 
@@ -297,6 +447,7 @@ export default function OrderDetail() {
                   orderId={orderId}
                   onVideoUploadClick={handleVideoUploadClick}
                   onCandidateUpdate={handleCandidateUpdate}
+                  onCandidateDelete={handleCandidateDelete}
                   isVideoUploading={videoUploadingCandidate === c.id_ld}
                 />
               ))}
