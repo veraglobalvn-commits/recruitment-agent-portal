@@ -16,6 +16,7 @@ export interface Order {
   status: string;
   url_demand_letter: string | null;
   job_type: string | null;
+  job_type_en: string | null;
   salary_usd: number | null;
   url_order: string | null;
 }

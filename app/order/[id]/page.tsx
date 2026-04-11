@@ -52,6 +52,7 @@ export default function OrderDetail() {
           status: orderRes.data.status || 'N/A',
           url_demand_letter: orderRes.data.url_demand_letter,
           job_type: orderRes.data.job_type,
+          job_type_en: orderRes.data.job_type_en,
           salary_usd: orderRes.data.salary_usd,
           url_order: orderRes.data.url_order,
         });
@@ -99,43 +100,6 @@ export default function OrderDetail() {
     });
   }, [orderId]);
 
-  const handleStatusChange = useCallback(
-    async (candidateId: string, status: 'Passed' | 'Failed') => {
-      const newCandidates = candidates.map((c) =>
-        c.id_ld === candidateId ? { ...c, interview_status: status } : c,
-      );
-      setCandidates(newCandidates);
-      sessionStorage.setItem(`c_url_${orderId}`, JSON.stringify(newCandidates));
-      setUploadMsg('Đang cập nhật...');
-
-      try {
-        const { error } = await supabase
-          .from('candidates')
-          .update({ interview_status: status })
-          .eq('id_ld', candidateId);
-        if (error) throw new Error(error.message);
-
-        // Sync to Lark — fire-and-forget
-        const n8nUrl = process.env.NEXT_PUBLIC_N8N_VIDEO_UPDATE_URL;
-        if (n8nUrl) fetch(n8nUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ candidate_id: candidateId, interview_status: status }),
-        }).catch(() => {});
-
-        setUploadMsg(`✅ Đã cập nhật: ${status}`);
-      } catch (err) {
-        // Revert optimistic update on failure
-        setCandidates(candidates);
-        sessionStorage.setItem(`c_url_${orderId}`, JSON.stringify(candidates));
-        setUploadMsg(`❌ Lỗi: ${err instanceof Error ? err.message : String(err)}`);
-      } finally {
-        setTimeout(() => setUploadMsg(null), 3000);
-      }
-    },
-    [candidates, orderId],
-  );
-
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -154,31 +118,35 @@ export default function OrderDetail() {
         canvas.height = img.height * scale;
         const ctx = canvas.getContext('2d')!;
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        const compressedBase64 = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
 
         try {
-          const apiUrl = process.env.NEXT_PUBLIC_N8N_UPLOAD_URL;
-          if (!apiUrl) throw new Error('API URL not configured');
+          const compressedBase64 = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
+
           const { data: { user } } = await supabase.auth.getUser();
           if (!user) throw new Error('Not authenticated');
 
-          const res = await fetch(apiUrl, {
+          const res = await fetch('/api/passport', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              supabase_user_id: user.id,
-              order_id: orderId,
               image_base64: compressedBase64,
+              order_id: orderId,
+              supabase_user_id: user.id,
             }),
           });
 
-          if (!res.ok) { setUploadMsg(`Upload failed: HTTP ${res.status}`); return; }
-          const result = await res.json();
+          if (!res.ok) {
+            const errData = await res.json() as { error?: string };
+            throw new Error(errData.error || `HTTP ${res.status}`);
+          }
+
+          const result = await res.json() as { success?: boolean; error?: string };
           if (result.success) {
-            setUploadMsg('✅ Passport processed successfully!');
+            sessionStorage.removeItem(`c_url_${orderId}`);
+            setUploadMsg('✅ Passport uploaded successfully!');
             fetchCandidates();
           } else {
-            setUploadMsg(`Upload failed: ${JSON.stringify(result)}`);
+            setUploadMsg(`Upload failed: ${result.error || 'Unknown error'}`);
           }
         } catch (err) {
           setUploadMsg(`Upload error: ${err instanceof Error ? err.message : String(err)}`);
@@ -289,23 +257,13 @@ export default function OrderDetail() {
                   Demand Letter ↗
                 </a>
               )}
-              {orderData.url_order && (
-                <a
-                  href={orderData.url_order}
-                  target="_blank" rel="noopener noreferrer"
-                  className="text-xs bg-gray-200 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-300 min-h-[36px] flex items-center"
-                >
-                  Recruitment File ↗
-                </a>
-              )}
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-px bg-gray-100">
               {[
                 { label: 'Company', value: orderData.company },
                 { label: 'Total Labor', value: orderData.total_labor },
-                { label: 'Job Type', value: orderData.job_type },
+                { label: 'Job Type', value: orderData.job_type_en },
                 { label: 'Salary (USD)', value: orderData.salary_usd ? `$${orderData.salary_usd.toLocaleString()}` : null },
-                { label: 'Status', value: orderData.status },
               ].map(({ label, value }) => (
                 <div key={label} className="bg-white px-4 py-3">
                   <p className="text-gray-400 text-xs uppercase tracking-wider">{label}</p>
@@ -337,11 +295,9 @@ export default function OrderDetail() {
                   key={c.id_ld}
                   candidate={c}
                   orderId={orderId}
-                  onStatusChange={handleStatusChange}
                   onVideoUploadClick={handleVideoUploadClick}
                   onCandidateUpdate={handleCandidateUpdate}
                   isVideoUploading={videoUploadingCandidate === c.id_ld}
-                  currentStatus={c.interview_status}
                 />
               ))}
             </div>

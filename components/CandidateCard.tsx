@@ -7,23 +7,22 @@ import { supabase } from '@/lib/supabase';
 interface CandidateCardProps {
   candidate: Candidate;
   orderId: string;
-  onStatusChange: (id: string, status: 'Passed' | 'Failed') => void;
   onVideoUploadClick: (id: string) => void;
   onCandidateUpdate: (id: string, updates: Partial<Candidate>) => void;
   isVideoUploading: boolean;
-  currentStatus: string | null;
+  onStatusChange?: (id: string, status: 'Passed' | 'Failed') => void;
+  currentStatus?: string | null;
 }
 
 export default function CandidateCard({
   candidate,
   orderId,
-  onStatusChange,
   onVideoUploadClick,
   onCandidateUpdate,
   isVideoUploading,
+  onStatusChange,
   currentStatus,
 }: CandidateCardProps) {
-  const isActive = (status: string) => currentStatus === status;
 
   const [photoUploading, setPhotoUploading] = useState(false);
   const [pccUploading, setPccUploading] = useState(false);
@@ -262,22 +261,36 @@ export default function CandidateCard({
         {/* Row 2: Status */}
         <div className="flex items-center gap-2">
           <span className="text-xs text-gray-500 flex-1">Visa: {candidate.visa_status || 'Pending'}</span>
-          <button
-            onClick={() => onStatusChange(candidate.id_ld, 'Passed')}
-            className={`text-sm px-4 py-2 rounded-lg font-semibold min-h-[44px] min-w-[80px] transition-colors ${
-              isActive('Passed') ? 'bg-green-600 text-white' : 'bg-green-100 text-green-700 hover:bg-green-200'
-            }`}
-          >
-            ✓ Pass
-          </button>
-          <button
-            onClick={() => onStatusChange(candidate.id_ld, 'Failed')}
-            className={`text-sm px-4 py-2 rounded-lg font-semibold min-h-[44px] min-w-[80px] transition-colors ${
-              isActive('Failed') ? 'bg-red-600 text-white' : 'bg-red-100 text-red-700 hover:bg-red-200'
-            }`}
-          >
-            ✗ Fail
-          </button>
+          {onStatusChange ? (
+            <>
+              <button
+                onClick={() => onStatusChange(candidate.id_ld, 'Passed')}
+                className={`text-sm px-4 py-2 rounded-lg font-semibold min-h-[44px] min-w-[80px] transition-colors ${
+                  currentStatus === 'Passed' ? 'bg-green-600 text-white' : 'bg-green-100 text-green-700 hover:bg-green-200'
+                }`}
+              >
+                ✓ Pass
+              </button>
+              <button
+                onClick={() => onStatusChange(candidate.id_ld, 'Failed')}
+                className={`text-sm px-4 py-2 rounded-lg font-semibold min-h-[44px] min-w-[80px] transition-colors ${
+                  currentStatus === 'Failed' ? 'bg-red-600 text-white' : 'bg-red-100 text-red-700 hover:bg-red-200'
+                }`}
+              >
+                ✗ Fail
+              </button>
+            </>
+          ) : candidate.interview_status ? (
+            <span
+              className={`text-sm px-4 py-2 rounded-lg font-semibold min-h-[44px] min-w-[80px] flex items-center justify-center ${
+                candidate.interview_status === 'Passed'
+                  ? 'bg-green-100 text-green-700'
+                  : 'bg-red-100 text-red-700'
+              }`}
+            >
+              {candidate.interview_status === 'Passed' ? '✓ Passed' : '✗ Failed'}
+            </span>
+          ) : null}
         </div>
       </div>
     </div>

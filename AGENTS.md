@@ -163,12 +163,14 @@ n8n/                                  # n8n workflow JSON files (sanitized, no s
 - **Don't persist with failing approach ≥3 times.** Stop, benchmark alternatives quantitatively, pick highest scoring solution.
 
 ### Data Safety
+- **Data flow principle:** Web <=> Supabase is the default. Lark sync (if any): Supabase <=> N8N <=> Lark. Never let Lark be the primary data source — Supabase must always receive data before Lark.
 - **Verify before writing:** Check FK constraints and column existence in DB before writing join queries or inserts. Test with REST API curl after migrations.
 - **Duplicate check:** Every create form must check for duplicates before insert (e.g., company name + tax_code).
 - **Soft delete only:** Use `deleted_at` column. Keep text data, remove Storage files (images/docs).
 - **CRUD complete:** All data entities must have Create / Read / Update / Delete unless there's a specific reason not to.
 
 ### Code Quality
+- **DB-related code must be tested end-to-end.** After coding any feature that reads/writes to DB, verify it actually works against the real database (query check, UI check, data flow) before marking done.
 - **Run `npx tsc --noEmit`** immediately after every edit session — must be 0 errors.
 - **Check for dangling code** after large edits (read end of file to confirm no orphaned code).
 - **UI text vs data value:** Hard-coded labels/buttons/headings = follow language rule. DB values (status, names) = display as-is, never translate.

@@ -1,15 +1,16 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import type { DashboardStats, Order } from '@/lib/types';
 import LoginForm from '@/components/LoginForm';
 import DashboardStatsComponent from '@/components/DashboardStats';
-import PaymentChart from '@/components/PaymentChart';
 import OrdersList from '@/components/OrdersList';
 import LoadingSkeleton from '@/components/LoadingSkeleton';
 
 export default function Home() {
+  const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -39,8 +40,18 @@ export default function Home() {
       return;
     }
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session) {
+        const { data: agentData } = await supabase
+          .from('agents')
+          .select('role')
+          .eq('supabase_uid', session.user.id)
+          .maybeSingle();
+        if (agentData?.role === 'admin') {
+          router.replace('/admin');
+          setCheckingSession(false);
+          return;
+        }
         setUserId(session.user.id);
         setIsLoggedIn(true);
       }
@@ -49,8 +60,17 @@ export default function Home() {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session) {
+        const { data: agentData } = await supabase
+          .from('agents')
+          .select('role')
+          .eq('supabase_uid', session.user.id)
+          .maybeSingle();
+        if (agentData?.role === 'admin') {
+          router.replace('/admin');
+          return;
+        }
         setUserId(session.user.id);
         setIsLoggedIn(true);
       } else {
@@ -111,6 +131,7 @@ export default function Home() {
           status: o.status || 'N/A',
           url_demand_letter: o.url_demand_letter,
           job_type: o.job_type,
+          job_type_en: o.job_type_en,
           salary_usd: o.salary_usd,
           url_order: o.url_order,
         }));
@@ -161,8 +182,18 @@ export default function Home() {
       if (authError) {
         setError(`Login failed: ${authError.message}`);
         setLoading(false);
+        return;
       }
       if (data?.user) {
+        const { data: agentData } = await supabase
+          .from('agents')
+          .select('role')
+          .eq('supabase_uid', data.user.id)
+          .maybeSingle();
+        if (agentData?.role === 'admin') {
+          router.replace('/admin');
+          return;
+        }
         setUserId(data.user.id);
         setIsLoggedIn(true);
       }
@@ -220,7 +251,6 @@ export default function Home() {
         ) : (
           <>
             {stats && <DashboardStatsComponent stats={stats} />}
-            {stats && <PaymentChart stats={stats} />}
             <div className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-gray-100">
               <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4">
                 Your Orders
