@@ -104,24 +104,44 @@ export default function Home() {
         }
 
         // Read directly from Supabase (bypasses n8n, ~50ms)
-        const { data: agentData, error: agentErr } = await supabase
-          .from('agents')
-          .select('id, full_name, short_name, avatar_url')
-          .eq('supabase_uid', uid)
-          .maybeSingle();
+        let agentData, agentErr;
+        try {
+          const agentRes = await supabase
+            .from('agents')
+            .select('id, full_name, short_name, avatar_url')
+            .eq('supabase_uid', uid)
+            .maybeSingle();
+          agentData = agentRes.data;
+          agentErr = agentRes.error;
+          console.log('Agent data:', agentData);
+          console.log('Agent error:', agentErr);
+        } catch (err) {
+          console.error('Failed to fetch agent:', err);
+          agentErr = err as any;
+          agentData = null;
+        }
 
         if (agentErr || !agentData) {
+          console.error('Agent not found error:', agentErr);
           setError('Agent not found. Please contact admin.');
           setIsLoggedIn(false);
           return;
         }
 
         // Fetch recruitment stats separately
-        const { data: statsData } = await supabase
-          .from('recruitment_stats')
-          .select('*')
-          .eq('agent_id', agentData.id)
-          .maybeSingle();
+        let statsData;
+        try {
+          const statsRes = await supabase
+            .from('recruitment_stats')
+            .select('*')
+            .eq('agent_id', agentData.id)
+            .maybeSingle();
+          statsData = statsRes.data;
+          console.log('Stats data:', statsData);
+        } catch (statsErr) {
+          console.error('Failed to fetch stats:', statsErr);
+          statsData = null;
+        }
 
         const stats: DashboardStats | null = statsData ? {
           Tong_Lao_Dong: statsData.tong_lao_dong,
@@ -133,10 +153,18 @@ export default function Home() {
         } : null;
 
         // Fetch orders separately
-        const { data: ordersData } = await supabase
-          .from('orders')
-          .select('*')
-          .contains('agent_ids', [agentData.id]);
+        let ordersData;
+        try {
+          const ordersRes = await supabase
+            .from('orders')
+            .select('*')
+            .contains('agent_ids', [agentData.id]);
+          ordersData = ordersRes.data;
+          console.log('Orders data:', ordersData);
+        } catch (ordersErr) {
+          console.error('Failed to fetch orders:', ordersErr);
+          ordersData = [];
+        }
 
         const orders: Order[] = (ordersData || []).map((o: any) => ({
           order_id: o.id,
@@ -171,6 +199,7 @@ export default function Home() {
         sessionStorage.setItem(cacheKey, JSON.stringify(result));
 
       } catch (err) {
+        console.error('Failed to load data:', err);
         setError('Failed to load data');
       } finally {
         setLoadingData(false);
