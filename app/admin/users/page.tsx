@@ -32,6 +32,32 @@ export default function UsersPage() {
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState<RoleFilter>('all');
   const [showModal, setShowModal] = useState(false);
+  const [debugResult, setDebugResult] = useState<string | null>(null);
+  const [debugging, setDebugging] = useState(false);
+
+  const runAuthDebug = async () => {
+    setDebugging(true);
+    setDebugResult(null);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { setDebugResult('getUser() trả null — phiên hết hạn, đăng nhập lại'); return; }
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) { setDebugResult('getSession() không có access_token'); return; }
+
+      const res = await fetch('/api/auth/debug', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      const data = await res.json() as { ok: boolean; failedAt?: string; steps: string[] };
+      setDebugResult(
+        `${data.ok ? '✅ Auth OK' : `❌ FAIL: ${data.failedAt}`}\n\n${data.steps.join('\n')}`,
+      );
+    } catch (err) {
+      setDebugResult(`Exception: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setDebugging(false);
+    }
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -75,12 +101,32 @@ export default function UsersPage() {
           <p className="text-xs text-gray-400">{agentCount} agent · {adminCount} admin</p>
         </div>
         <button
+          onClick={runAuthDebug}
+          disabled={debugging}
+          title="Kiểm tra quyền admin"
+          className="bg-gray-100 hover:bg-gray-200 text-gray-600 font-medium px-3 py-2.5 rounded-xl text-xs min-h-[44px] transition-colors disabled:opacity-50"
+        >
+          {debugging ? '...' : 'Test quyền'}
+        </button>
+        <button
           onClick={() => setShowModal(true)}
           className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2.5 rounded-xl text-sm min-h-[44px] flex items-center gap-1.5 transition-colors"
         >
           + Thêm
         </button>
       </div>
+
+      {debugResult && (
+        <div className="bg-slate-900 text-green-400 text-xs font-mono p-4 rounded-xl whitespace-pre-wrap">
+          {debugResult}
+          <button
+            onClick={() => setDebugResult(null)}
+            className="ml-4 text-gray-500 hover:text-gray-300"
+          >
+            [đóng]
+          </button>
+        </div>
+      )}
 
       <div className="relative">
         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔍</span>

@@ -1,32 +1,52 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
+const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+
 function getAdminClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  );
+  return createClient(url, serviceKey);
 }
 
-// Xác thực admin qua Bearer token (client gọi getUser() trước để đảm bảo token fresh)
+// Xác thực admin qua Bearer token
+// Log chi tiết từng bước để dễ debug qua Vercel logs
 async function getAdminFromRequest(req: NextRequest): Promise<ReturnType<typeof getAdminClient> | null> {
   const token = req.headers.get('authorization')?.replace('Bearer ', '').trim();
-  if (!token) return null;
+  if (!token) {
+    console.error('[agents/create] AUTH FAIL: không có Bearer token trong request');
+    return null;
+  }
 
+  // Dùng anon client để validate user JWT (semantically correct — đây là user token)
+  const anonClient = createClient(url, anonKey);
+  const { data: { user }, error } = await anonClient.auth.getUser(token);
+  if (error || !user) {
+    console.error('[agents/create] AUTH FAIL: token không hợp lệ —', error?.message ?? 'no user returned');
+    return null;
+  }
+
+  // Dùng service role client để query DB (bypass RLS)
   const adminClient = getAdminClient();
-
-  // Validate user JWT bằng service role client
-  const { data: { user }, error } = await adminClient.auth.getUser(token);
-  if (error || !user) return null;
-
-  // Kiểm tra role admin trong DB
-  const { data: agent } = await adminClient
+  const { data: agent, error: agentErr } = await adminClient
     .from('agents')
     .select('role')
     .eq('supabase_uid', user.id)
     .maybeSingle();
 
-  if (!agent || agent.role !== 'admin') return null;
+  if (agentErr) {
+    console.error('[agents/create] AUTH FAIL: DB error khi tìm agent —', agentErr.message);
+    return null;
+  }
+  if (!agent) {
+    console.error('[agents/create] AUTH FAIL: uid', user.id.slice(0, 8), '... không có trong bảng agents');
+    return null;
+  }
+  if (agent.role !== 'admin') {
+    console.error('[agents/create] AUTH FAIL: role =', agent.role, '(cần admin)');
+    return null;
+  }
+
   return adminClient;
 }
 
