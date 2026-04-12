@@ -143,10 +143,11 @@ export async function POST(req: NextRequest) {
     const authResult = await getAuthenticatedUser(req);
     if (!authResult) return unauthorizedResponse();
 
-    const { image_base64, order_id, agent_id } = await req.json() as {
+    const { image_base64, order_id, agent_id, forceUpdate } = await req.json() as {
       image_base64: string;
       order_id: string;
       agent_id: string | null;
+      forceUpdate?: boolean;
     };
 
     if (!image_base64 || !order_id) {
@@ -162,6 +163,22 @@ export async function POST(req: NextRequest) {
     const parsed = await parsePassportFields(rawText);
 
     const idLd = generateIdLd(parsed.PP_No, parsed.Full_Name);
+
+    // Kiểm tra trùng ứng viên (theo id_ld = passport + tên)
+    if (!forceUpdate) {
+      const { data: existing } = await supabaseAdmin
+        .from('candidates')
+        .select('id_ld, full_name, order_id, pp_no, visa_status, interview_status')
+        .eq('id_ld', idLd)
+        .maybeSingle();
+
+      if (existing) {
+        return NextResponse.json(
+          { duplicate: true, existing },
+          { status: 409 },
+        );
+      }
+    }
 
     // Step 3: Save image to Supabase Storage
     const buffer = Buffer.from(cleanBase64, 'base64');

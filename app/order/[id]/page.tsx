@@ -26,6 +26,11 @@ export default function OrderDetail() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [videoUploadingCandidate, setVideoUploadingCandidate] = useState<string | null>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
+  const [dupWarning, setDupWarning] = useState<{
+    fullName: string; orderId: string; ppNo: string;
+    visaStatus: string | null; interviewStatus: string | null;
+  } | null>(null);
+  const [pendingUpload, setPendingUpload] = useState<{ base64: string; agentId: string | null } | null>(null);
 
   const fetchCandidates = useCallback(async () => {
     try {
@@ -190,6 +195,25 @@ export default function OrderDetail() {
             }),
           });
 
+          // Ứng viên đã tồn tại → hỏi confirm trước khi ghi đè
+          if (res.status === 409) {
+            const warn = await res.json() as {
+              duplicate: boolean;
+              existing: { full_name: string; order_id: string; pp_no: string; visa_status: string | null; interview_status: string | null };
+            };
+            setDupWarning({
+              fullName: warn.existing.full_name || 'Không rõ',
+              orderId: warn.existing.order_id,
+              ppNo: warn.existing.pp_no || '—',
+              visaStatus: warn.existing.visa_status,
+              interviewStatus: warn.existing.interview_status,
+            });
+            setPendingUpload({ base64: compressedBase64, agentId });
+            setIsUploading(false);
+            if (fileInputRef.current) fileInputRef.current.value = '';
+            return;
+          }
+
           if (!res.ok) {
             const errData = await res.json() as { error?: string };
             throw new Error(errData.error || `HTTP ${res.status}`);
@@ -198,11 +222,11 @@ export default function OrderDetail() {
           const result = await res.json() as { success?: boolean; error?: string };
           if (result.success) {
             sessionStorage.removeItem(`c_url_${orderId}`);
-            setUploadMsg('✅ Passport uploaded successfully!');
+            setUploadMsg('✅ Đã thêm ứng viên thành công');
             setTimeout(() => setUploadMsg(null), 3000);
             fetchCandidates();
           } else {
-            setUploadMsg(`Upload failed: ${result.error || 'Unknown error'}`);
+            setUploadMsg(`Upload thất bại: ${result.error || 'Unknown error'}`);
           }
         } catch (err) {
           setUploadMsg(`Upload error: ${err instanceof Error ? err.message : String(err)}`);
@@ -215,6 +239,42 @@ export default function OrderDetail() {
     };
     reader.readAsDataURL(file);
   };
+
+  const handleConfirmUpdate = useCallback(async () => {
+    if (!pendingUpload) return;
+    setIsUploading(true);
+    setDupWarning(null);
+    const { data: { session } } = await supabase.auth.getSession();
+    try {
+      const res = await fetch('/api/passport', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
+        body: JSON.stringify({
+          image_base64: pendingUpload.base64,
+          order_id: orderId,
+          agent_id: pendingUpload.agentId,
+          forceUpdate: true,
+        }),
+      });
+      setPendingUpload(null);
+      if (res.ok) {
+        sessionStorage.removeItem(`c_url_${orderId}`);
+        setUploadMsg('✅ Đã cập nhật thông tin ứng viên');
+        setTimeout(() => setUploadMsg(null), 3000);
+        fetchCandidates();
+      } else {
+        const errData = await res.json() as { error?: string };
+        setUploadMsg(`Lỗi: ${errData.error || 'Không rõ'}`);
+      }
+    } catch (err) {
+      setUploadMsg(`Lỗi: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setIsUploading(false);
+    }
+  }, [pendingUpload, orderId, fetchCandidates]);
 
   const handleVideoUploadClick = useCallback((candidateId: string) => {
     setVideoUploadingCandidate(candidateId);
@@ -426,6 +486,47 @@ export default function OrderDetail() {
         </div>
 
       </div>
+
+      {/* Confirm modal khi ứng viên đã tồn tại */}
+      {dupWarning && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white w-full sm:max-w-sm rounded-t-3xl sm:rounded-2xl shadow-xl p-5 space-y-4">
+            <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto sm:hidden" />
+            <div className="flex items-start gap-3 pt-1">
+              <span className="text-2xl flex-shrink-0">⚠️</span>
+              <div>
+                <h3 className="font-bold text-slate-800">Ứng viên đã tồn tại</h3>
+                <p className="text-sm text-gray-600 mt-1">
+                  <span className="font-medium">{dupWarning.fullName}</span> (PP: {dupWarning.ppNo}) đã có trong đơn hàng{' '}
+                  <span className="text-blue-600 font-medium">{dupWarning.orderId}</span>.
+                </p>
+                {(dupWarning.visaStatus || dupWarning.interviewStatus) && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    {dupWarning.visaStatus && `Visa: ${dupWarning.visaStatus}`}
+                    {dupWarning.visaStatus && dupWarning.interviewStatus && ' · '}
+                    {dupWarning.interviewStatus && `PV: ${dupWarning.interviewStatus}`}
+                  </p>
+                )}
+                <p className="text-sm text-gray-600 mt-2">Bạn có muốn cập nhật thông tin từ hộ chiếu mới này không?</p>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => { setDupWarning(null); setPendingUpload(null); }}
+                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 rounded-xl text-sm min-h-[44px]"
+              >
+                Huỷ
+              </button>
+              <button
+                onClick={handleConfirmUpdate}
+                className="flex-1 bg-amber-500 hover:bg-amber-600 text-white font-semibold py-3 rounded-xl text-sm min-h-[44px]"
+              >
+                Cập nhật
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

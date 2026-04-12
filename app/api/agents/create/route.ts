@@ -88,6 +88,21 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Kiểm tra trùng short_name (dùng để đăng nhập bằng username)
+    if (short_name?.trim()) {
+      const { data: existingByShortName } = await adminClient
+        .from('agents')
+        .select('id')
+        .ilike('short_name', short_name.trim())
+        .maybeSingle();
+      if (existingByShortName) {
+        return NextResponse.json(
+          { error: `Tên viết tắt "${short_name.trim()}" đã được sử dụng bởi tài khoản khác` },
+          { status: 409 },
+        );
+      }
+    }
+
     const { data: authData, error: authErr } = await adminClient.auth.admin.createUser({
       email: email.trim().toLowerCase(),
       password,
@@ -95,6 +110,11 @@ export async function POST(req: NextRequest) {
     });
 
     if (authErr) {
+      // Map lỗi tiếng Anh của Supabase sang tiếng Việt thân thiện
+      const msg = authErr.message.toLowerCase();
+      if (msg.includes('already registered') || msg.includes('already exists') || msg.includes('duplicate')) {
+        return NextResponse.json({ error: 'Email này đã được đăng ký bởi tài khoản khác' }, { status: 409 });
+      }
       return NextResponse.json(
         { error: `Tạo tài khoản thất bại: ${authErr.message}` },
         { status: 400 },
@@ -122,8 +142,15 @@ export async function POST(req: NextRequest) {
 
     if (dbErr) {
       await adminClient.auth.admin.deleteUser(uid);
+      const dbMsg = dbErr.message.toLowerCase();
+      if (dbMsg.includes('duplicate') || dbMsg.includes('unique') || dbMsg.includes('already exists')) {
+        return NextResponse.json(
+          { error: `Tên viết tắt hoặc ID tài khoản đã tồn tại, vui lòng dùng tên khác` },
+          { status: 409 },
+        );
+      }
       return NextResponse.json(
-        { error: `Tạo agent thất bại: ${dbErr.message}` },
+        { error: `Tạo tài khoản thất bại: ${dbErr.message}` },
         { status: 500 },
       );
     }
