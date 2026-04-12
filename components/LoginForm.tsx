@@ -56,7 +56,7 @@ export default function LoginForm({
               onChange={(e) => onUsernameChange(e.target.value)}
               required
               className="w-full px-3 py-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Email hoặc tên viết tắt (VD: Nam)"
+              placeholder="Email hoặc ID tài khoản (VD: NAM_2026)"
               autoComplete="username"
             />
           </div>

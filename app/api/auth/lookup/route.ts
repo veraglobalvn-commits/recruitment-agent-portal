@@ -11,7 +11,7 @@ function getAdminClient() {
 // POST /api/auth/lookup
 // Body: { username: string }
 // Returns: { email: string } hoặc { error: string }
-// Mục đích: Tìm email từ tên đăng nhập (short_name) để dùng signInWithPassword phía client
+// Mục đích: Tìm email từ agent ID (VD: NAM_2026) để dùng signInWithPassword phía client
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json() as { username?: string };
@@ -28,11 +28,11 @@ export async function POST(req: NextRequest) {
 
     const supabase = getAdminClient();
 
-    // Tìm agent theo short_name (case-insensitive)
+    // Tìm agent theo id (case-insensitive), VD: NAM_2026
     const { data: agent, error: agentErr } = await supabase
       .from('agents')
       .select('supabase_uid')
-      .ilike('short_name', username)
+      .ilike('id', username)
       .maybeSingle();
 
     if (agentErr) {
@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (!agent?.supabase_uid) {
-      return NextResponse.json({ error: 'Không tìm thấy tài khoản với tên đăng nhập này' }, { status: 404 });
+      return NextResponse.json({ error: 'Không tìm thấy tài khoản với ID này (VD: NAM_2026)' }, { status: 404 });
     }
 
     // Lấy email từ Supabase Auth bằng UID

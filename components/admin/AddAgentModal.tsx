@@ -136,6 +136,14 @@ export default function AddAgentModal({ onClose, onSaved, showRoleSelector }: Ad
               placeholder="VD: Nam, Hoa..."
               className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[44px]"
             />
+            {form.short_name.trim() && (
+              <p className="text-xs text-gray-400 mt-1">
+                ID đăng nhập:{' '}
+                <span className="font-mono font-medium text-gray-600">
+                  {form.short_name.trim().toUpperCase().replace(/\s+/g, '_')}_{new Date().getFullYear()}
+                </span>
+              </p>
+            )}
           </div>
 
           {showRoleSelector && (

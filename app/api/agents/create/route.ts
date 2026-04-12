@@ -18,13 +18,13 @@ async function getAdminFromRequest(req: NextRequest): Promise<ReturnType<typeof 
   let userId: string | null = null;
 
   // Ưu tiên cookie-based auth (browser tự gửi khi same-origin fetch)
+  // Dùng getAll() để hỗ trợ chunked cookies từ @supabase/ssr
   try {
     const cookieStore = cookies();
     const browserClient = createServerClient(url, anonKey, {
       cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value;
-        },
+        getAll() { return cookieStore.getAll(); },
+        setAll() { /* read-only in API route */ },
       },
     });
     const { data: { user } } = await browserClient.auth.getUser();
@@ -124,7 +124,7 @@ export async function POST(req: NextRequest) {
     const uid = authData.user.id;
 
     const shortNameVal = short_name?.trim() || full_name.trim().split(' ').pop() || 'AGENT';
-    const agentId = `${shortNameVal.toUpperCase().replace(/\s+/g, '_')} ${new Date().getFullYear()}`;
+    const agentId = `${shortNameVal.toUpperCase().replace(/\s+/g, '_')}_${new Date().getFullYear()}`;
 
     const assignedRole = (role === 'admin' || role === 'agent') ? role : 'agent';
 
