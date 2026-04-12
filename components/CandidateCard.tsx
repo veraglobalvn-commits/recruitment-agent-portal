@@ -251,17 +251,17 @@ export default function CandidateCard({
         </div>
 
         <div className="flex-1 min-w-0">
-          <div className="flex justify-between items-start gap-1">
-            <h3 className="font-bold text-gray-800 text-sm leading-tight">{candidate.full_name || <span className="text-red-400">N/A</span>}</h3>
-            {candidate.interview_status && !onStatusChange && (
-              <span className={`text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${
-                candidate.interview_status === 'Passed' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-              }`}>
-                {candidate.interview_status === 'Passed' ? '✓ Passed' : '✗ Failed'}
-              </span>
-            )}
+          <div className="flex items-start justify-between gap-1 mb-0.5">
+            <h3 className="font-bold text-gray-800 text-sm leading-tight flex-1 min-w-0 truncate">{candidate.full_name || <span className="text-red-400">N/A</span>}</h3>
             <span className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded flex-shrink-0">{candidate.id_ld}</span>
           </div>
+          {candidate.interview_status && !onStatusChange && (
+            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+              candidate.interview_status === 'Passed' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+            }`}>
+              {candidate.interview_status === 'Passed' ? '✓ Passed' : '✗ Failed'}
+            </span>
+          )}
         </div>
       </div>
 
@@ -269,7 +269,7 @@ export default function CandidateCard({
       <div className="px-4 pb-3">
         {editing ? (
           <div className="bg-blue-50 rounded-lg p-3 space-y-2">
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Full Name</label>
                 <input value={form.full_name} onChange={(e) => setForm(f => ({ ...f, full_name: e.target.value }))} className={inputCls} />
@@ -298,7 +298,7 @@ export default function CandidateCard({
                 <label className="block text-xs text-gray-500 mb-1">Phone</label>
                 <input value={form.phone} onChange={(e) => setForm(f => ({ ...f, phone: e.target.value }))} className={inputCls} />
               </div>
-              <div className="col-span-2">
+              <div className="sm:col-span-2">
                 <label className="block text-xs text-gray-500 mb-1">Address</label>
                 <input value={form.address} onChange={(e) => setForm(f => ({ ...f, address: e.target.value }))} className={inputCls} />
               </div>
@@ -316,7 +316,7 @@ export default function CandidateCard({
           </div>
         ) : (
           <div className="bg-gray-50 rounded-lg p-3">
-            <div className="grid grid-cols-3 gap-x-4 gap-y-1.5 text-xs">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-3 gap-y-1.5 text-xs">
               <div>
                 <span className="text-gray-400">PP No</span>
                 <p className={`font-semibold ${candidate.pp_no ? 'text-gray-800' : 'text-red-400'}`}>{candidate.pp_no || 'N/A'}</p>
@@ -341,7 +341,7 @@ export default function CandidateCard({
                 <span className="text-gray-400">POB</span>
                 <p className={`font-semibold ${candidate.pob ? 'text-gray-800' : 'text-red-400'}`}>{candidate.pob || 'N/A'}</p>
               </div>
-              <div className="col-span-3">
+              <div className="col-span-2 sm:col-span-3">
                 <span className="text-gray-400">Address</span>
                 <p className={`font-semibold ${candidate.address ? 'text-gray-800' : 'text-red-400'}`}>{candidate.address || 'N/A'}</p>
               </div>

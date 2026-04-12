@@ -5,14 +5,16 @@
 ---
 
 ## Tech Stack
-- **Framework:** Next.js 14 (App Router)
+- **Framework:** Next.js 14.2.35 (App Router)
 - **Language:** TypeScript (strict)
 - **Styling:** Tailwind CSS 3.4
 - **Auth:** Supabase Auth (`@supabase/ssr`)
 - **Database:** Supabase PostgreSQL (primary read/write)
 - **Storage:** Supabase Storage (`agent-media` bucket)
-- **OCR:** OCR.space + OpenAI GPT-4o-mini (for business license scanning)
-- **Charts:** Recharts (available but not heavily used yet)
+- **OCR:** OCR.space + OpenAI GPT-4o-mini (passport & business license scanning)
+- **Data sync:** n8n webhooks → Lark Suite Bitable
+- **Hosting:** Vercel (auto-deploy from `main` branch)
+- **Domain:** `portal.veraglobal.vn`
 
 ---
 
@@ -56,7 +58,7 @@ app/
   error.tsx                           # Global error boundary
   order/[id]/page.tsx                 # Agent order detail + candidate cards
   admin/
-    layout.tsx                        # Admin shell: sidebar + mobile drawer + auth guard
+    layout.tsx                        # Admin shell: sidebar + mobile drawer + auth guard (role check)
     page.tsx                          # Admin dashboard: KPIs, orders, agents, FAB
     companies/
       page.tsx                        # Company list: search, mobile cards, desktop table
@@ -64,9 +66,15 @@ app/
     orders/
       page.tsx                        # Order list: search, filter, mobile cards, desktop table
       [id]/page.tsx                   # Order detail: edit info, agent, payment, docs, candidates
+    agents/
+      page.tsx                        # Agent list
+      [id]/page.tsx                   # Edit agent info, role, labor_percentage
+    candidates/
+      page.tsx                        # All candidates list with filters, edit, delete
   api/
     ocr/route.ts                      # POST: base64 → OCR.space → GPT-4o-mini → parsed fields
     passport/route.ts                 # POST: base64 → OCR.space → GPT-4o-mini → Supabase DB → Storage → n8n/Lark
+    agents/create/route.ts            # POST: create new agent (admin only)
 
 components/
   LoginForm.tsx                       # Agent login form (email + password)
@@ -78,16 +86,48 @@ components/
   admin/
     CompanyFormModal.tsx              # Add company modal (manual + OCR scan tabs)
     AddOrderModal.tsx                 # Add order modal (company selector + form)
+    AddAgentModal.tsx                 # Add agent modal
     ConfirmDeleteModal.tsx            # Confirm delete by typing "xoá"
 
 lib/
   types.ts                            # All TypeScript interfaces (single source of truth)
-  supabase.ts                         # Browser Supabase client singleton
+  supabase.ts                         # Browser Supabase client singleton (anon key)
+  auth-helpers.ts                     # Server-side auth: getAuthenticatedUser(), getAdminUser()
   imageUtils.ts                       # compressImage, compressToBase64, fmtFileSize
 
-middleware.ts                         # Auth guard: protects /order/* routes only
+middleware.ts                         # Session guard: redirects unauthenticated → /
+                                      # Protects: /order/* and /admin/*
 n8n/                                  # n8n workflow JSON files (sanitized, no secrets)
+scripts/                              # Utility Python scripts (migrations, Lark sync, testing)
 ```
+
+---
+
+## Auth Pattern
+
+### Browser (client components)
+- `lib/supabase.ts` → `createSupabaseClient()` với anon key
+- Direct Supabase calls from useCallback/useEffect
+
+### Server / API Routes
+- `lib/auth-helpers.ts` → service role key (bypasses RLS)
+- `getAuthenticatedUser(req: NextRequest)` — verifies Bearer token, returns user or 401
+- `getAdminUser(req: NextRequest)` — same + checks `agents.role === 'admin'`, returns 403 if not admin
+- **All API routes must use one of these helpers** (no unauthenticated endpoints)
+
+### Middleware (Edge Runtime)
+- `middleware.ts` dùng `@supabase/ssr` createServerClient + cookie để verify session
+- Unauthenticated → redirect về `/`
+- Role check (admin) ở `app/admin/layout.tsx` (cần DB query, không làm trong Edge Runtime)
+
+### Route Protection Summary
+| Route | Guard |
+|---|---|
+| `/order/*` | Middleware (session) |
+| `/admin/*` | Middleware (session) + Layout (role=admin) |
+| `/api/ocr` | Bearer token (`getAuthenticatedUser`) |
+| `/api/passport` | Bearer token (`getAuthenticatedUser`) |
+| `/api/agents/create` | Bearer token + admin role (`getAdminUser`) |
 
 ---
 
@@ -100,7 +140,7 @@ n8n/                                  # n8n workflow JSON files (sanitized, no s
 | `agents` | `id, supabase_uid, role(admin/agent), full_name, short_name, avatar_url, labor_percentage` | Auth mapped via `supabase_uid = auth.uid()`. `labor_percentage` for multi-agent orders (0-100, manually set by admin) |
 | `companies` | `id, company_name, short_name, tax_code, legal_rep, legal_rep_title, address, phone, email, industry, business_reg_authority, business_reg_date, company_media(JSONB[]), avatar_url, video_url, doc_links(JSONB[]), deleted_at, en_company_name, en_legal_rep, en_address, en_title` | Soft delete via `deleted_at` |
 | `orders` | `id(ORD-xxx), company_id(FK→companies), company_name, job_type, job_type_en, total_labor, labor_missing, status, total_fee_vn, payment_status_vn, service_fee_per_person, agent_id, url_demand_letter, salary_usd, url_order, legal_status, meal, dormitory, recruitment_info` | FK: `orders_company_id_fkey` |
-| `candidates` | `id_ld, order_id, agent_id, full_name, pp_no, dob, pp_doi, pp_doe, pob, address, phone, visa_status, passport_link, video_link, photo_link, height_ft, weight_kg, pcc_link, health_cert_link, interview_status` | Agent can UPDATE own candidates. Delete only when no files + no pass/fail. |
+| `candidates` | `id_ld, order_id, agent_id, full_name, pp_no, dob, pp_doi, pp_doe, pob, address, phone, visa_status, passport_link, video_link, photo_link, height_ft, weight_kg, pcc_link, health_cert_link, interview_status, created_at` | Agent can UPDATE own candidates. Delete only when no files + no pass/fail. |
 
 ### Supabase Storage
 - **Bucket:** `agent-media`
@@ -110,7 +150,6 @@ n8n/                                  # n8n workflow JSON files (sanitized, no s
 ### Auth Flow
 - **Agent:** Login → `supabase.auth.signInWithPassword` → session check → dashboard
 - **Admin:** Same login → check `agents.role = 'admin'` via `supabase_uid` → redirect if not admin
-- **Middleware:** Only guards `/order/*` routes. Admin routes guarded client-side in `app/admin/layout.tsx`
 
 ---
 
@@ -165,7 +204,7 @@ n8n/                                  # n8n workflow JSON files (sanitized, no s
 - **Don't persist with failing approach ≥3 times.** Stop, benchmark alternatives quantitatively, pick highest scoring solution.
 
 ### Data Safety
-- **Data flow principle:** Web <=> Supabase is the default. Lark sync (if any): Supabase <=> N8N <=> Lark. Never let Lark be the primary data source — Supabase must always receive data before Lark.
+- **Data flow principle:** Web ⟺ Supabase is the default. Lark sync (if any): Supabase ⟺ N8N ⟺ Lark. Never let Lark be the primary data source — Supabase must always receive data before Lark.
 - **Verify before writing:** Check FK constraints and column existence in DB before writing join queries or inserts. Test with REST API curl after migrations.
 - **Duplicate check:** Every create form must check for duplicates before insert (e.g., company name + tax_code).
 - **Soft delete only:** Use `deleted_at` column. Keep text data, remove Storage files (images/docs).
@@ -178,41 +217,15 @@ n8n/                                  # n8n workflow JSON files (sanitized, no s
 - **UI text vs data value:** Hard-coded labels/buttons/headings = follow language rule. DB values (status, names) = display as-is, never translate.
 - **Never define components inside render:** Defining a component (function) inside another component's render body causes React to remount it on every re-render, breaking input focus. Move to module scope or use inline JSX instead.
 - **Responsive is mandatory for all UI work:** Before coding any new page or UI-related task, ensure the design works on mobile (375px) and desktop (1280px). Use mobile cards + desktop tables pattern. Touch targets must be `min-h-[44px] min-w-[44px]`.
+- **No console.log in production code.** Use `console.error` only at API route boundaries. Never log PII (names, passport numbers, DOB).
 
 ---
 
 ## Environment Variables
 See `.env.example`. Key vars:
-- `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` — Supabase
-- `SUPABASE_SERVICE_ROLE_KEY` — Service role key for server-side API routes (bypass RLS)
+- `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` — Supabase (browser-safe)
+- `SUPABASE_SERVICE_ROLE_KEY` — Service role key for server-side API routes (bypass RLS, **server-only**)
 - `OCR_SPACE_API_KEY` — OCR.space API
 - `OPENAI_API_KEY` — GPT-4o-mini for OCR field extraction
-
----
-
-## Recent Changes (2026-04)
-
-### Agent Portal Updates
-- **Hidden fields for agents:** Order status, job file, PaymentChart, and visa status are now hidden from agent view
-- **Job Type display:** Uses `job_type_en` (English) instead of `job_type` for better readability
-- **Pass/Fail status:** Display-only for agents (badge), admin still has action buttons
-- **Passport upload:** New `/api/passport` route handles OCR (OCR.space) → AI parse (GPT-4o-mini) → Supabase DB → Storage → n8n/Lark sync
-- **Candidate editing:** Agents can edit passport info fields (name, PP No, DOB, dates, POB, address, phone)
-- **Candidate deletion:** Agents can delete candidates only when no files uploaded + no pass/fail status
-- **Auto-save measurements:** Height/weight auto-save with 1.5s debounce, no manual save button
-- **Empty field highlighting:** All empty fields display in red to indicate missing data
-- **PCC & Health Cert split:** Separated into two distinct upload buttons with consistent color coding (red=missing, green=uploaded, yellow=uploading)
-- **Video upload fix:** Fixed spinning button issue when user cancels file dialog
-- **Agent avatar upload:** Agents can now upload their own avatar from the dashboard header
-- **Recruitment efficiency:** Added progress bar showing hired candidates vs total labor on order detail page
-- **Order detail enhancements:** Added Meal, Dormitory, and Recruitment Info fields to order detail page
-- **Multi-agent labor division:** Added per-agent progress bars for orders with 2+ agents. Admin can set labor_percentage (0-100) for each agent. Progress calculated as passed candidates / allocated labor. Shows error if percentages don't sum to 100% or if any agent has null percentage.
-
-### Database Schema Changes Required
-- **orders table:** Add column `job_type_en` (text, nullable) for English job type display
-- **candidates table:**
-  - Rename column `pcc_health_cert_link` → `pcc_link`
-  - Add column `health_cert_link` (text, nullable)
-- **agents table:** Add column `avatar_url` (text, nullable) for agent avatar
-- **agents table:** Add column `labor_percentage` (integer, nullable) for multi-agent labor division
-- **orders table:** Add columns `meal` (text, nullable), `dormitory` (text, nullable), `recruitment_info` (text, nullable)
+- `NEXT_PUBLIC_N8N_UPLOAD_URL` — n8n webhook for Lark passport sync
+- `NEXT_PUBLIC_N8N_VIDEO_UPDATE_URL` — n8n webhook for Lark video update

@@ -146,15 +146,15 @@ export default function CompaniesPage() {
                 </div>
                 <div className="text-right flex-shrink-0">
                   {c.active_orders > 0 && (
-                    <span className="inline-block text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">
-                      {c.active_orders} đơn đang tuyển
+                    <span className="inline-block text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium whitespace-nowrap">
+                      {c.active_orders} đang tuyển
                     </span>
                   )}
                   {c.total_orders === 0 && (
-                    <span className="inline-block text-xs bg-gray-100 text-gray-400 px-2 py-0.5 rounded-full">Chưa có đơn</span>
+                    <span className="inline-block text-xs bg-gray-100 text-gray-400 px-2 py-0.5 rounded-full whitespace-nowrap">Chưa có đơn</span>
                   )}
                   {c.total_revenue > 0 && (
-                    <p className="text-xs text-blue-600 font-semibold mt-1">{fmtVnd(c.total_revenue)} ₫</p>
+                    <p className="text-xs text-blue-600 font-semibold mt-1 whitespace-nowrap">{fmtVnd(c.total_revenue)} ₫</p>
                   )}
                 </div>
               </Link>
