@@ -27,19 +27,30 @@ export async function POST(req: NextRequest) {
       steps.push(`step2a: anon getUser OK — uid prefix ${anonData.user.id.slice(0, 8)}`);
     }
 
-    // Bước 2b: Validate token bằng service role client
+    // Bước 2b: Validate token bằng service role client (optional — có thể fail nếu key sai)
     const svcClient = createClient(url, serviceKey);
     const { data: svcData, error: svcErr } = await svcClient.auth.getUser(token);
     if (svcErr || !svcData.user) {
-      steps.push(`step2b: service getUser FAIL — ${svcErr?.message ?? 'no user'}`);
+      steps.push(`step2b: service getUser FAIL — ${svcErr?.message ?? 'no user'} ← kiểm tra SUPABASE_SERVICE_ROLE_KEY trong Vercel`);
+    } else {
+      steps.push(`step2b: service getUser OK — uid prefix ${svcData.user.id.slice(0, 8)}`);
+    }
+
+    // Bước 2c: Validate + query role dùng user client (cách mới, không cần service role)
+    const userClient = createClient(url, anonKey, {
+      global: { headers: { Authorization: `Bearer ${token}` } },
+    });
+    const { data: userData2, error: userErr2 } = await userClient.auth.getUser();
+    if (userErr2 || !userData2.user) {
+      steps.push(`step2c: user client getUser FAIL — ${userErr2?.message ?? 'no user'}`);
       return NextResponse.json({ ok: false, failedAt: 'step2_token_invalid', steps });
     }
-    steps.push(`step2b: service getUser OK — uid prefix ${svcData.user.id.slice(0, 8)}`);
+    steps.push(`step2c: user client getUser OK — uid prefix ${userData2.user.id.slice(0, 8)}`);
 
-    const userId = svcData.user.id;
+    const userId = userData2.user.id;
 
-    // Bước 3: Tìm user trong bảng agents
-    const { data: agent, error: agentErr } = await svcClient
+    // Bước 3: Tìm user trong bảng agents (dùng user client)
+    const { data: agent, error: agentErr } = await userClient
       .from('agents')
       .select('id, role, supabase_uid')
       .eq('supabase_uid', userId)

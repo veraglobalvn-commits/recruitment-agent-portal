@@ -10,7 +10,8 @@ function getAdminClient() {
 }
 
 // Xác thực admin qua Bearer token
-// Log chi tiết từng bước để dễ debug qua Vercel logs
+// - Dùng anon client cho validate JWT + role check (không cần service role)
+// - Service role chỉ dùng cho thao tác thực sự cần bypass RLS (createUser, insert agent)
 async function getAdminFromRequest(req: NextRequest): Promise<ReturnType<typeof getAdminClient> | null> {
   const token = req.headers.get('authorization')?.replace('Bearer ', '').trim();
   if (!token) {
@@ -18,17 +19,19 @@ async function getAdminFromRequest(req: NextRequest): Promise<ReturnType<typeof 
     return null;
   }
 
-  // Dùng anon client để validate user JWT (semantically correct — đây là user token)
-  const anonClient = createClient(url, anonKey);
-  const { data: { user }, error } = await anonClient.auth.getUser(token);
-  if (error || !user) {
-    console.error('[agents/create] AUTH FAIL: token không hợp lệ —', error?.message ?? 'no user returned');
+  // Validate JWT + query role dùng anon client + user token (không phụ thuộc service role key)
+  const userClient = createClient(url, anonKey, {
+    global: { headers: { Authorization: `Bearer ${token}` } },
+  });
+
+  const { data: { user }, error: userErr } = await userClient.auth.getUser();
+  if (userErr || !user) {
+    console.error('[agents/create] AUTH FAIL: token không hợp lệ —', userErr?.message ?? 'no user returned');
     return null;
   }
 
-  // Dùng service role client để query DB (bypass RLS)
-  const adminClient = getAdminClient();
-  const { data: agent, error: agentErr } = await adminClient
+  // Query role qua user client (RLS cho phép user đọc record của chính mình)
+  const { data: agent, error: agentErr } = await userClient
     .from('agents')
     .select('role')
     .eq('supabase_uid', user.id)
@@ -47,7 +50,7 @@ async function getAdminFromRequest(req: NextRequest): Promise<ReturnType<typeof 
     return null;
   }
 
-  return adminClient;
+  return getAdminClient(); // service role chỉ dùng từ đây trở đi
 }
 
 export async function POST(req: NextRequest) {
