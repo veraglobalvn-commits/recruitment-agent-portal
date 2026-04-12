@@ -16,23 +16,97 @@
             "name": "Mỗi ngày 8PM SGT",
             "type": "n8n-nodes-base.scheduleTrigger",
             "typeVersion": 1.2,
-            "position": [
-                0,
-                0
-            ]
+            "position": [0, 0]
         },
         {
             "parameters": {
-                "jsCode": "// === CẤU HÌNH ===\nconst SUPABASE_URL = 'https://fpesidoqwxyyutgvalsp.supabase.co';\nconst SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZwZXNpZG9xd3h5eXV0Z3ZhbHNwIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTY3NDkzNywiZXhwIjoyMDkxMjUwOTM3fQ.X9s9a_rSNefhdd7UEsTulNB1xct4JK_QZe2UzIubPg8';\nconst CHAT_ID = '-5163098733';\n\n// === TÍNH NGÀY (SGT = UTC+7) ===\nconst now = new Date();\nconst SGT_OFFSET = 7 * 60 * 60 * 1000;\nconst sgtNow = new Date(now.getTime() + SGT_OFFSET);\nconst sgtDateStr = sgtNow.toISOString().split('T')[0]; // YYYY-MM-DD\nconst startDate = new Date(sgtDateStr + 'T00:00:00+07:00').toISOString();\nconst endDate = now.toISOString();\n\nconst headers = {\n  'apikey': SUPABASE_KEY,\n  'Authorization': `Bearer ${SUPABASE_KEY}`,\n  'Content-Type': 'application/json'\n};\n\n// === QUERY 1: Ứng viên mới trong ngày ===\nconst candidatesResp = await $helpers.httpRequest({\n  method: 'GET',\n  url: `${SUPABASE_URL}/rest/v1/candidates?select=id_ld,full_name,order_id,interview_status,agent_id&synced_at=gte.${encodeURIComponent(startDate)}&synced_at=lt.${encodeURIComponent(endDate)}&order=synced_at.asc`,\n  headers\n});\nconst candidates = Array.isArray(candidatesResp) ? candidatesResp : [];\n\n// === QUERY 2: Đơn hàng còn thiếu lao động ===\nconst ordersResp = await $helpers.httpRequest({\n  method: 'GET',\n  url: `${SUPABASE_URL}/rest/v1/orders?select=id,company_name,job_type,total_labor,labor_missing,status&labor_missing=gt.0&order=created_at.desc`,\n  headers\n});\nconst orders = Array.isArray(ordersResp) ? ordersResp : [];\n\n// === FORMAT TIN NHẮN ===\n// Định dạng ngày theo tiếng Việt: DD/MM/YYYY\nconst [yyyy, mm, dd] = sgtDateStr.split('-');\nconst dateDisplay = `${dd}/${mm}/${yyyy}`;\n\nlet text = `📊 *BÁO CÁO NGÀY ${dateDisplay}*\\n`;\ntext += `━━━━━━━━━━━━━━━━━━\\n\\n`;\n\n// --- Phần 1: Ứng viên mới ---\nif (candidates.length === 0) {\n  text += `🆕 *Ứng viên mới hôm nay:* Không có\\n`;\n} else {\n  text += `🆕 *Ứng viên mới hôm nay: ${candidates.length} người*\\n`;\n\n  // Nhóm theo đơn hàng\n  const byOrder = {};\n  for (const c of candidates) {\n    const key = c.order_id || 'Chưa phân đơn';\n    if (!byOrder[key]) byOrder[key] = { pass: 0, fail: 0, pending: 0 };\n    const status = (c.interview_status || '').toLowerCase();\n    if (status === 'pass') byOrder[key].pass++;\n    else if (status === 'fail') byOrder[key].fail++;\n    else byOrder[key].pending++;\n  }\n\n  for (const [orderId, stats] of Object.entries(byOrder)) {\n    const total = stats.pass + stats.fail + stats.pending;\n    const parts = [];\n    if (stats.pass > 0) parts.push(`✅ ${stats.pass} pass`);\n    if (stats.fail > 0) parts.push(`❌ ${stats.fail} fail`);\n    if (stats.pending > 0) parts.push(`⏳ ${stats.pending} chờ`);\n    text += `  📦 ${orderId}: ${total} người — ${parts.join(', ') || '⏳ chờ duyệt'}\\n`;\n  }\n}\n\ntext += `\\n`;\n\n// --- Phần 2: Đơn hàng đang tuyển ---\nif (orders.length === 0) {\n  text += `📋 *Đơn hàng:* Tất cả đã đủ lao động 🎉`;\n} else {\n  const totalMissing = orders.reduce((sum, o) => sum + (parseInt(o.labor_missing) || 0), 0);\n  text += `📋 *Đơn hàng đang tuyển: ${orders.length} đơn — còn thiếu ${totalMissing} suất*\\n`;\n\n  const displayed = orders.slice(0, 8);\n  for (const o of displayed) {\n    text += `  • ${o.company_name} — ${o.job_type}\\n    còn thiếu *${o.labor_missing}/${o.total_labor}* suất\\n`;\n  }\n  if (orders.length > 8) {\n    text += `  _...và ${orders.length - 8} đơn khác_\\n`;\n  }\n}\n\nreturn [{\n  json: {\n    text,\n    chat_id: CHAT_ID\n  }\n}];"
+                "jsCode": "// Compute today's date range in SGT (UTC+7)\nconst now = new Date();\nconst SGT_OFFSET = 7 * 60 * 60 * 1000;\nconst sgtNow = new Date(now.getTime() + SGT_OFFSET);\nconst sgtDateStr = sgtNow.toISOString().split('T')[0]; // YYYY-MM-DD\n\nconst startDate = new Date(sgtDateStr + 'T00:00:00+07:00').toISOString();\nconst endDate = now.toISOString();\n\n// Format: DD/MM/YYYY\nconst [yyyy, mm, dd] = sgtDateStr.split('-');\nconst dateDisplay = `${dd}/${mm}/${yyyy}`;\n\nreturn [{\n  json: {\n    start_date: startDate,\n    end_date: endDate,\n    date_display: dateDisplay\n  }\n}];"
             },
-            "id": "fetch-and-format",
-            "name": "Lấy Dữ Liệu & Tạo Báo Cáo",
+            "id": "compute-dates",
+            "name": "Tính Ngày",
             "type": "n8n-nodes-base.code",
             "typeVersion": 2,
-            "position": [
-                220,
-                0
-            ]
+            "position": [220, 0]
+        },
+        {
+            "parameters": {
+                "method": "GET",
+                "url": "=https://fpesidoqwxyyutgvalsp.supabase.co/rest/v1/candidates?select=id_ld,full_name,order_id,interview_status&synced_at=gte.{{$json.start_date}}&synced_at=lt.{{$json.end_date}}&order=synced_at.asc",
+                "sendHeaders": true,
+                "headerParameters": {
+                    "parameters": [
+                        {
+                            "name": "apikey",
+                            "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZwZXNpZG9xd3h5eXV0Z3ZhbHNwIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTY3NDkzNywiZXhwIjoyMDkxMjUwOTM3fQ.X9s9a_rSNefhdd7UEsTulNB1xct4JK_QZe2UzIubPg8"
+                        },
+                        {
+                            "name": "Authorization",
+                            "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZwZXNpZG9xd3h5eXV0Z3ZhbHNwIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTY3NDkzNywiZXhwIjoyMDkxMjUwOTM3fQ.X9s9a_rSNefhdd7UEsTulNB1xct4JK_QZe2UzIubPg8"
+                        },
+                        {
+                            "name": "Accept",
+                            "value": "application/json"
+                        }
+                    ]
+                },
+                "options": {
+                    "response": {
+                        "response": {
+                            "responseFormat": "text"
+                        }
+                    }
+                }
+            },
+            "id": "query-candidates",
+            "name": "Query Candidates",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.2,
+            "position": [440, 0]
+        },
+        {
+            "parameters": {
+                "method": "GET",
+                "url": "https://fpesidoqwxyyutgvalsp.supabase.co/rest/v1/orders?select=id,company_name,job_type,total_labor,labor_missing,status&labor_missing=gt.0&order=created_at.desc",
+                "sendHeaders": true,
+                "headerParameters": {
+                    "parameters": [
+                        {
+                            "name": "apikey",
+                            "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZwZXNpZG9xd3h5eXV0Z3ZhbHNwIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTY3NDkzNywiZXhwIjoyMDkxMjUwOTM3fQ.X9s9a_rSNefhdd7UEsTulNB1xct4JK_QZe2UzIubPg8"
+                        },
+                        {
+                            "name": "Authorization",
+                            "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZwZXNpZG9xd3h5eXV0Z3ZhbHNwIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTY3NDkzNywiZXhwIjoyMDkxMjUwOTM3fQ.X9s9a_rSNefhdd7UEsTulNB1xct4JK_QZe2UzIubPg8"
+                        },
+                        {
+                            "name": "Accept",
+                            "value": "application/json"
+                        }
+                    ]
+                },
+                "options": {
+                    "response": {
+                        "response": {
+                            "responseFormat": "text"
+                        }
+                    }
+                }
+            },
+            "id": "query-orders",
+            "name": "Query Orders",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.2,
+            "position": [660, 0]
+        },
+        {
+            "parameters": {
+                "jsCode": "// === ĐỌC DỮ LIỆU ===\n// responseFormat: text → $json.data là raw JSON string, luôn có 1 item dù kết quả rỗng\nconst candidatesRaw = $('Query Candidates').first().json.data || '[]';\nconst ordersRaw = $json.data || '[]';\nconst dateDisplay = $('Tính Ngày').first().json.date_display;\n\nconst candidates = JSON.parse(candidatesRaw);\nconst orders = JSON.parse(ordersRaw);\n\n// === TẠO TIN NHẮN ===\nlet text = `📊 *BÁO CÁO NGÀY ${dateDisplay}*\\n`;\ntext += `━━━━━━━━━━━━━━━━━━\\n\\n`;\n\n// --- Phần 1: Ứng viên mới ---\nif (!Array.isArray(candidates) || candidates.length === 0) {\n  text += `🆕 *Ứng viên mới hôm nay:* Không có\\n`;\n} else {\n  text += `🆕 *Ứng viên mới hôm nay: ${candidates.length} người*\\n`;\n\n  const byOrder = {};\n  for (const c of candidates) {\n    const key = c.order_id || 'Chưa phân đơn';\n    if (!byOrder[key]) byOrder[key] = { pass: 0, fail: 0, pending: 0 };\n    const status = (c.interview_status || '').toLowerCase();\n    if (status === 'pass') byOrder[key].pass++;\n    else if (status === 'fail') byOrder[key].fail++;\n    else byOrder[key].pending++;\n  }\n\n  for (const [orderId, stats] of Object.entries(byOrder)) {\n    const total = stats.pass + stats.fail + stats.pending;\n    const parts = [];\n    if (stats.pass > 0) parts.push(`✅ ${stats.pass}`);\n    if (stats.fail > 0) parts.push(`❌ ${stats.fail}`);\n    if (stats.pending > 0) parts.push(`⏳ ${stats.pending}`);\n    text += `  📦 ${orderId}: ${total} người — ${parts.join(' / ') || '⏳ chờ duyệt'}\\n`;\n  }\n}\n\ntext += `\\n`;\n\n// --- Phần 2: Đơn hàng đang tuyển ---\nif (!Array.isArray(orders) || orders.length === 0) {\n  text += `📋 *Đơn hàng:* Tất cả đã đủ lao động 🎉`;\n} else {\n  const totalMissing = orders.reduce((sum, o) => sum + (parseInt(o.labor_missing) || 0), 0);\n  text += `📋 *Đơn hàng đang tuyển: ${orders.length} đơn — còn thiếu ${totalMissing} suất*\\n`;\n\n  for (const o of orders.slice(0, 8)) {\n    text += `  • ${o.company_name} — ${o.job_type}\\n    còn thiếu *${o.labor_missing}/${o.total_labor}* suất\\n`;\n  }\n  if (orders.length > 8) {\n    text += `  _...và ${orders.length - 8} đơn khác_\\n`;\n  }\n}\n\nreturn [{\n  json: {\n    text,\n    chat_id: '-5163098733'\n  }\n}];"
+            },
+            "id": "format-message",
+            "name": "Tạo Tin Nhắn",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [880, 0]
         },
         {
             "parameters": {
@@ -47,34 +121,34 @@
             "name": "Gửi Telegram",
             "type": "n8n-nodes-base.httpRequest",
             "typeVersion": 4.2,
-            "position": [
-                440,
-                0
-            ]
+            "position": [1100, 0]
         }
     ],
     "pinData": {},
     "connections": {
         "Mỗi ngày 8PM SGT": {
             "main": [
-                [
-                    {
-                        "node": "Lấy Dữ Liệu & Tạo Báo Cáo",
-                        "type": "main",
-                        "index": 0
-                    }
-                ]
+                [{"node": "Tính Ngày", "type": "main", "index": 0}]
             ]
         },
-        "Lấy Dữ Liệu & Tạo Báo Cáo": {
+        "Tính Ngày": {
             "main": [
-                [
-                    {
-                        "node": "Gửi Telegram",
-                        "type": "main",
-                        "index": 0
-                    }
-                ]
+                [{"node": "Query Candidates", "type": "main", "index": 0}]
+            ]
+        },
+        "Query Candidates": {
+            "main": [
+                [{"node": "Query Orders", "type": "main", "index": 0}]
+            ]
+        },
+        "Query Orders": {
+            "main": [
+                [{"node": "Tạo Tin Nhắn", "type": "main", "index": 0}]
+            ]
+        },
+        "Tạo Tin Nhắn": {
+            "main": [
+                [{"node": "Gửi Telegram", "type": "main", "index": 0}]
             ]
         }
     },
@@ -83,11 +157,7 @@
         "executionOrder": "v1"
     },
     "tags": [
-        {
-            "name": "telegram"
-        },
-        {
-            "name": "daily-report"
-        }
+        {"name": "telegram"},
+        {"name": "daily-report"}
     ]
 }
