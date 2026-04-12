@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { getAuthenticatedUser, unauthorizedResponse } from '@/lib/auth-helpers';
 
 interface PassportParsed {
   Full_Name: string;
@@ -139,6 +140,9 @@ function generateIdLd(ppNo: string, fullName: string): string {
 
 export async function POST(req: NextRequest) {
   try {
+    const authResult = await getAuthenticatedUser(req);
+    if (!authResult) return unauthorizedResponse();
+
     const { image_base64, order_id, agent_id } = await req.json() as {
       image_base64: string;
       order_id: string;
@@ -153,11 +157,9 @@ export async function POST(req: NextRequest) {
 
     // Step 1: OCR passport text
     const rawText = await extractPassportText(cleanBase64);
-    console.log('[Passport] OCR text length:', rawText.length);
 
     // Step 2: AI parse structured fields
     const parsed = await parsePassportFields(rawText);
-    console.log('[Passport] Parsed:', JSON.stringify(parsed));
 
     const idLd = generateIdLd(parsed.PP_No, parsed.Full_Name);
 
@@ -176,7 +178,7 @@ export async function POST(req: NextRequest) {
       const { data: urlData } = supabaseAdmin.storage.from('agent-media').getPublicUrl(filePath);
       passportUrl = urlData.publicUrl;
     } else {
-      console.warn('[Passport] Storage upload failed:', storageErr.message);
+      console.error('[Passport] Storage upload failed:', storageErr.message);
     }
 
     // Step 4: Insert candidate into Supabase DB (primary data source)
@@ -216,7 +218,7 @@ export async function POST(req: NextRequest) {
           image_base64: cleanBase64,
           candidate_id: idLd,
         }),
-      }).catch((e) => console.warn('[Passport] Lark sync failed:', e.message));
+      }).catch((e) => console.error('[Passport] Lark sync failed:', e.message));
     }
 
     return NextResponse.json({ success: true, candidate: candidateData });

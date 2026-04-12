@@ -116,7 +116,13 @@ export default function CandidatesPage() {
   const [orderFilter, setOrderFilter] = useState<string>('all');
   const [playingVideo, setPlayingVideo] = useState<string | null>(null);
   const [videoUploadingCandidate, setVideoUploadingCandidate] = useState<string | null>(null);
-  const [newVideoCandidates, setNewVideoCandidates] = useState<Set<string>>(new Set());
+  const [newVideoCandidates, setNewVideoCandidates] = useState<string[]>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('newVideoCandidates');
+      return saved ? JSON.parse(saved) : [];
+    }
+    return [];
+  });
 
   const videoInputRef = useRef<HTMLInputElement>(null);
 
@@ -126,11 +132,17 @@ export default function CandidatesPage() {
   const load = useCallback(async () => {
     setLoading(true);
     const [candRes, agRes, ordRes] = await Promise.all([
-      supabase.from('candidates').select('*').order('id_ld'),
+      supabase.from('candidates').select('*'),
       supabase.from('agents').select('id, full_name, short_name').neq('role', 'admin'),
       supabase.from('orders').select('id, company_name, job_type'),
     ]);
-    setCandidates((candRes.data ?? []) as Candidate[]);
+    const candidates = (candRes.data ?? []) as Candidate[];
+    candidates.sort((a, b) => {
+      const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+      return dateB - dateA;
+    });
+    setCandidates(candidates);
     setAgents((agRes.data ?? []) as AgentOption[]);
     setOrders((ordRes.data ?? []) as OrderBrief[]);
     setLoading(false);
@@ -138,38 +150,53 @@ export default function CandidatesPage() {
 
   useEffect(() => { load(); }, [load]);
 
+  // Lưu newVideoCandidates vào localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('newVideoCandidates', JSON.stringify(newVideoCandidates));
+    }
+  }, [newVideoCandidates]);
+
   useEffect(() => {
     const q = search.toLowerCase();
-    setFiltered(
-      candidates
-        .filter((c) => {
-          const matchSearch =
-            (c.full_name ?? '').toLowerCase().includes(q) ||
-            (c.pp_no ?? '').toLowerCase().includes(q) ||
-            (c.id_ld ?? '').toLowerCase().includes(q);
-          const matchStatus =
-            statusFilter === 'all' ||
-            (statusFilter === 'Pending' && !c.interview_status) ||
-            c.interview_status === statusFilter;
-          const matchAgent = agentFilter === 'all' || c.agent_id === agentFilter;
-          const matchOrder = orderFilter === 'all' || c.order_id === orderFilter;
-          return matchSearch && matchStatus && matchAgent && matchOrder;
-        })
-        .sort((a, b) => {
-          if (a.video_link && !b.video_link) return -1;
-          if (!a.video_link && b.video_link) return 1;
-          return 0;
-        }),
-    );
-  }, [search, statusFilter, agentFilter, orderFilter, candidates]);
+    const filtered = candidates
+      .filter((c) => {
+        const matchSearch =
+          (c.full_name ?? '').toLowerCase().includes(q) ||
+          (c.pp_no ?? '').toLowerCase().includes(q) ||
+          (c.id_ld ?? '').toLowerCase().includes(q);
+        const matchStatus =
+          statusFilter === 'all' ||
+          (statusFilter === 'Pending' && !c.interview_status) ||
+          c.interview_status === statusFilter;
+        const matchAgent = agentFilter === 'all' || c.agent_id === agentFilter;
+        const matchOrder = orderFilter === 'all' || c.order_id === orderFilter;
+        return matchSearch && matchStatus && matchAgent && matchOrder;
+      })
+      .sort((a, b) => {
+        const aIsNewVideo = newVideoCandidates.includes(a.id_ld);
+        const bIsNewVideo = newVideoCandidates.includes(b.id_ld);
+        
+        // Ưu tiên 1: Ứng viên mới gửi video lên đầu
+        if (aIsNewVideo && !bIsNewVideo) return -1;
+        if (!aIsNewVideo && bIsNewVideo) return 1;
+        
+        // Ưu tiên 2: Ứng viên có video lên trước
+        if (a.video_link && !b.video_link) return -1;
+        if (!a.video_link && b.video_link) return 1;
+        
+        // Ưu tiên 3: Sắp xếp theo ngày tạo mới nhất
+        const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+        return dateB - dateA;
+      });
+
+    setFiltered(filtered);
+  }, [search, statusFilter, agentFilter, orderFilter, candidates, newVideoCandidates]);
 
   const handleStatusChange = useCallback(async (candidateId: string, status: 'Passed' | 'Failed') => {
     setCandidates((prev) => prev.map((c) => c.id_ld === candidateId ? { ...c, interview_status: status } : c));
-    setNewVideoCandidates((prev) => {
-      const next = new Set(prev);
-      next.delete(candidateId);
-      return next;
-    });
+    setNewVideoCandidates((prev) => prev.filter((id) => id !== candidateId));
     try {
       const { error } = await supabase.from('candidates').update({ interview_status: status }).eq('id_ld', candidateId);
       if (error) throw new Error(error.message);
@@ -200,8 +227,9 @@ export default function CandidatesPage() {
       const { data: urlData } = supabase.storage.from('agent-media').getPublicUrl(filePath);
       await supabase.from('candidates').update({ video_link: urlData.publicUrl }).eq('id_ld', videoUploadingCandidate);
       handleCandidateUpdate(videoUploadingCandidate, { video_link: urlData.publicUrl });
-      setNewVideoCandidates((prev) => new Set(prev).add(videoUploadingCandidate));
+      setNewVideoCandidates((prev) => [...prev, videoUploadingCandidate]);
     } catch (err) {
+      console.error('Upload error:', err);
       alert(`Upload lỗi: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       if (videoInputRef.current) videoInputRef.current.value = '';
@@ -210,11 +238,7 @@ export default function CandidatesPage() {
   };
 
   const handleVideoViewed = useCallback((candidateId: string) => {
-    setNewVideoCandidates((prev) => {
-      const next = new Set(prev);
-      next.delete(candidateId);
-      return next;
-    });
+    setNewVideoCandidates((prev) => prev.filter((id) => id !== candidateId));
   }, []);
 
   const totalPassed = candidates.filter((c) => c.interview_status === 'Passed').length;
@@ -305,7 +329,7 @@ export default function CandidatesPage() {
                 useDropdown={true}
                 orderInfo={ord ? { id: ord.id, company_name: ord.company_name, job_type: ord.job_type } : undefined}
                 agentInfo={ag ? { short_name: ag.short_name, full_name: ag.full_name } : undefined}
-                isNewVideo={newVideoCandidates.has(c.id_ld)}
+                isNewVideo={newVideoCandidates.includes(c.id_ld)}
                 onVideoViewed={() => handleVideoViewed(c.id_ld)}
               />
             );

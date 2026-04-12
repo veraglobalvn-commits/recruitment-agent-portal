@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getAuthenticatedUser, unauthorizedResponse } from '@/lib/auth-helpers';
 
 interface OcrParsed {
   taxCode: string;
@@ -74,7 +75,6 @@ ${rawText}`,
   if (data.error) throw new Error(data.error.message);
 
   const text = data.choices?.[0]?.message?.content ?? '{}';
-  console.log('[OCR] GPT-4o-mini output:', text.slice(0, 400));
 
   const parsed = JSON.parse(text) as Partial<Record<string, string>>;
   return {
@@ -97,7 +97,6 @@ ${rawText}`,
 
 async function extractRawText(imageBase64: string): Promise<string> {
   const apiKey = process.env.OCR_SPACE_API_KEY ?? '';
-  console.log('[OCR] Using key:', apiKey.slice(0, 4) + '***', '| base64 length:', imageBase64.length);
 
   const params = new URLSearchParams();
   params.append('apikey', apiKey);
@@ -114,7 +113,6 @@ async function extractRawText(imageBase64: string): Promise<string> {
   });
 
   const responseText = await ocrRes.text();
-  console.log('[OCR] Status:', ocrRes.status, '| Response preview:', responseText.slice(0, 200));
 
   if (!ocrRes.ok) {
     throw new Error(`OCR API error: ${ocrRes.status}`);
@@ -139,6 +137,9 @@ async function extractRawText(imageBase64: string): Promise<string> {
 // ── Route handler ──────────────────────────────────────────────
 export async function POST(req: NextRequest) {
   try {
+    const authResult = await getAuthenticatedUser(req);
+    if (!authResult) return unauthorizedResponse();
+
     const { imageBase64 } = await req.json() as { imageBase64: string };
     if (!imageBase64) {
       return NextResponse.json({ error: 'imageBase64 required' }, { status: 400 });
@@ -146,11 +147,9 @@ export async function POST(req: NextRequest) {
 
     // Step 1: OCR → raw text
     const rawText = await extractRawText(imageBase64);
-    console.log('[OCR] Raw text length:', rawText.length, '| Preview:', rawText.slice(0, 150));
 
     // Step 2: OpenRouter (Gemini 2.0 Flash) → structured fields
     const parsed = await extractWithOpenRouter(rawText);
-    console.log('[OCR] Parsed fields:', JSON.stringify(parsed));
 
     return NextResponse.json({ parsed, rawText });
   } catch (err) {

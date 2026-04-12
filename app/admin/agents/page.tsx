@@ -13,6 +13,7 @@ interface AgentRow {
   totalCandidates: number;
   passed: number;
   target: number;
+  created_at?: string | null;
 }
 
 function ProgressBar({ value, max }: { value: number; max: number }) {
@@ -33,35 +34,41 @@ export default function AgentsPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [agentsRes, ordersRes, candidatesRes] = await Promise.all([
-      supabase.from('agents').select('id, full_name, short_name, role').neq('role', 'admin'),
-      supabase.from('orders').select('id, agent_ids, total_labor'),
-      supabase.from('candidates').select('id_ld, agent_id, interview_status'),
-    ]);
+    try {
+      const [agentsRes, ordersRes, candidatesRes] = await Promise.all([
+        supabase.from('agents').select('id, full_name, short_name, role').neq('role', 'admin'),
+        supabase.from('orders').select('id, agent_ids, total_labor'),
+        supabase.from('candidates').select('id_ld, agent_id, interview_status'),
+      ]);
 
-    const agentsRaw = agentsRes.data || [];
-    const orders = ordersRes.data || [];
-    const candidates = candidatesRes.data || [];
+      const agentsRaw = agentsRes.data || [];
+      const orders = ordersRes.data || [];
+      const candidates = candidatesRes.data || [];
 
-    const rows: AgentRow[] = agentsRaw.map((ag: any) => {
-      const agCands = candidates.filter((c: any) => c.agent_id === ag.id);
-      const passed = agCands.filter((c: any) => c.interview_status === 'Passed').length;
-      const agOrders = orders.filter((o: any) => (o.agent_ids || []).includes(ag.id));
-      const target = agOrders.reduce((s: number, o: any) => s + (o.total_labor || 0), 0);
-      return {
-        id: ag.id,
-        full_name: ag.full_name,
-        short_name: ag.short_name,
-        totalOrders: agOrders.length,
-        totalCandidates: agCands.length,
-        passed,
-        target,
-      };
-    });
+      const rows: AgentRow[] = agentsRaw.map((ag: any) => {
+        const agCands = candidates.filter((c: any) => c.agent_id === ag.id);
+        const passed = agCands.filter((c: any) => c.interview_status === 'Passed').length;
+        const agOrders = orders.filter((o: any) => (o.agent_ids || []).includes(ag.id));
+        const target = agOrders.reduce((s: number, o: any) => s + (o.total_labor || 0), 0);
+        return {
+          id: ag.id,
+          full_name: ag.full_name,
+          short_name: ag.short_name,
+          totalOrders: agOrders.length,
+          totalCandidates: agCands.length,
+          passed,
+          target,
+          created_at: ag.created_at,
+        };
+      });
 
-    setAgents(rows);
-    setFiltered(rows);
-    setLoading(false);
+      setAgents(rows);
+      setFiltered(rows);
+    } catch (error) {
+      console.error('Error loading agents:', error);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => { load(); }, [load]);
