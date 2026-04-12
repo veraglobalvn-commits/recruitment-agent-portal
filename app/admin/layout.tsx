@@ -15,6 +15,7 @@ const NAV = [
   { href: '/admin/companies', label: 'Công ty VN', icon: '🏭' },
   { href: '/admin/orders', label: 'Đơn hàng', icon: '📋' },
   { href: '/admin/agents', label: 'Agent BD', icon: '👥' },
+  { href: '/admin/users', label: 'Tài khoản', icon: '🔑' },
   { href: '/admin/candidates', label: 'Ứng viên', icon: '🧑‍💼' },
   { href: '/admin/reports', label: 'Báo cáo', icon: '📈' },
 ];

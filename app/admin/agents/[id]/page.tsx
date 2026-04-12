@@ -163,6 +163,7 @@ export default function AgentDetailPage() {
     );
   }
 
+  const isAgentBD = agent.role !== 'admin';
   const displayName = agent.short_name || agent.full_name || 'Agent';
   const passedCount = candidates.filter((c) => c.interview_status === 'Passed').length;
   const totalTarget = orders.reduce((s, o) => s + (o.total_labor || 0), 0);
@@ -192,7 +193,7 @@ export default function AgentDetailPage() {
         {saveMsg && <div className="sm:hidden p-3 bg-green-50 border border-green-200 text-green-700 text-sm rounded-lg text-center">{saveMsg}</div>}
 
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex items-center gap-4">
-          <div className="w-14 h-14 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-xl flex-shrink-0">
+          <div className={`w-14 h-14 rounded-full flex items-center justify-center font-bold text-xl flex-shrink-0 ${isAgentBD ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>
             {displayName[0].toUpperCase()}
           </div>
           <div className="flex-1 min-w-0">
@@ -201,18 +202,20 @@ export default function AgentDetailPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-3">
-          {[
-            { label: 'Đơn hàng', value: orders.length, color: 'text-slate-800' },
-            { label: 'Ứng viên', value: candidates.length, color: 'text-blue-600' },
-            { label: 'Trúng tuyển', value: passedCount, color: 'text-green-600' },
-          ].map(({ label, value, color }) => (
-            <div key={label} className="bg-white rounded-2xl p-3 shadow-sm border border-gray-100 text-center">
-              <p className="text-xs text-gray-500">{label}</p>
-              <p className={`text-xl font-bold mt-0.5 ${color}`}>{value}</p>
-            </div>
-          ))}
-        </div>
+        {isAgentBD && (
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { label: 'Đơn hàng', value: orders.length, color: 'text-slate-800' },
+              { label: 'Ứng viên', value: candidates.length, color: 'text-blue-600' },
+              { label: 'Trúng tuyển', value: passedCount, color: 'text-green-600' },
+            ].map(({ label, value, color }) => (
+              <div key={label} className="bg-white rounded-2xl p-3 shadow-sm border border-gray-100 text-center">
+                <p className="text-xs text-gray-500">{label}</p>
+                <p className={`text-xl font-bold mt-0.5 ${color}`}>{value}</p>
+              </div>
+            ))}
+          </div>
+        )}
 
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="px-4 py-3 border-b border-gray-50 flex items-center justify-between">
@@ -222,7 +225,7 @@ export default function AgentDetailPage() {
           <div className="p-4 space-y-3">
             <div><label className="block text-xs text-gray-500 mb-1">Họ tên</label><input type="text" value={form.full_name} onChange={(e) => setField('full_name', e.target.value)} placeholder="Nguyễn Văn A" className={inputCls} /></div>
             <div><label className="block text-xs text-gray-500 mb-1">Tên viết tắt</label><input type="text" value={form.short_name} onChange={(e) => setField('short_name', e.target.value)} placeholder="VD: Nam" className={inputCls} /></div>
-            <div><label className="block text-xs text-gray-500 mb-1">% Lao động</label><input type="number" min="0" max="100" value={form.labor_percentage} onChange={(e) => setField('labor_percentage', e.target.value)} placeholder="VD: 50" className={inputCls} /></div>
+            {isAgentBD && <div><label className="block text-xs text-gray-500 mb-1">% Lao động</label><input type="number" min="0" max="100" value={form.labor_percentage} onChange={(e) => setField('labor_percentage', e.target.value)} placeholder="VD: 50" className={inputCls} /></div>}
             <div>
               <label className="block text-xs text-gray-500 mb-1">Vai trò</label>
               <select value={form.role} onChange={(e) => setField('role', e.target.value)} className={inputCls + ' bg-white'}>
@@ -233,6 +236,7 @@ export default function AgentDetailPage() {
           </div>
         </div>
 
+        {isAgentBD && (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="px-4 py-3 border-b border-gray-50">
             <h2 className="text-sm font-semibold text-slate-700">Đơn hàng phụ trách ({orders.length})</h2>
@@ -263,7 +267,9 @@ export default function AgentDetailPage() {
             </div>
           )}
         </div>
+        )}
 
+        {isAgentBD && (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="px-4 py-3 border-b border-gray-50 flex items-center justify-between">
             <h2 className="text-sm font-semibold text-slate-700">Ứng viên ({candidates.length})</h2>
@@ -307,6 +313,7 @@ export default function AgentDetailPage() {
             </div>
           )}
         </div>
+        )}
       </div>
     </div>
   );
