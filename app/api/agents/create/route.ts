@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { getAdminUser, unauthorizedResponse } from '@/lib/auth-helpers';
+import { createServerClient } from '@supabase/ssr';
+import { cookies } from 'next/headers';
 
 function getAdminClient() {
   return createClient(
@@ -9,10 +10,59 @@ function getAdminClient() {
   );
 }
 
+async function getAdminFromRequest(req: NextRequest): Promise<ReturnType<typeof getAdminClient> | null> {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+
+  let userId: string | null = null;
+
+  // Ưu tiên cookie-based auth (browser tự gửi khi same-origin fetch)
+  try {
+    const cookieStore = cookies();
+    const browserClient = createServerClient(url, anonKey, {
+      cookies: {
+        get(name: string) {
+          return cookieStore.get(name)?.value;
+        },
+      },
+    });
+    const { data: { user } } = await browserClient.auth.getUser();
+    if (user) userId = user.id;
+  } catch {
+    // cookie auth failed, fall through to Bearer token
+  }
+
+  // Fallback: Bearer token trong Authorization header
+  if (!userId) {
+    const authHeader = req.headers.get('authorization');
+    const token = authHeader?.replace('Bearer ', '').trim();
+    if (token) {
+      const adminSupabase = createClient(url, serviceKey);
+      const { data: { user } } = await adminSupabase.auth.getUser(token);
+      if (user) userId = user.id;
+    }
+  }
+
+  if (!userId) return null;
+
+  const adminClient = createClient(url, serviceKey);
+  const { data: agent } = await adminClient
+    .from('agents')
+    .select('role')
+    .eq('supabase_uid', userId)
+    .maybeSingle();
+
+  if (!agent || agent.role !== 'admin') return null;
+  return adminClient;
+}
+
 export async function POST(req: NextRequest) {
   try {
-    const authResult = await getAdminUser(req);
-    if (!authResult) return unauthorizedResponse('Chỉ admin mới được tạo agent');
+    const adminClient = await getAdminFromRequest(req);
+    if (!adminClient) {
+      return NextResponse.json({ error: 'Chỉ admin mới được tạo tài khoản' }, { status: 401 });
+    }
 
     const body = await req.json() as {
       email?: string;
@@ -38,9 +88,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const supabase = getAdminClient();
-
-    const { data: authData, error: authErr } = await supabase.auth.admin.createUser({
+    const { data: authData, error: authErr } = await adminClient.auth.admin.createUser({
       email: email.trim().toLowerCase(),
       password,
       email_confirm: true,
@@ -60,7 +108,7 @@ export async function POST(req: NextRequest) {
 
     const assignedRole = (role === 'admin' || role === 'agent') ? role : 'agent';
 
-    const { data: agentData, error: dbErr } = await supabase
+    const { data: agentData, error: dbErr } = await adminClient
       .from('agents')
       .insert({
         id: agentId,
@@ -73,7 +121,7 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (dbErr) {
-      await supabase.auth.admin.deleteUser(uid);
+      await adminClient.auth.admin.deleteUser(uid);
       return NextResponse.json(
         { error: `Tạo agent thất bại: ${dbErr.message}` },
         { status: 500 },

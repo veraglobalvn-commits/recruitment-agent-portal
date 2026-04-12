@@ -11,7 +11,7 @@ import LoadingSkeleton from '@/components/LoadingSkeleton';
 
 export default function Home() {
   const router = useRouter();
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -267,12 +267,30 @@ export default function Home() {
       return;
     }
     try {
+      let email = username.trim();
+
+      // Nếu không phải email (không có @), tra cứu email qua username (short_name)
+      if (!email.includes('@')) {
+        const res = await fetch('/api/auth/lookup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: email }),
+        });
+        const data = await res.json() as { email?: string; error?: string };
+        if (!res.ok || !data.email) {
+          setError(data.error || 'Không tìm thấy tài khoản');
+          setLoading(false);
+          return;
+        }
+        email = data.email;
+      }
+
       const { data, error: authError } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
       if (authError) {
-        setError(`Login failed: ${authError.message}`);
+        setError(`Đăng nhập thất bại: ${authError.message}`);
         setLoading(false);
         return;
       }
@@ -290,7 +308,7 @@ export default function Home() {
         setIsLoggedIn(true);
       }
     } catch (err) {
-      setError(`Error: ${err instanceof Error ? err.message : String(err)}`);
+      setError(`Lỗi: ${err instanceof Error ? err.message : String(err)}`);
       setLoading(false);
     }
   };
@@ -340,11 +358,11 @@ export default function Home() {
     return (
       <LoginForm
         onSubmit={handleLogin}
-        email={email}
+        username={username}
         password={password}
         error={error}
         loading={loading}
-        onEmailChange={setEmail}
+        onUsernameChange={setUsername}
         onPasswordChange={setPassword}
       />
     );

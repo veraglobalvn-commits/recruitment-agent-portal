@@ -4,21 +4,21 @@ import { useState, useEffect } from 'react';
 
 interface LoginFormProps {
   onSubmit: (e: React.FormEvent) => void;
-  email: string;
+  username: string;
   password: string;
   error: string | null;
   loading: boolean;
-  onEmailChange: (val: string) => void;
+  onUsernameChange: (val: string) => void;
   onPasswordChange: (val: string) => void;
 }
 
 export default function LoginForm({
   onSubmit,
-  email,
+  username,
   password,
   error,
   loading,
-  onEmailChange,
+  onUsernameChange,
   onPasswordChange,
 }: LoginFormProps) {
   const [ready, setReady] = useState(false);
@@ -49,15 +49,15 @@ export default function LoginForm({
 
         <form onSubmit={onSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Tên đăng nhập</label>
             <input
-              type="email"
-              value={email}
-              onChange={(e) => onEmailChange(e.target.value)}
+              type="text"
+              value={username}
+              onChange={(e) => onUsernameChange(e.target.value)}
               required
               className="w-full px-3 py-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="agent@email.com"
-              autoComplete="email"
+              placeholder="Email hoặc tên viết tắt (VD: Nam)"
+              autoComplete="username"
             />
           </div>
           <div>
