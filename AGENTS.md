@@ -41,7 +41,7 @@ npx tsc --noEmit  # TypeScript type check (always run after edits)
 | Passport Upload API | `/api/passport` | ✅ Done | OCR.space → GPT-4o-mini → Supabase DB → Storage → n8n/Lark |
 | Orders Admin | `/admin/orders/[id]` | ✅ Done | Order list, detail, edit, candidates, payment |
 | Candidates Admin | `/admin/candidates` | ✅ Done | List all candidates with filters, edit, delete |
-| Agents Admin | `/admin/agents/[id]` | ❌ Not built | Page linked from dashboard but route doesn't exist yet |
+| Agents Admin | `/admin/agents/[id]` | ✅ Done | Edit agent info, role, and labor percentage |
 | Reports | `/admin/reports` | ❌ Not built | Nav item exists, page doesn't |
 
 ---

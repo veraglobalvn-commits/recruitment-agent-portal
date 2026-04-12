@@ -54,10 +54,16 @@ export default function OrdersPage() {
   const load = useCallback(async () => {
     setLoading(true);
     const [ordRes, agRes] = await Promise.all([
-      supabase.from('orders').select('*').order('id', { ascending: false }),
+      supabase.from('orders').select('*'),
       supabase.from('agents').select('id, full_name, short_name').neq('role', 'admin'),
     ]);
-    setOrders((ordRes.data ?? []) as AdminOrder[]);
+    const orders = (ordRes.data ?? []) as AdminOrder[];
+    orders.sort((a, b) => {
+      const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+      return dateB - dateA;
+    });
+    setOrders(orders);
     setAgents((agRes.data ?? []) as AgentOption[]);
     setLoading(false);
   }, []);

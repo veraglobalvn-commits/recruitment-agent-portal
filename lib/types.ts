@@ -22,6 +22,7 @@ export interface Order {
   meal: string | null;
   dormitory: string | null;
   recruitment_info: string | null;
+  created_at?: string | null;
 }
 
 export interface Candidate {
@@ -45,6 +46,7 @@ export interface Candidate {
   pcc_link: string | null;
   health_cert_link: string | null;
   interview_status: string | null;
+  created_at?: string | null;
 }
 
 export interface DashboardData {
@@ -138,5 +140,6 @@ export interface Agent {
   role: string | null;
   avatar_url: string | null;
   labor_percentage: number | null;
+  created_at?: string | null;
 }
 

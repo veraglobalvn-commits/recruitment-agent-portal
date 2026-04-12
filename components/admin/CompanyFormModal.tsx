@@ -85,9 +85,13 @@ export default function CompanyFormModal({ onClose, onSaved }: CompanyFormModalP
       setOcrImg(URL.createObjectURL(file));
       // Compress + base64
       const base64 = await compressToBase64(file);
+      const { data: { session: sess } } = await supabase.auth.getSession();
       const res = await fetch('/api/ocr', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(sess?.access_token ? { Authorization: `Bearer ${sess.access_token}` } : {}),
+        },
         body: JSON.stringify({ imageBase64: base64 }),
       });
       const data: { parsed?: OcrParsed; rawText?: string; error?: string } = await res.json();

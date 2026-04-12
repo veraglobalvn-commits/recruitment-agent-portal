@@ -50,7 +50,7 @@ function ProgressBar({ value, max }: { value: number; max: number }) {
 export default function AgentDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const id = params.id as string;
+  const id = decodeURIComponent(params.id as string);
 
   const [agent, setAgent] = useState<AgentData | null>(null);
   const [orders, setOrders] = useState<OrderBrief[]>([]);
@@ -59,6 +59,7 @@ export default function AgentDetailPage() {
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const [form, setForm] = useState({
     full_name: '',
@@ -73,11 +74,19 @@ export default function AgentDetailPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
     const [agentRes, ordersRes, candidatesRes] = await Promise.all([
-      supabase.from('agents').select('id, full_name, short_name, role, labor_percentage').eq('id', id).single(),
+      supabase.from('agents').select('id, full_name, short_name, role, labor_percentage').eq('id', id).maybeSingle(),
       supabase.from('orders').select('id, company_name, job_type, total_labor, labor_missing, status, agent_ids'),
       supabase.from('candidates').select('*').eq('agent_id', id),
     ]);
+
+    if (agentRes.error) {
+      console.error('Agent fetch error:', agentRes.error);
+      setLoadError(`Lỗi tải agent: ${agentRes.error.message}`);
+      setLoading(false);
+      return;
+    }
 
     if (agentRes.data) {
       const a = agentRes.data as AgentData;
@@ -87,6 +96,8 @@ export default function AgentDetailPage() {
         short_name: a.short_name ?? '',
         labor_percentage: a.labor_percentage?.toString() ?? '',
       });
+    } else {
+      setLoadError(`Không tìm thấy agent với ID: "${id}"`);
     }
 
     const allOrders = (ordersRes.data || []) as (OrderBrief & { agent_ids: string[] | null })[];
@@ -143,7 +154,7 @@ export default function AgentDetailPage() {
   if (!agent) {
     return (
       <div className="p-8 text-center">
-        <p className="text-gray-500">Không tìm thấy agent</p>
+        <p className="text-gray-500">{loadError || 'Không tìm thấy agent'}</p>
         <Link href="/admin/agents" className="text-blue-600 text-sm mt-2 inline-block">← Quay lại</Link>
       </div>
     );

@@ -19,6 +19,7 @@ export default function OrderDetail() {
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [orderData, setOrderData] = useState<Order | null>(null);
   const [agents, setAgents] = useState<any[]>([]);
+  const [currentAgentId, setCurrentAgentId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadMsg, setUploadMsg] = useState<string | null>(null);
@@ -28,6 +29,9 @@ export default function OrderDetail() {
 
   const fetchCandidates = useCallback(async () => {
     try {
+      const agentId = localStorage.getItem('agent_id');
+      setCurrentAgentId(agentId);
+
       const cacheKey = `c_url_${orderId}`;
       const cached = sessionStorage.getItem(cacheKey);
       if (cached) {
@@ -85,18 +89,26 @@ export default function OrderDetail() {
         pcc_link: r.pcc_link,
         health_cert_link: r.health_cert_link,
         interview_status: r.interview_status,
-      }));
+        created_at: r.created_at,
+      })).sort((a, b) => {
+        const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+        return dateB - dateA;
+      });
 
       setCandidates(newCandidates);
       sessionStorage.setItem(cacheKey, JSON.stringify(newCandidates));
 
-      if (agentIds.length > 0) {
+      if (agentIds.length > 0 && agentId) {
         const agentsRes = await supabase
           .from('agents')
-          .select('id, full_name, short_name, avatar_url, labor_percentage')
-          .in('id', agentIds);
+          .select('id, full_name, short_name, labor_percentage');
         if (agentsRes.data) {
-          setAgents(agentsRes.data);
+          const allAgents = agentsRes.data;
+          const currentAgent = allAgents.find((a: any) => a.id === agentId);
+          if (currentAgent) {
+            setAgents([currentAgent]);
+          }
         }
       }
     } catch (err) {
@@ -162,11 +174,15 @@ export default function OrderDetail() {
           const { data: { user } } = await supabase.auth.getUser();
           if (!user) throw new Error('Not authenticated');
 
+          const { data: { session } } = await supabase.auth.getSession();
           const agentId = localStorage.getItem('agent_id');
 
           const res = await fetch('/api/passport', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+              'Content-Type': 'application/json',
+              ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+            },
             body: JSON.stringify({
               image_base64: compressedBase64,
               order_id: orderId,
@@ -329,96 +345,50 @@ export default function OrderDetail() {
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
             <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">Hiệu quả tuyển dụng</h3>
             {agents.length === 0 ? (
-              <p className="text-gray-400 text-sm text-center py-4">Chưa có agent nào được phân công</p>
-            ) : agents.length === 1 ? (
-              <div className="flex items-center gap-4">
-                <div className="flex-1">
-                  <div className="flex justify-between text-xs mb-1">
-                    <span className="text-gray-600">Tiến độ</span>
-                    <span className="font-semibold text-gray-800">
-                      {candidates.filter(c => c.interview_status === 'Passed').length} / {orderData.total_labor}
-                    </span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2.5">
-                    <div
-                      className="bg-blue-600 h-2.5 rounded-full transition-all duration-300"
-                      style={{
-                        width: `${orderData.total_labor ? Math.min(100, (candidates.filter(c => c.interview_status === 'Passed').length / Number(orderData.total_labor)) * 100) : 0}%`
-                      }}
-                    />
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className="text-2xl font-bold text-gray-800">
-                    {orderData.total_labor ? ((candidates.filter(c => c.interview_status === 'Passed').length / Number(orderData.total_labor)) * 100).toFixed(1) : 0}%
-                  </p>
-                  <p className="text-xs text-gray-500">Hoàn thành</p>
-                </div>
-              </div>
+              <p className="text-gray-400 text-sm text-center py-4">Bạn chưa được phân công cho đơn hàng này</p>
             ) : (
               <div className="space-y-4">
-                {(() => {
-                  const hasNullPercentage = agents.some(a => a.labor_percentage === null);
-                  const totalPercentage = agents.reduce((sum, a) => sum + (a.labor_percentage || 0), 0);
+                {agents.map((agent) => {
+                  const allocatedLabor = agent.labor_percentage
+                    ? Math.round((agent.labor_percentage / 100) * Number(orderData.total_labor))
+                    : 0;
+                  const passedCount = candidates.filter(
+                    c => c.agent_id === agent.id && c.interview_status === 'Passed'
+                  ).length;
+                  const percentage = allocatedLabor > 0
+                    ? Math.min(100, (passedCount / allocatedLabor) * 100)
+                    : 0;
 
-                  if (hasNullPercentage) {
-                    return (
-                      <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg text-center">
-                        ⚠️ Vui lòng nhập % lao động cho tất cả agent
-                      </div>
-                    );
-                  }
-
-                  if (totalPercentage !== 100) {
-                    return (
-                      <div className="p-3 bg-yellow-50 border border-yellow-200 text-yellow-700 text-sm rounded-lg text-center">
-                        ⚠️ Tổng % lao động không bằng 100% (hiện tại: {totalPercentage}%)
-                      </div>
-                    );
-                  }
-
-                  return agents.map((agent) => {
-                    const allocatedLabor = agent.labor_percentage
-                      ? Math.round((agent.labor_percentage / 100) * Number(orderData.total_labor))
-                      : 0;
-                    const passedCount = candidates.filter(
-                      c => c.agent_id === agent.id && c.interview_status === 'Passed'
-                    ).length;
-                    const percentage = allocatedLabor > 0
-                      ? Math.min(100, (passedCount / allocatedLabor) * 100)
-                      : 0;
-
-                    return (
-                      <div key={agent.id} className="space-y-2">
-                        <div className="flex items-center gap-3">
-                          {agent.avatar_url ? (
-                            <img src={agent.avatar_url} alt={agent.short_name || agent.full_name || 'Agent'} className="w-10 h-10 rounded-full object-cover border-2 border-gray-200" />
-                          ) : (
-                            <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-sm">
-                              {(agent.short_name || agent.full_name || 'A')[0].toUpperCase()}
-                            </div>
-                          )}
-                          <div className="flex-1 min-w-0">
-                            <p className="font-semibold text-gray-800 text-sm">{agent.short_name || agent.full_name || 'Agent'}</p>
-                            <p className="text-xs text-gray-500">
-                              Phân công: {allocatedLabor} người ({agent.labor_percentage}%)
-                            </p>
+                  return (
+                    <div key={agent.id} className="space-y-2">
+                      <div className="flex items-center gap-3">
+                        {agent.avatar_url ? (
+                          <img src={agent.avatar_url} alt={agent.short_name || agent.full_name || 'Agent'} className="w-10 h-10 rounded-full object-cover border-2 border-gray-200" />
+                        ) : (
+                          <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-sm">
+                            {(agent.short_name || agent.full_name || 'A')[0].toUpperCase()}
                           </div>
-                          <div className="text-right">
-                            <p className="text-lg font-bold text-gray-800">{passedCount} / {allocatedLabor}</p>
-                            <p className="text-xs text-gray-500">{percentage.toFixed(1)}%</p>
-                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-gray-800 text-sm">{agent.short_name || agent.full_name || 'Agent'}</p>
+                          <p className="text-xs text-gray-500">
+                            Phân công: {allocatedLabor} người ({agent.labor_percentage}%)
+                          </p>
                         </div>
-                        <div className="w-full bg-gray-200 rounded-full h-2.5">
-                          <div
-                            className="bg-blue-600 h-2.5 rounded-full transition-all duration-300"
-                            style={{ width: `${percentage}%` }}
-                          />
+                        <div className="text-right">
+                          <p className="text-lg font-bold text-gray-800">{passedCount} / {allocatedLabor}</p>
+                          <p className="text-xs text-gray-500">{percentage.toFixed(1)}%</p>
                         </div>
                       </div>
-                    );
-                  });
-                })()}
+                      <div className="w-full bg-gray-200 rounded-full h-2.5">
+                        <div
+                          className="bg-blue-600 h-2.5 rounded-full transition-all duration-300"
+                          style={{ width: `${percentage}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>

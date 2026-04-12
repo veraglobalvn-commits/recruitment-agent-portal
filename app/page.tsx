@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
+import { createSupabaseClient } from '@/lib/supabase';
 import type { DashboardStats, Order } from '@/lib/types';
 import LoginForm from '@/components/LoginForm';
 import DashboardStatsComponent from '@/components/DashboardStats';
@@ -29,7 +29,12 @@ export default function Home() {
   const avatarInputRef = useRef<HTMLInputElement>(null);
 
   const handleLogout = useCallback(async () => {
-    await supabase?.auth.signOut();
+    try {
+      const supabase = createSupabaseClient();
+      await supabase.auth.signOut();
+    } catch {
+      // ignore
+    }
     setIsLoggedIn(false);
     setUserId(null);
     setAgentName(null);
@@ -39,18 +44,59 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    if (!supabase) {
-      setCheckingSession(false);
-      return;
-    }
+    let cancelled = false;
 
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (session) {
+    (async () => {
+      let supabase;
+      try {
+        supabase = createSupabaseClient();
+      } catch {
+        if (!cancelled) setCheckingSession(false);
+        return;
+      }
+
+      const { data: { session } } = await supabase.auth.getSession();
+
+      if (!session) {
+        if (!cancelled) setCheckingSession(false);
+
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
+          if (cancelled) return;
+          if (newSession) {
+            try {
+              const { data: agentData } = await supabase
+                .from('agents')
+                .select('role')
+                .eq('supabase_uid', newSession.user.id)
+                .maybeSingle();
+              if (agentData?.role === 'admin') {
+                router.replace('/admin');
+                return;
+              }
+              setUserId(newSession.user.id);
+              setIsLoggedIn(true);
+            } catch {
+              // ignore
+            }
+          }
+          setCheckingSession(false);
+        });
+
+        return () => {
+          cancelled = true;
+          subscription.unsubscribe();
+        };
+      }
+
+      if (cancelled) return;
+
+      try {
         const { data: agentData } = await supabase
           .from('agents')
           .select('role')
           .eq('supabase_uid', session.user.id)
           .maybeSingle();
+        if (cancelled) return;
         if (agentData?.role === 'admin') {
           router.replace('/admin');
           setCheckingSession(false);
@@ -58,35 +104,32 @@ export default function Home() {
         }
         setUserId(session.user.id);
         setIsLoggedIn(true);
+      } catch {
+        // ignore
+      } finally {
+        if (!cancelled) setCheckingSession(false);
       }
+    })();
+
+    const timeout = setTimeout(() => {
       setCheckingSession(false);
-    });
+    }, 2000);
 
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (session) {
-        const { data: agentData } = await supabase
-          .from('agents')
-          .select('role')
-          .eq('supabase_uid', session.user.id)
-          .maybeSingle();
-        if (agentData?.role === 'admin') {
-          router.replace('/admin');
-          return;
-        }
-        setUserId(session.user.id);
-        setIsLoggedIn(true);
-      } else {
-        setIsLoggedIn(false);
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
+    return () => {
+      cancelled = true;
+      clearTimeout(timeout);
+    };
+  }, [router]);
 
   const fetchDashboardData = useCallback(
     async (uid: string) => {
+      let supabase;
+      try {
+        supabase = createSupabaseClient();
+      } catch {
+        setLoadingData(false);
+        return;
+      }
       try {
         const cacheKey = `dashboard_cache_${uid}`;
         const cachedData = sessionStorage.getItem(cacheKey);
@@ -113,16 +156,12 @@ export default function Home() {
             .maybeSingle();
           agentData = agentRes.data;
           agentErr = agentRes.error;
-          console.log('Agent data:', agentData);
-          console.log('Agent error:', agentErr);
         } catch (err) {
-          console.error('Failed to fetch agent:', err);
           agentErr = err as any;
           agentData = null;
         }
 
         if (agentErr || !agentData) {
-          console.error('Agent not found error:', agentErr);
           setError('Agent not found. Please contact admin.');
           setIsLoggedIn(false);
           return;
@@ -137,9 +176,7 @@ export default function Home() {
             .eq('agent_id', agentData.id)
             .maybeSingle();
           statsData = statsRes.data;
-          console.log('Stats data:', statsData);
         } catch (statsErr) {
-          console.error('Failed to fetch stats:', statsErr);
           statsData = null;
         }
 
@@ -160,9 +197,7 @@ export default function Home() {
             .select('*')
             .contains('agent_ids', [agentData.id]);
           ordersData = ordersRes.data;
-          console.log('Orders data:', ordersData);
         } catch (ordersErr) {
-          console.error('Failed to fetch orders:', ordersErr);
           ordersData = [];
         }
 
@@ -180,7 +215,12 @@ export default function Home() {
           meal: o.meal,
           dormitory: o.dormitory,
           recruitment_info: o.recruitment_info,
-        }));
+          created_at: o.created_at,
+        })).sort((a, b) => {
+          const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+          const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+          return dateB - dateA;
+        });
 
         const result = {
           agent_name: agentData.short_name || agentData.full_name,
@@ -199,7 +239,6 @@ export default function Home() {
         sessionStorage.setItem(cacheKey, JSON.stringify(result));
 
       } catch (err) {
-        console.error('Failed to load data:', err);
         setError('Failed to load data');
       } finally {
         setLoadingData(false);
@@ -219,7 +258,10 @@ export default function Home() {
     e.preventDefault();
     setLoading(true);
     setError(null);
-    if (!supabase) {
+    let supabase;
+    try {
+      supabase = createSupabaseClient();
+    } catch {
       setError('System loading...');
       setLoading(false);
       return;
@@ -257,6 +299,12 @@ export default function Home() {
     const file = e.target.files?.[0];
     if (!file || !agentId) return;
 
+    let supabase;
+    try {
+      supabase = createSupabaseClient();
+    } catch {
+      return;
+    }
     setAvatarUploading(true);
     try {
       const ext = file.name.split('.').pop();

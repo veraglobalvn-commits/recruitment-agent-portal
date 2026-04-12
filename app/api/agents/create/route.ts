@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { getAdminUser, unauthorizedResponse } from '@/lib/auth-helpers';
 
 function getAdminClient() {
   return createClient(
@@ -10,6 +11,9 @@ function getAdminClient() {
 
 export async function POST(req: NextRequest) {
   try {
+    const authResult = await getAdminUser(req);
+    if (!authResult) return unauthorizedResponse('Chỉ admin mới được tạo agent');
+
     const body = await req.json() as {
       email?: string;
       password?: string;

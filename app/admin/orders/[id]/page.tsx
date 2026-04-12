@@ -48,11 +48,13 @@ export default function OrderDetailPage() {
   const [order, setOrder] = useState<AdminOrder | null>(null);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [agents, setAgents] = useState<AgentOption[]>([]);
+  const [agentLaborAllocations, setAgentLaborAllocations] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
   const [videoUploadingCandidate, setVideoUploadingCandidate] = useState<string | null>(null);
+  const [showAgentDropdown, setShowAgentDropdown] = useState(false);
 
   const videoInputRef = useRef<HTMLInputElement>(null);
 
@@ -78,12 +80,19 @@ export default function OrderDetailPage() {
     setDirty(true);
   };
 
+  const totalLabor = parseInt(form.total_labor) || 0;
+  const totalAllocatedLabor = form.agent_ids.reduce((sum, agentId) => {
+    const allocation = parseInt(agentLaborAllocations[agentId] || '0') || 0;
+    return sum + allocation;
+  }, 0);
+  const isLaborUnbalanced = totalLabor > 0 && totalAllocatedLabor !== totalLabor;
+
   const load = useCallback(async () => {
     setLoading(true);
     const [ordRes, candRes, agRes] = await Promise.all([
       supabase.from('orders').select('*').eq('id', id).single(),
       supabase.from('candidates').select('*').eq('order_id', id),
-      supabase.from('agents').select('id, full_name, short_name').neq('role', 'admin'),
+      supabase.from('agents').select('id, full_name, short_name, labor_percentage').neq('role', 'admin'),
     ]);
 
     if (ordRes.data) {
@@ -105,7 +114,16 @@ export default function OrderDetailPage() {
       });
     }
     setCandidates((candRes.data ?? []) as Candidate[]);
-    setAgents((agRes.data ?? []) as AgentOption[]);
+    const agentsData = (agRes.data ?? []) as (AgentOption & { labor_percentage: number | null })[];
+    setAgents(agentsData);
+    const allocations: Record<string, string> = {};
+    agentsData.forEach((ag) => {
+      const percentage = ag.labor_percentage ?? 0;
+      const totalLabor = ordRes.data?.total_labor ?? 0;
+      const allocation = percentage > 0 ? Math.round((percentage / 100) * totalLabor) : 0;
+      allocations[ag.id] = allocation.toString();
+    });
+    setAgentLaborAllocations(allocations);
     setDirty(false);
     setLoading(false);
   }, [id]);
@@ -158,6 +176,23 @@ export default function OrderDetailPage() {
     }
   }, []);
 
+  const handleAgentAllocationChange = useCallback(async (agentId: string, value: string) => {
+    const numValue = value ? parseInt(value, 10) : null;
+    if (numValue !== null && numValue < 0) {
+      alert('Số người phải lớn hơn hoặc bằng 0');
+      return;
+    }
+    setAgentLaborAllocations((prev: Record<string, string>) => ({ ...prev, [agentId]: value }));
+    try {
+      const totalLabor = parseInt(form.total_labor) || 0;
+      const percentage = totalLabor > 0 && numValue !== null ? Math.round((numValue / totalLabor) * 100) : null;
+      const { error } = await supabase.from('agents').update({ labor_percentage: percentage }).eq('id', agentId);
+      if (error) throw error;
+    } catch (err) {
+      alert(`Lỗi lưu số người: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }, [form.total_labor]);
+
   const handleVideoUploadClick = useCallback((candidateId: string) => {
     setVideoUploadingCandidate(candidateId);
     videoInputRef.current?.click();
@@ -203,7 +238,6 @@ export default function OrderDetailPage() {
     );
   }
 
-  const totalLabor = parseInt(form.total_labor) || 0;
   const laborMissing = parseInt(form.labor_missing) || 0;
   const done = totalLabor - laborMissing;
   const passedCount = candidates.filter((c) => c.interview_status === 'Passed').length;
@@ -277,33 +311,112 @@ export default function OrderDetailPage() {
         </div>
 
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-          <div className="px-4 py-3 border-b border-gray-50">
-            <h2 className="text-sm font-semibold text-slate-700">Agent phụ trách</h2>
+          <div className="px-4 py-3 border-b border-gray-50 flex items-center justify-between">
+            <h2 className={`text-sm font-semibold ${isLaborUnbalanced ? 'text-red-600' : 'text-slate-700'}`}>Agent phụ trách</h2>
+            <div className="relative">
+              <button
+                onClick={() => setShowAgentDropdown(!showAgentDropdown)}
+                className="text-xs text-blue-600 hover:underline"
+              >
+                + Thêm agent
+              </button>
+              {showAgentDropdown && (
+                <div className="absolute right-0 top-full mt-1 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
+                  {agents.filter((ag) => !form.agent_ids.includes(ag.id)).length === 0 ? (
+                    <div className="p-2 text-xs text-gray-400 text-center">Không có agent nào</div>
+                  ) : (
+                    agents.filter((ag) => !form.agent_ids.includes(ag.id)).map((ag) => (
+                      <button
+                        key={ag.id}
+                        onClick={() => {
+                          setForm((f) => ({
+                            ...f,
+                            agent_ids: [...f.agent_ids, ag.id],
+                          }));
+                          setDirty(true);
+                          setShowAgentDropdown(false);
+                        }}
+                        className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 first:rounded-t-lg last:rounded-b-lg"
+                      >
+                        {ag.short_name || ag.full_name}
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
           </div>
           <div className="p-4">
-            <div className="max-h-48 overflow-y-auto space-y-1 border border-gray-200 rounded-lg p-2">
-              {agents.map((ag) => (
-                <label key={ag.id} className="flex items-center gap-2 p-1.5 rounded hover:bg-gray-50 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={form.agent_ids.includes(ag.id)}
-                    onChange={() => {
-                      setForm((f) => ({
-                        ...f,
-                        agent_ids: f.agent_ids.includes(ag.id)
-                          ? f.agent_ids.filter((x) => x !== ag.id)
-                          : [...f.agent_ids, ag.id],
-                      }));
-                      setDirty(true);
-                    }}
-                    className="rounded text-blue-600 focus:ring-blue-400"
-                  />
-                  <span className="text-sm text-gray-700">{ag.short_name || ag.full_name}</span>
-                </label>
-              ))}
+            {isLaborUnbalanced && (
+              <div className="mb-3 p-2 bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg text-center">
+                ⚠️ Tổng số lao động phân công ({totalAllocatedLabor}) không bằng tổng số cần tuyển ({totalLabor})
+              </div>
+            )}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {agents.filter((ag) => form.agent_ids.includes(ag.id)).map((ag) => {
+                const agentWithPercentage = ag as AgentOption & { labor_percentage: number | null };
+                const allocation = agentLaborAllocations[ag.id] || '';
+                const allocatedLabor = parseInt(allocation) || 0;
+                const percentage = totalLabor > 0 ? Math.round((allocatedLabor / totalLabor) * 100) : 0;
+                const passedCount = candidates.filter((c) => c.agent_id === ag.id && c.interview_status === 'Passed').length;
+
+                return (
+                  <div key={ag.id} className="p-2 rounded border border-blue-200 bg-blue-50">
+                    <div className="flex items-center gap-2 mb-2">
+                      <input
+                        type="checkbox"
+                        checked={true}
+                        onChange={() => {
+                          setForm((f) => ({
+                            ...f,
+                            agent_ids: f.agent_ids.filter((x) => x !== ag.id),
+                          }));
+                          setDirty(true);
+                        }}
+                        className="rounded text-blue-600 focus:ring-blue-400"
+                      />
+                      <span className="text-sm text-gray-700 font-medium flex-1">{ag.short_name || ag.full_name}</span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">Số người</label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={allocation}
+                          onChange={(e) => handleAgentAllocationChange(ag.id, e.target.value)}
+                          placeholder="0"
+                          className="w-full text-xs border border-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                        />
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs text-gray-500">Tỷ lệ</p>
+                        <p className="text-sm font-semibold text-gray-700">{percentage}%</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs text-gray-500">Đã tuyển</p>
+                        <p className="text-sm font-semibold text-green-600">{passedCount}</p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
             {form.agent_ids.length === 0 && (
-              <p className="text-xs text-gray-400 mt-2">Chưa chọn agent nào</p>
+              <div className="text-center py-4">
+                <p className="text-xs text-gray-400 mb-2">Chưa chọn agent nào</p>
+                <button
+                  onClick={() => setShowAgentDropdown(!showAgentDropdown)}
+                  className="text-xs text-blue-600 hover:underline"
+                >
+                  + Thêm agent
+                </button>
+              </div>
+            )}
+            {form.agent_ids.length > 0 && totalLabor > 0 && (
+              <div className={`mt-2 text-xs text-center ${isLaborUnbalanced ? 'text-red-600 font-semibold' : 'text-gray-500'}`}>
+                Tổng phân công: {totalAllocatedLabor} / {totalLabor} người
+              </div>
             )}
           </div>
         </div>

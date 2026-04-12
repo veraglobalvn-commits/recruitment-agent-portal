@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import type { Agent } from '@/lib/types';
+import { supabase } from '@/lib/supabase';
 
 interface AddAgentModalProps {
   onClose: () => void;
@@ -31,9 +32,13 @@ export default function AddAgentModal({ onClose, onSaved }: AddAgentModalProps) 
     setError(null);
 
     try {
+      const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch('/api/agents/create', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
         body: JSON.stringify({
           email: form.email.trim().toLowerCase(),
           password: form.password,

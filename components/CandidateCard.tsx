@@ -230,7 +230,7 @@ export default function CandidateCard({
   };
 
   return (
-    <div className="border border-gray-200 rounded-xl hover:shadow-md transition-shadow bg-white overflow-hidden">
+    <div className={`border rounded-xl hover:shadow-md transition-shadow bg-white overflow-hidden ${isNewVideo ? 'border-yellow-400 ring-2 ring-yellow-200' : 'border-gray-200'}`}>
       {/* Header: Photo + Name + ID */}
       <div className="flex items-start gap-3 p-4 pb-3">
         <div className="relative flex-shrink-0">
