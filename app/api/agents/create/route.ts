@@ -19,9 +19,10 @@ export async function POST(req: NextRequest) {
       password?: string;
       full_name?: string;
       short_name?: string;
+      role?: string;
     };
 
-    const { email, password, full_name, short_name } = body;
+    const { email, password, full_name, short_name, role } = body;
 
     if (!email || !password || !full_name) {
       return NextResponse.json(
@@ -57,6 +58,8 @@ export async function POST(req: NextRequest) {
     const shortNameVal = short_name?.trim() || full_name.trim().split(' ').pop() || 'AGENT';
     const agentId = `${shortNameVal.toUpperCase().replace(/\s+/g, '_')} ${new Date().getFullYear()}`;
 
+    const assignedRole = (role === 'admin' || role === 'agent') ? role : 'agent';
+
     const { data: agentData, error: dbErr } = await supabase
       .from('agents')
       .insert({
@@ -64,7 +67,7 @@ export async function POST(req: NextRequest) {
         supabase_uid: uid,
         full_name: full_name.trim(),
         short_name: short_name?.trim() || null,
-        role: 'agent',
+        role: assignedRole,
       })
       .select()
       .single();

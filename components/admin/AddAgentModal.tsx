@@ -15,6 +15,7 @@ export default function AddAgentModal({ onClose, onSaved }: AddAgentModalProps) 
     password: '',
     full_name: '',
     short_name: '',
+    role: 'agent',
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -44,6 +45,7 @@ export default function AddAgentModal({ onClose, onSaved }: AddAgentModalProps) 
           password: form.password,
           full_name: form.full_name.trim(),
           short_name: form.short_name.trim() || undefined,
+          role: form.role,
         }),
       });
 
@@ -73,7 +75,7 @@ export default function AddAgentModal({ onClose, onSaved }: AddAgentModalProps) 
         <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mt-3 sm:hidden flex-shrink-0" />
 
         <div className="flex justify-between items-center px-5 pt-4 pb-3 flex-shrink-0">
-          <h2 className="text-base font-bold text-gray-800">Thêm Agent BD</h2>
+          <h2 className="text-base font-bold text-gray-800">Thêm người dùng</h2>
           <button onClick={onClose} className="min-h-[44px] min-w-[44px] flex items-center justify-center text-gray-400 hover:text-gray-700 text-xl">✕</button>
         </div>
 
@@ -134,6 +136,18 @@ export default function AddAgentModal({ onClose, onSaved }: AddAgentModalProps) 
               className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[44px]"
             />
           </div>
+
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Vai trò</label>
+            <select
+              value={form.role}
+              onChange={(e) => set('role', e.target.value)}
+              className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[44px] bg-white"
+            >
+              <option value="agent">Agent BD</option>
+              <option value="admin">Admin</option>
+            </select>
+          </div>
         </div>
 
         <div className="px-5 py-4 border-t border-gray-100 flex gap-2 flex-shrink-0">
@@ -148,7 +162,7 @@ export default function AddAgentModal({ onClose, onSaved }: AddAgentModalProps) 
             disabled={saving}
             className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl text-sm disabled:opacity-50 min-h-[44px]"
           >
-            {saving ? 'Đang tạo...' : 'Tạo Agent'}
+            {saving ? 'Đang tạo...' : 'Tạo người dùng'}
           </button>
         </div>
       </div>

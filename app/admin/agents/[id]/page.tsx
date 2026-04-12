@@ -65,6 +65,7 @@ export default function AgentDetailPage() {
     full_name: '',
     short_name: '',
     labor_percentage: '',
+    role: 'agent',
   });
 
   const setField = (k: keyof typeof form, v: string) => {
@@ -95,6 +96,7 @@ export default function AgentDetailPage() {
         full_name: a.full_name ?? '',
         short_name: a.short_name ?? '',
         labor_percentage: a.labor_percentage?.toString() ?? '',
+        role: a.role ?? 'agent',
       });
     } else {
       setLoadError(`Không tìm thấy agent với ID: "${id}"`);
@@ -127,6 +129,7 @@ export default function AgentDetailPage() {
       full_name: form.full_name.trim() || null,
       short_name: form.short_name.trim() || null,
       labor_percentage: laborPercentageValue,
+      role: form.role,
     }).eq('id', id);
     setSaving(false);
     if (error) { setSaveMsg(`❌ ${error.message}`); return; }
@@ -194,7 +197,7 @@ export default function AgentDetailPage() {
           </div>
           <div className="flex-1 min-w-0">
             <p className="font-bold text-slate-800">{agent.full_name || '—'}</p>
-            <p className="text-xs text-gray-400">{agent.role === 'agent' ? 'Agent BD' : agent.role}</p>
+            <p className="text-xs text-gray-400">{agent.role === 'admin' ? 'Admin' : 'Agent BD'}</p>
           </div>
         </div>
 
@@ -220,6 +223,13 @@ export default function AgentDetailPage() {
             <div><label className="block text-xs text-gray-500 mb-1">Họ tên</label><input type="text" value={form.full_name} onChange={(e) => setField('full_name', e.target.value)} placeholder="Nguyễn Văn A" className={inputCls} /></div>
             <div><label className="block text-xs text-gray-500 mb-1">Tên viết tắt</label><input type="text" value={form.short_name} onChange={(e) => setField('short_name', e.target.value)} placeholder="VD: Nam" className={inputCls} /></div>
             <div><label className="block text-xs text-gray-500 mb-1">% Lao động</label><input type="number" min="0" max="100" value={form.labor_percentage} onChange={(e) => setField('labor_percentage', e.target.value)} placeholder="VD: 50" className={inputCls} /></div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Vai trò</label>
+              <select value={form.role} onChange={(e) => setField('role', e.target.value)} className={inputCls + ' bg-white'}>
+                <option value="agent">Agent BD</option>
+                <option value="admin">Admin</option>
+              </select>
+            </div>
           </div>
         </div>
 
