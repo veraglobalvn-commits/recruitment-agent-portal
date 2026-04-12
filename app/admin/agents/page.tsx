@@ -16,7 +16,6 @@ interface AgentRow {
   totalCandidates: number;
   passed: number;
   target: number;
-  created_at?: string | null;
 }
 
 function ProgressBar({ value, max }: { value: number; max: number }) {
@@ -51,10 +50,12 @@ export default function AgentsPage() {
     setLoading(true);
     try {
       const [agentsRes, ordersRes, candidatesRes] = await Promise.all([
-        supabase.from('agents').select('id, full_name, short_name, role, created_at'),
+        supabase.from('agents').select('id, full_name, short_name, role'),
         supabase.from('orders').select('id, agent_ids, total_labor'),
         supabase.from('candidates').select('id_ld, agent_id, interview_status'),
       ]);
+
+      if (agentsRes.error) throw new Error(`agents: ${agentsRes.error.message}`);
 
       const agentsRaw = agentsRes.data || [];
       const orders = ordersRes.data || [];
@@ -74,7 +75,6 @@ export default function AgentsPage() {
           totalCandidates: agCands.length,
           passed,
           target,
-          created_at: ag.created_at,
         };
       });
 
