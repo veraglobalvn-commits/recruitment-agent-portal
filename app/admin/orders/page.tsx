@@ -27,7 +27,7 @@ function StatusPill({ label }: { label: string | null }) {
     'TT lan 2': 'bg-indigo-100 text-indigo-700',
     'TT lan 3': 'bg-purple-100 text-purple-700',
   };
-  return <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${c[label] ?? 'bg-gray-100 text-gray-600'}`}>{label}</span>;
+  return <span className={`text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap ${c[label] ?? 'bg-gray-100 text-gray-600'}`}>{label}</span>;
 }
 
 const STATUS_FILTERS: { key: StatusFilter; label: string }[] = [

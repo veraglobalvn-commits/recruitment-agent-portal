@@ -253,7 +253,7 @@ export default function CandidateCard({
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-1 mb-0.5">
             <h3 className="font-bold text-gray-800 text-sm leading-tight flex-1 min-w-0 truncate">{candidate.full_name || <span className="text-red-400">N/A</span>}</h3>
-            <span className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded flex-shrink-0">{candidate.id_ld}</span>
+            <span className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded flex-shrink-0 max-w-[120px] truncate">{candidate.id_ld}</span>
           </div>
           {candidate.interview_status && !onStatusChange && (
             <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
