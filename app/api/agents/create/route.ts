@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { createServerClient } from '@supabase/ssr';
-import { cookies } from 'next/headers';
 
 function getAdminClient() {
   return createClient(
@@ -10,47 +8,22 @@ function getAdminClient() {
   );
 }
 
+// Xác thực admin qua Bearer token (client gọi getUser() trước để đảm bảo token fresh)
 async function getAdminFromRequest(req: NextRequest): Promise<ReturnType<typeof getAdminClient> | null> {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+  const token = req.headers.get('authorization')?.replace('Bearer ', '').trim();
+  if (!token) return null;
 
-  let userId: string | null = null;
+  const adminClient = getAdminClient();
 
-  // Ưu tiên cookie-based auth (browser tự gửi khi same-origin fetch)
-  // Dùng getAll() để hỗ trợ chunked cookies từ @supabase/ssr
-  try {
-    const cookieStore = cookies();
-    const browserClient = createServerClient(url, anonKey, {
-      cookies: {
-        getAll() { return cookieStore.getAll(); },
-        setAll() { /* read-only in API route */ },
-      },
-    });
-    const { data: { user } } = await browserClient.auth.getUser();
-    if (user) userId = user.id;
-  } catch {
-    // cookie auth failed, fall through to Bearer token
-  }
+  // Validate user JWT bằng service role client
+  const { data: { user }, error } = await adminClient.auth.getUser(token);
+  if (error || !user) return null;
 
-  // Fallback: Bearer token trong Authorization header
-  if (!userId) {
-    const authHeader = req.headers.get('authorization');
-    const token = authHeader?.replace('Bearer ', '').trim();
-    if (token) {
-      const adminSupabase = createClient(url, serviceKey);
-      const { data: { user } } = await adminSupabase.auth.getUser(token);
-      if (user) userId = user.id;
-    }
-  }
-
-  if (!userId) return null;
-
-  const adminClient = createClient(url, serviceKey);
+  // Kiểm tra role admin trong DB
   const { data: agent } = await adminClient
     .from('agents')
     .select('role')
-    .eq('supabase_uid', userId)
+    .eq('supabase_uid', user.id)
     .maybeSingle();
 
   if (!agent || agent.role !== 'admin') return null;

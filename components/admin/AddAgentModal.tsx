@@ -34,12 +34,26 @@ export default function AddAgentModal({ onClose, onSaved, showRoleSelector }: Ad
     setError(null);
 
     try {
+      // getUser() validates against Supabase server và auto-refresh token nếu expired
+      // Phải gọi TRƯỚC getSession() để đảm bảo token luôn còn hạn
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setError('Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại');
+        setSaving(false);
+        return;
+      }
       const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        setError('Không lấy được token, vui lòng đăng nhập lại');
+        setSaving(false);
+        return;
+      }
+
       const res = await fetch('/api/agents/create', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+          Authorization: `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({
           email: form.email.trim().toLowerCase(),
