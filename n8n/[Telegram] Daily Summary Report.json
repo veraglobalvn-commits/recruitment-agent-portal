@@ -20,93 +20,13 @@
         },
         {
             "parameters": {
-                "jsCode": "// Compute today's date range in SGT (UTC+7)\nconst now = new Date();\nconst SGT_OFFSET = 7 * 60 * 60 * 1000;\nconst sgtNow = new Date(now.getTime() + SGT_OFFSET);\nconst sgtDateStr = sgtNow.toISOString().split('T')[0]; // YYYY-MM-DD\n\nconst startDate = new Date(sgtDateStr + 'T00:00:00+07:00').toISOString();\nconst endDate = now.toISOString();\n\n// Format: DD/MM/YYYY\nconst [yyyy, mm, dd] = sgtDateStr.split('-');\nconst dateDisplay = `${dd}/${mm}/${yyyy}`;\n\nreturn [{\n  json: {\n    start_date: startDate,\n    end_date: endDate,\n    date_display: dateDisplay\n  }\n}];"
+                "jsCode": "// ============================================================\n// DAILY SUMMARY REPORT\n// Node duy nhất: tính ngày, query Supabase, format tin nhắn\n// try/catch toàn bộ → luôn trả đúng 1 output item\n// ============================================================\n\nconst SUPABASE = 'https://fpesidoqwxyyutgvalsp.supabase.co/rest/v1';\nconst KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZwZXNpZG9xd3h5eXV0Z3ZhbHNwIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTY3NDkzNywiZXhwIjoyMDkxMjUwOTM3fQ.X9s9a_rSNefhdd7UEsTulNB1xct4JK_QZe2UzIubPg8';\nconst HEADERS = { apikey: KEY, Authorization: `Bearer ${KEY}` };\nconst CHAT_ID = '-5163098733';\n\n// --- Tính ngày SGT ---\nconst now = new Date();\nconst SGT_OFFSET = 7 * 60 * 60 * 1000;\nconst sgtNow = new Date(now.getTime() + SGT_OFFSET);\nconst sgtDateStr = sgtNow.toISOString().split('T')[0];\nconst startDate = new Date(sgtDateStr + 'T00:00:00+07:00');\nconst endDate = now;\nconst [yyyy, mm, dd] = sgtDateStr.split('-');\nconst dateDisplay = `${dd}/${mm}/${yyyy}`;\n\nlet candidates = [];\nlet orders = [];\nlet errorNotes = '';\n\n// --- Query candidates (toàn bộ, filter ngày trong JS) ---\ntry {\n  const resp = await $helpers.httpRequest({\n    method: 'GET',\n    url: `${SUPABASE}/candidates?select=id_ld,full_name,order_id,interview_status,synced_at&order=synced_at.desc&limit=500`,\n    headers: HEADERS\n  });\n  const all = Array.isArray(resp) ? resp : [];\n  candidates = all.filter(c => {\n    const t = new Date(c.synced_at);\n    return t >= startDate && t < endDate;\n  });\n} catch (e) {\n  errorNotes += `[candidates: ${e.message}] `;\n}\n\n// --- Query orders còn thiếu lao động ---\ntry {\n  const resp = await $helpers.httpRequest({\n    method: 'GET',\n    url: `${SUPABASE}/orders?select=id,company_name,job_type,total_labor,labor_missing&labor_missing=gt.0&order=created_at.desc`,\n    headers: HEADERS\n  });\n  orders = Array.isArray(resp) ? resp : [];\n} catch (e) {\n  errorNotes += `[orders: ${e.message}] `;\n}\n\n// --- Format tin nhắn ---\nlet text = `📊 *BÁO CÁO NGÀY ${dateDisplay}*\\n`;\ntext += `━━━━━━━━━━━━━━━━━━\\n\\n`;\n\nif (candidates.length === 0) {\n  text += `🆕 *Ứng viên mới hôm nay:* Không có\\n`;\n} else {\n  text += `🆕 *Ứng viên mới hôm nay: ${candidates.length} người*\\n`;\n  const byOrder = {};\n  for (const c of candidates) {\n    const key = c.order_id || 'Chưa phân đơn';\n    if (!byOrder[key]) byOrder[key] = { pass: 0, fail: 0, pending: 0 };\n    const s = (c.interview_status || '').toLowerCase();\n    if (s === 'pass') byOrder[key].pass++;\n    else if (s === 'fail') byOrder[key].fail++;\n    else byOrder[key].pending++;\n  }\n  for (const [orderId, stats] of Object.entries(byOrder)) {\n    const total = stats.pass + stats.fail + stats.pending;\n    const parts = [];\n    if (stats.pass > 0) parts.push(`✅ ${stats.pass}`);\n    if (stats.fail > 0) parts.push(`❌ ${stats.fail}`);\n    if (stats.pending > 0) parts.push(`⏳ ${stats.pending}`);\n    text += `  📦 ${orderId}: ${total} người — ${parts.join(' / ')}\\n`;\n  }\n}\n\ntext += `\\n`;\n\nif (orders.length === 0) {\n  text += `📋 *Đơn hàng:* Tất cả đã đủ lao động 🎉`;\n} else {\n  const totalMissing = orders.reduce((s, o) => s + (parseInt(o.labor_missing) || 0), 0);\n  text += `📋 *Đơn hàng đang tuyển: ${orders.length} đơn — còn thiếu ${totalMissing} suất*\\n`;\n  for (const o of orders.slice(0, 8)) {\n    text += `  • ${o.company_name} — ${o.job_type}: còn thiếu *${o.labor_missing}/${o.total_labor}*\\n`;\n  }\n  if (orders.length > 8) text += `  _...và ${orders.length - 8} đơn khác_\\n`;\n}\n\nif (errorNotes) text += `\\n⚠️ _Lỗi query: ${errorNotes}_`;\n\nreturn [{ json: { text, chat_id: CHAT_ID } }];"
             },
-            "id": "compute-dates",
-            "name": "Tính Ngày",
+            "id": "build-report",
+            "name": "Tính Ngày + Query + Format",
             "type": "n8n-nodes-base.code",
             "typeVersion": 2,
             "position": [220, 0]
-        },
-        {
-            "parameters": {
-                "method": "GET",
-                "url": "https://fpesidoqwxyyutgvalsp.supabase.co/rest/v1/candidates?select=id_ld,full_name,order_id,interview_status,synced_at&order=synced_at.desc&limit=500",
-                "sendHeaders": true,
-                "headerParameters": {
-                    "parameters": [
-                        {
-                            "name": "apikey",
-                            "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZwZXNpZG9xd3h5eXV0Z3ZhbHNwIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTY3NDkzNywiZXhwIjoyMDkxMjUwOTM3fQ.X9s9a_rSNefhdd7UEsTulNB1xct4JK_QZe2UzIubPg8"
-                        },
-                        {
-                            "name": "Authorization",
-                            "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZwZXNpZG9xd3h5eXV0Z3ZhbHNwIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTY3NDkzNywiZXhwIjoyMDkxMjUwOTM3fQ.X9s9a_rSNefhdd7UEsTulNB1xct4JK_QZe2UzIubPg8"
-                        },
-                        {
-                            "name": "Accept",
-                            "value": "application/json"
-                        }
-                    ]
-                },
-                "options": {
-                    "response": {
-                        "response": {
-                            "responseFormat": "text"
-                        }
-                    }
-                }
-            },
-            "id": "query-candidates",
-            "name": "Query Candidates",
-            "type": "n8n-nodes-base.httpRequest",
-            "typeVersion": 4.2,
-            "position": [440, 0]
-        },
-        {
-            "parameters": {
-                "method": "GET",
-                "url": "https://fpesidoqwxyyutgvalsp.supabase.co/rest/v1/orders?select=id,company_name,job_type,total_labor,labor_missing,status&labor_missing=gt.0&order=created_at.desc",
-                "sendHeaders": true,
-                "headerParameters": {
-                    "parameters": [
-                        {
-                            "name": "apikey",
-                            "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZwZXNpZG9xd3h5eXV0Z3ZhbHNwIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTY3NDkzNywiZXhwIjoyMDkxMjUwOTM3fQ.X9s9a_rSNefhdd7UEsTulNB1xct4JK_QZe2UzIubPg8"
-                        },
-                        {
-                            "name": "Authorization",
-                            "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZwZXNpZG9xd3h5eXV0Z3ZhbHNwIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTY3NDkzNywiZXhwIjoyMDkxMjUwOTM3fQ.X9s9a_rSNefhdd7UEsTulNB1xct4JK_QZe2UzIubPg8"
-                        },
-                        {
-                            "name": "Accept",
-                            "value": "application/json"
-                        }
-                    ]
-                },
-                "options": {
-                    "response": {
-                        "response": {
-                            "responseFormat": "text"
-                        }
-                    }
-                }
-            },
-            "id": "query-orders",
-            "name": "Query Orders",
-            "type": "n8n-nodes-base.httpRequest",
-            "typeVersion": 4.2,
-            "position": [660, 0]
-        },
-        {
-            "parameters": {
-                "jsCode": "// === ĐỌC DỮ LIỆU ===\n// responseFormat: text → $json.data là raw JSON string, luôn có 1 item dù kết quả rỗng\nconst candidatesRaw = $('Query Candidates').first().json.data || '[]';\nconst ordersRaw = $json.data || '[]';\nconst tinhNgay = $('Tính Ngày').first().json;\nconst dateDisplay = tinhNgay.date_display;\n\nconst allCandidates = JSON.parse(candidatesRaw);\nconst orders = JSON.parse(ordersRaw);\n\n// Lọc candidates trong ngày SGT (JS-side, tránh n8n expression issues)\nconst startDate = new Date(tinhNgay.start_date);\nconst endDate = new Date(tinhNgay.end_date);\nconst candidates = Array.isArray(allCandidates)\n  ? allCandidates.filter(c => {\n      const t = new Date(c.synced_at);\n      return t >= startDate && t < endDate;\n    })\n  : [];\n\n// === TẠO TIN NHẮN ===\nlet text = `📊 *BÁO CÁO NGÀY ${dateDisplay}*\\n`;\ntext += `━━━━━━━━━━━━━━━━━━\\n\\n`;\n\n// --- Phần 1: Ứng viên mới ---\nif (!Array.isArray(candidates) || candidates.length === 0) {\n  text += `🆕 *Ứng viên mới hôm nay:* Không có\\n`;\n} else {\n  text += `🆕 *Ứng viên mới hôm nay: ${candidates.length} người*\\n`;\n\n  const byOrder = {};\n  for (const c of candidates) {\n    const key = c.order_id || 'Chưa phân đơn';\n    if (!byOrder[key]) byOrder[key] = { pass: 0, fail: 0, pending: 0 };\n    const status = (c.interview_status || '').toLowerCase();\n    if (status === 'pass') byOrder[key].pass++;\n    else if (status === 'fail') byOrder[key].fail++;\n    else byOrder[key].pending++;\n  }\n\n  for (const [orderId, stats] of Object.entries(byOrder)) {\n    const total = stats.pass + stats.fail + stats.pending;\n    const parts = [];\n    if (stats.pass > 0) parts.push(`✅ ${stats.pass}`);\n    if (stats.fail > 0) parts.push(`❌ ${stats.fail}`);\n    if (stats.pending > 0) parts.push(`⏳ ${stats.pending}`);\n    text += `  📦 ${orderId}: ${total} người — ${parts.join(' / ') || '⏳ chờ duyệt'}\\n`;\n  }\n}\n\ntext += `\\n`;\n\n// --- Phần 2: Đơn hàng đang tuyển ---\nif (!Array.isArray(orders) || orders.length === 0) {\n  text += `📋 *Đơn hàng:* Tất cả đã đủ lao động 🎉`;\n} else {\n  const totalMissing = orders.reduce((sum, o) => sum + (parseInt(o.labor_missing) || 0), 0);\n  text += `📋 *Đơn hàng đang tuyển: ${orders.length} đơn — còn thiếu ${totalMissing} suất*\\n`;\n\n  for (const o of orders.slice(0, 8)) {\n    text += `  • ${o.company_name} — ${o.job_type}\\n    còn thiếu *${o.labor_missing}/${o.total_labor}* suất\\n`;\n  }\n  if (orders.length > 8) {\n    text += `  _...và ${orders.length - 8} đơn khác_\\n`;\n  }\n}\n\nreturn [{\n  json: {\n    text,\n    chat_id: '-5163098733'\n  }\n}];"
-            },
-            "id": "format-message",
-            "name": "Tạo Tin Nhắn",
-            "type": "n8n-nodes-base.code",
-            "typeVersion": 2,
-            "position": [880, 0]
         },
         {
             "parameters": {
@@ -121,32 +41,17 @@
             "name": "Gửi Telegram",
             "type": "n8n-nodes-base.httpRequest",
             "typeVersion": 4.2,
-            "position": [1100, 0]
+            "position": [440, 0]
         }
     ],
     "pinData": {},
     "connections": {
         "Mỗi ngày 8PM SGT": {
             "main": [
-                [{"node": "Tính Ngày", "type": "main", "index": 0}]
+                [{"node": "Tính Ngày + Query + Format", "type": "main", "index": 0}]
             ]
         },
-        "Tính Ngày": {
-            "main": [
-                [{"node": "Query Candidates", "type": "main", "index": 0}]
-            ]
-        },
-        "Query Candidates": {
-            "main": [
-                [{"node": "Query Orders", "type": "main", "index": 0}]
-            ]
-        },
-        "Query Orders": {
-            "main": [
-                [{"node": "Tạo Tin Nhắn", "type": "main", "index": 0}]
-            ]
-        },
-        "Tạo Tin Nhắn": {
+        "Tính Ngày + Query + Format": {
             "main": [
                 [{"node": "Gửi Telegram", "type": "main", "index": 0}]
             ]
