@@ -29,6 +29,8 @@ jobs:
         env:
           NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
           NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder
-          NEXT_PUBLIC_N8N_API_URL: https://placeholder.com
-          NEXT_PUBLIC_N8N_CANDIDATES_URL: https://placeholder.com
+          SUPABASE_SERVICE_ROLE_KEY: placeholder
+          OCR_SPACE_API_KEY: placeholder
+          OPENAI_API_KEY: placeholder
           NEXT_PUBLIC_N8N_UPLOAD_URL: https://placeholder.com
+          NEXT_PUBLIC_N8N_VIDEO_UPDATE_URL: https://placeholder.com
