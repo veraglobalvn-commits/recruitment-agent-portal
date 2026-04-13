@@ -40,6 +40,17 @@ function ProgressBar({ value, max }: { value: number; max: number }) {
   );
 }
 
+function VideoPlayer({ url, onClose }: { url: string; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center" onClick={onClose}>
+      <div className="relative w-full max-w-lg mx-4" onClick={(e) => e.stopPropagation()}>
+        <button onClick={onClose} className="absolute -top-10 right-0 text-white text-2xl min-h-[44px] min-w-[44px] flex items-center justify-center">✕</button>
+        <video src={url} controls autoPlay className="w-full rounded-2xl bg-black" style={{ maxHeight: '70vh' }} />
+      </div>
+    </div>
+  );
+}
+
 export default function OrderDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -54,6 +65,7 @@ export default function OrderDetailPage() {
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
   const [videoUploadingCandidate, setVideoUploadingCandidate] = useState<string | null>(null);
+  const [playingVideo, setPlayingVideo] = useState<string | null>(null);
   const [showAgentDropdown, setShowAgentDropdown] = useState(false);
 
   const videoInputRef = useRef<HTMLInputElement>(null);
@@ -261,6 +273,7 @@ export default function OrderDetailPage() {
 
   return (
     <div className="pb-24">
+      {playingVideo && <VideoPlayer url={playingVideo} onClose={() => setPlayingVideo(null)} />}
       <input type="file" accept="video/*" ref={videoInputRef} onChange={handleVideoChange} className="hidden" />
 
       <div className="sticky top-0 z-20 bg-white border-b border-gray-100 px-4 py-3 flex items-center gap-3">
@@ -499,6 +512,7 @@ export default function OrderDetailPage() {
                     onCandidateUpdate={handleCandidateUpdate}
                     isVideoUploading={videoUploadingCandidate === c.id_ld}
                     currentStatus={c.interview_status}
+                    onVideoPlay={(url) => setPlayingVideo(url)}
                   />
                 ))}
               </div>

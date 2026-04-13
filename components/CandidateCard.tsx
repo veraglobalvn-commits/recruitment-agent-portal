@@ -18,6 +18,7 @@ interface CandidateCardProps {
   agentInfo?: { short_name: string | null; full_name: string | null };
   isNewVideo?: boolean;
   onVideoViewed?: () => void;
+  onVideoPlay?: (url: string) => void;
 }
 
 export default function CandidateCard({
@@ -34,6 +35,7 @@ export default function CandidateCard({
   agentInfo,
   isNewVideo,
   onVideoViewed,
+  onVideoPlay,
 }: CandidateCardProps) {
 
   const [editing, setEditing] = useState(false);
@@ -407,17 +409,21 @@ export default function CandidateCard({
         <div className="flex flex-wrap gap-2">
           {/* Video - special handling */}
           {candidate.video_link ? (
-            <a 
-              href={candidate.video_link} 
-              target="_blank" 
-              rel="noopener noreferrer"
-              onClick={onVideoViewed}
+            <button
+              onClick={() => {
+                onVideoViewed?.();
+                if (onVideoPlay) {
+                  onVideoPlay(candidate.video_link!);
+                } else {
+                  window.open(candidate.video_link!, '_blank', 'noopener,noreferrer');
+                }
+              }}
               className={`text-xs px-3 py-2 rounded-lg hover:bg-green-200 min-h-[44px] flex items-center font-medium ${
                 isNewVideo ? 'bg-yellow-100 text-yellow-700 animate-pulse' : 'bg-green-100 text-green-700'
               }`}
             >
               ▶ Video
-            </a>
+            </button>
           ) : isVideoUploading ? (
             <button disabled className="text-xs bg-yellow-100 text-yellow-600 px-3 py-2 rounded-lg min-h-[44px] flex items-center gap-1 cursor-not-allowed">
               <span className="inline-block w-3 h-3 border-2 border-yellow-500 border-t-transparent rounded-full animate-spin" />

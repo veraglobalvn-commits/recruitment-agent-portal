@@ -7,6 +7,17 @@ import type { Candidate, Order } from '@/lib/types';
 import CandidateCard from '@/components/CandidateCard';
 import LoadingSkeleton from '@/components/LoadingSkeleton';
 
+function VideoPlayer({ url, onClose }: { url: string; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center" onClick={onClose}>
+      <div className="relative w-full max-w-lg mx-4" onClick={(e) => e.stopPropagation()}>
+        <button onClick={onClose} className="absolute -top-10 right-0 text-white text-2xl min-h-[44px] min-w-[44px] flex items-center justify-center">✕</button>
+        <video src={url} controls autoPlay className="w-full rounded-2xl bg-black" style={{ maxHeight: '70vh' }} />
+      </div>
+    </div>
+  );
+}
+
 export default function OrderDetail() {
   const params = useParams();
   const searchParams = useSearchParams();
@@ -25,6 +36,7 @@ export default function OrderDetail() {
   const [uploadMsg, setUploadMsg] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [videoUploadingCandidate, setVideoUploadingCandidate] = useState<string | null>(null);
+  const [playingVideo, setPlayingVideo] = useState<string | null>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
   const [dupWarning, setDupWarning] = useState<{
     fullName: string; orderId: string; ppNo: string;
@@ -346,6 +358,7 @@ export default function OrderDetail() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {playingVideo && <VideoPlayer url={playingVideo} onClose={() => setPlayingVideo(null)} />}
       {/* Hidden inputs */}
       <input type="file" accept="video/*" ref={videoInputRef} onChange={handleVideoChange} className="hidden" />
       <input type="file" accept="image/*" ref={fileInputRef} onChange={handleFileChange} className="hidden" />
@@ -494,6 +507,7 @@ export default function OrderDetail() {
                   onCandidateUpdate={handleCandidateUpdate}
                   onCandidateDelete={handleCandidateDelete}
                   isVideoUploading={videoUploadingCandidate === c.id_ld}
+                  onVideoPlay={(url) => setPlayingVideo(url)}
                 />
               ))}
             </div>

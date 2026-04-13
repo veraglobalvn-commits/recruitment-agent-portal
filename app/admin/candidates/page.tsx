@@ -346,6 +346,7 @@ export default function CandidatesPage() {
                 agentInfo={ag ? { short_name: ag.short_name, full_name: ag.full_name } : undefined}
                 isNewVideo={newVideoCandidates.includes(c.id_ld)}
                 onVideoViewed={() => handleVideoViewed(c.id_ld)}
+                onVideoPlay={(url) => setPlayingVideo(url)}
               />
             );
           })}
