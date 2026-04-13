@@ -228,6 +228,21 @@ export default function CandidatesPage() {
       await supabase.from('candidates').update({ video_link: urlData.publicUrl }).eq('id_ld', videoUploadingCandidate);
       handleCandidateUpdate(videoUploadingCandidate, { video_link: urlData.publicUrl });
       setNewVideoCandidates((prev) => [...prev, videoUploadingCandidate]);
+
+      const notifyUrl = process.env.NEXT_PUBLIC_N8N_VIDEO_NOTIFY_URL;
+      if (notifyUrl) {
+        const candidate = candidates.find((c) => c.id_ld === videoUploadingCandidate);
+        fetch(notifyUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            candidate_id: videoUploadingCandidate,
+            full_name: candidate?.full_name ?? '',
+            order_id: candidate?.order_id ?? '',
+            video_link: urlData.publicUrl,
+          }),
+        }).catch(() => {});
+      }
     } catch (err) {
       console.error('Upload error:', err);
       alert(`Upload lỗi: ${err instanceof Error ? err.message : String(err)}`);

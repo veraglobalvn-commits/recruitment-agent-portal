@@ -307,13 +307,28 @@ export default function OrderDetail() {
 
       await supabase.from('candidates').update({ video_link: videoUrl }).eq('id_ld', videoUploadingCandidate);
 
-      const n8nUrl = process.env.NEXT_PUBLIC_N8N_VIDEO_UPDATE_URL;
-      if (n8nUrl) {
-        await fetch(n8nUrl, {
+      const larkUrl = process.env.NEXT_PUBLIC_N8N_VIDEO_UPDATE_URL;
+      if (larkUrl) {
+        await fetch(larkUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ candidate_id: videoUploadingCandidate, video_link: videoUrl }),
         });
+      }
+
+      const notifyUrl = process.env.NEXT_PUBLIC_N8N_VIDEO_NOTIFY_URL;
+      if (notifyUrl) {
+        const candidate = candidates.find((c) => c.id_ld === videoUploadingCandidate);
+        fetch(notifyUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            candidate_id: videoUploadingCandidate,
+            full_name: candidate?.full_name ?? '',
+            order_id: orderId,
+            video_link: videoUrl,
+          }),
+        }).catch(() => {});
       }
 
       setUploadMsg(`✅ Video uploaded successfully!`);
