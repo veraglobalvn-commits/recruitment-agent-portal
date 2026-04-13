@@ -1,0 +1,139 @@
+{
+    "name": "[Telegram] Video Notification",
+    "nodes": [
+        {
+            "parameters": {
+                "httpMethod": "POST",
+                "path": "telegram-video-notify",
+                "responseMode": "responseNode",
+                "options": {}
+            },
+            "id": "webhook-video-notify",
+            "name": "Webhook Trigger",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 2.1,
+            "position": [
+                0,
+                0
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "// Nhận data từ Supabase DB Webhook hoặc Portal API\nconst body = $input.first().json.body;\n\n// Validate required fields\nconst candidateId = body.candidate_id || body.id_ld;\nconst candidateName = body.full_name || 'Unknown';\nconst orderId = body.order_id || 'N/A';\nconst videoLink = body.video_link || '';\n\nif (!candidateId) {\n  return [{ json: { error: 'Missing candidate_id' } }];\n}\n\nreturn [{\n  json: {\n    candidate_id: candidateId,\n    full_name: candidateName,\n    order_id: orderId,\n    video_link: videoLink,\n    chat_id: '-5163098733',\n    timestamp: new Date().toISOString()\n  }\n}];"
+            },
+            "id": "prep-data",
+            "name": "Chuẩn bị Data",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                220,
+                0
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "// Tạo nội dung tin nhắn Telegram\nconst data = $input.first().json;\nconst text = `📹 Ứng viên mới nộp video\\n\\n`\n  + `👤 Tên: ${data.full_name}\\n`\n  + `📋 Mã LD: ${data.candidate_id}\\n`\n  + `📦 Đơn hàng: ${data.order_id}\\n`\n  + `🕐 Thời gian: ${new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}`;\n\nconst inline_keyboard = {\n  inline_keyboard: [[\n    { text: '▶️ Xem Video', url: data.video_link || 'https://portal.veraglobal.vn' },\n    { text: '✅ Pass', callback_data: `pass:${data.candidate_id}` },\n    { text: '❌ Fail', callback_data: `fail:${data.candidate_id}` }\n  ]]\n};\n\nreturn [{\n  json: {\n    chat_id: data.chat_id,\n    text: text,\n    reply_markup: JSON.stringify(inline_keyboard),\n    candidate_id: data.candidate_id,\n    full_name: data.full_name\n  }\n}];"
+            },
+            "id": "format-message",
+            "name": "Format Tin Nhắn",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                440,
+                0
+            ]
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "=https://api.telegram.org/bot8213635094:AAEziFudsLcEnKzDYJXyNqLQKEdPoSeHTmc/sendMessage",
+                "sendBody": true,
+                "specifyBody": "json",
+                "jsonBody": "={{ JSON.stringify({ chat_id: $json.chat_id, text: $json.text, reply_markup: JSON.parse($json.reply_markup) }) }}",
+                "options": {}
+            },
+            "id": "send-telegram",
+            "name": "Gửi Telegram",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.2,
+            "position": [
+                660,
+                0
+            ]
+        },
+        {
+            "parameters": {
+                "respondWith": "json",
+                "responseBody": "={{ JSON.stringify({ success: true, message_id: $json.result?.message_id }) }}",
+                "options": {}
+            },
+            "id": "respond-webhook",
+            "name": "Phản hồi",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1.1,
+            "position": [
+                880,
+                0
+            ]
+        }
+    ],
+    "pinData": {},
+    "connections": {
+        "Webhook Trigger": {
+            "main": [
+                [
+                    {
+                        "node": "Chuẩn bị Data",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Chuẩn bị Data": {
+            "main": [
+                [
+                    {
+                        "node": "Format Tin Nhắn",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Format Tin Nhắn": {
+            "main": [
+                [
+                    {
+                        "node": "Gửi Telegram",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Gửi Telegram": {
+            "main": [
+                [
+                    {
+                        "node": "Phản hồi",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "active": true,
+    "settings": {
+        "executionOrder": "v1"
+    },
+    "tags": [
+        {
+            "name": "telegram"
+        },
+        {
+            "name": "recruitment"
+        }
+    ]
+}
