@@ -576,7 +576,7 @@ export default function CompanyDetailPage() {
             </button>
           </div>
           <div className="p-4 space-y-3">
-            <p className="text-xs text-gray-400">Các trường EN được dùng trong tài liệu tuyển dụng. Bấm "Dịch tự động" để AI điền.</p>
+            <p className="text-xs text-gray-400">Các trường EN được dùng trong tài liệu tuyển dụng. Bấm &ldquo;Dịch tự động&rdquo; để AI điền.</p>
             <div><label className="block text-xs text-gray-500 mb-1">Company Name (EN)</label><input type="text" readOnly value={company.en_company_name ?? ''} placeholder="Auto-filled by AI" className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 bg-gray-50 text-gray-700 min-h-[44px] cursor-default" /></div>
             <div className="grid grid-cols-2 gap-3">
               <div><label className="block text-xs text-gray-500 mb-1">Industry (EN)</label><input type="text" readOnly value={company.en_industry ?? ''} placeholder="Auto-filled" className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 bg-gray-50 text-gray-700 min-h-[44px] cursor-default" /></div>
