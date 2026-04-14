@@ -231,8 +231,10 @@ export default function CandidateCard({
     );
   };
 
+  const isMissingCandidate = !candidate.pp_no || !candidate.interview_status;
+
   return (
-    <div className={`border rounded-xl hover:shadow-md transition-shadow bg-white overflow-hidden ${isNewVideo ? 'border-yellow-400 ring-2 ring-yellow-200' : 'border-gray-200'}`}>
+    <div className={`border rounded-xl hover:shadow-md transition-shadow bg-white overflow-hidden ${isNewVideo ? 'border-yellow-400 ring-2 ring-yellow-200' : isMissingCandidate ? 'border-red-200 bg-red-50/20' : 'border-gray-200'}`}>
       {/* Header: Photo + Name + ID */}
       <div className="flex items-start gap-3 p-4 pb-3">
         <div className="relative flex-shrink-0">

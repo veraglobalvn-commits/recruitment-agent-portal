@@ -94,8 +94,8 @@ export default function OrderDetail() {
           job_type_en: orderRes.data.job_type_en,
           salary_usd: orderRes.data.salary_usd,
           url_order: orderRes.data.url_order,
-          meal: orderRes.data.meal,
-          dormitory: orderRes.data.dormitory,
+          meal: orderRes.data.meal_en || orderRes.data.meal,
+          dormitory: orderRes.data.dormitory_en || orderRes.data.dormitory,
           recruitment_info: orderRes.data.recruitment_info,
           probation: orderRes.data.probation,
           probation_salary_pct: orderRes.data.probation_salary_pct,
@@ -511,15 +511,15 @@ export default function OrderDetail() {
             <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">Recruitment Productivity</h3>
             <div className="flex items-center justify-between text-center">
               <div>
-                <p className="text-xs text-gray-400 mb-1">Tổng cần tuyển</p>
+                <p className="text-xs text-gray-400 mb-1">Allocated</p>
                 <p className="text-2xl font-bold text-slate-800">{allocated}</p>
               </div>
               <div>
-                <p className="text-xs text-gray-400 mb-1">Đã passed</p>
+                <p className="text-xs text-gray-400 mb-1">Passed</p>
                 <p className="text-2xl font-bold text-green-600">{agentPassed}</p>
               </div>
               <div>
-                <p className="text-xs text-gray-400 mb-1">Còn thiếu</p>
+                <p className="text-xs text-gray-400 mb-1">Remaining</p>
                 <p className="text-2xl font-bold text-red-500">{Math.max(0, allocated - agentPassed)}</p>
               </div>
             </div>

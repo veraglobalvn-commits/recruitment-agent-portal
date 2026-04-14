@@ -24,6 +24,7 @@ export interface Order {
   dormitory: string | null;
   recruitment_info: string | null;
   probation: string | null;
+  probation_months?: number | null;
   probation_salary_pct: number | null;
   agent_order_status: string | null;
   created_at?: string | null;
@@ -139,6 +140,7 @@ export interface AdminOrder {
   dormitory_en: string | null;
   dormitory_note: string | null;
   probation: string | null;
+  probation_months?: number | null;
   probation_salary_pct: number | null;
   agent_order_status: string | null;
   created_at: string;
@@ -162,6 +164,20 @@ export interface AgentOption {
   id: string;
   full_name: string | null;
   short_name: string | null;
+}
+
+export interface OrderPayment {
+  id: string;
+  order_id: string;
+  payment_party: 'company' | 'agent';
+  payment_type: string;
+  agent_id: string | null;
+  handover_id: string | null;
+  amount: number;
+  currency: 'VND' | 'USD';
+  payment_date: string | null;
+  note: string | null;
+  created_at: string;
 }
 
 export interface Agent {

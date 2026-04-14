@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import type { AdminOrder, AgentOption } from '@/lib/types';
+import { fmtUSD } from '@/lib/formatters';
 
 interface AddOrderModalProps {
   onClose: () => void;
@@ -225,9 +226,10 @@ export default function AddOrderModal({ onClose, onSaved, prefillCompanyId }: Ad
             <div>
               <label className="block text-xs text-gray-500 mb-1">Lương (USD)</label>
               <input
-                type="number"
-                value={form.salary_usd}
-                onChange={(e) => set('salary_usd', e.target.value)}
+                type="text"
+                inputMode="numeric"
+                value={form.salary_usd ? fmtUSD(parseFloat(form.salary_usd) || 0) : ''}
+                onChange={(e) => set('salary_usd', e.target.value.replace(/,/g, ''))}
                 className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 min-h-[44px] focus:outline-none focus:ring-2 focus:ring-blue-400"
               />
             </div>

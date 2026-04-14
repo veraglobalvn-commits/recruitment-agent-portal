@@ -13,14 +13,17 @@ interface CompanyRow extends Company {
   total_revenue: number;
 }
 
+function isMissingData(c: CompanyRow) {
+  return !c.short_name || !c.tax_code || !c.legal_rep || !c.legal_rep_title || !c.address;
+}
+
 function nameClass(c: CompanyRow) {
-  const isMissing = !c.short_name || !c.tax_code || !c.legal_rep || !c.legal_rep_title || !c.address;
-  return isMissing ? 'font-semibold text-sm text-red-600 truncate' : 'font-semibold text-sm text-slate-800 truncate';
+  return isMissingData(c) ? 'font-semibold text-sm text-red-600 truncate' : 'font-semibold text-sm text-slate-800 truncate';
 }
 
 function Avatar({ c }: { c: CompanyRow }) {
   const src = c.avatar_url ?? c.company_media?.[0] ?? null;
-  const isMissing = !c.short_name || !c.tax_code || !c.legal_rep || !c.legal_rep_title || !c.address;
+  const isMissing = isMissingData(c);
   return src ? (
     <img src={src} alt={c.company_name} className="w-10 h-10 rounded-full object-cover flex-shrink-0" />
   ) : (
@@ -136,7 +139,7 @@ export default function CompaniesPage() {
               <Link
                 key={c.id}
                 href={`/admin/companies/${c.id}`}
-                className="flex items-center gap-3 p-4 bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow active:scale-[0.99]"
+                className={`flex items-center gap-3 p-4 bg-white rounded-2xl border shadow-sm hover:shadow-md transition-shadow active:scale-[0.99] ${isMissingData(c) ? 'border-red-200 bg-red-50/30' : 'border-gray-100'}`}
               >
                 <Avatar c={c} />
                 <div className="flex-1 min-w-0">
@@ -173,7 +176,7 @@ export default function CompaniesPage() {
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {filtered.map((c) => (
-                  <tr key={c.id} className="hover:bg-gray-50 transition-colors">
+                  <tr key={c.id} className={`transition-colors ${isMissingData(c) ? 'bg-red-50/30 hover:bg-red-50/50' : 'hover:bg-gray-50'}`}>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
                         <Avatar c={c} />

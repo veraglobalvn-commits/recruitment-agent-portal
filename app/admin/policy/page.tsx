@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
+import { fmtVND, fmtUSD } from '@/lib/formatters';
 
 interface AgentRow {
   id: string;
@@ -84,12 +85,6 @@ export default function PolicyPage() {
     setTimeout(() => setSaveMsg(null), 3000);
   };
 
-  const fmtVnd = (v: string) => {
-    const n = parseFloat(v);
-    if (!n) return v;
-    return n.toLocaleString('vi-VN') + ' ₫';
-  };
-
   const inputCls = 'w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[44px]';
 
   if (loading) {
@@ -133,13 +128,14 @@ export default function PolicyPage() {
               <label className="block text-xs text-gray-500 mb-1">Phí mặc định / lao động tại Việt Nam (VNĐ)</label>
               <div className="flex items-center gap-3">
                 <input
-                  type="number"
-                  value={feeVnd}
-                  onChange={(e) => setFeeVnd(e.target.value)}
+                  type="text"
+                  inputMode="numeric"
+                  value={feeVnd ? fmtVND(parseFloat(feeVnd) || 0) : ''}
+                  onChange={(e) => setFeeVnd(e.target.value.replace(/\./g, ''))}
                   className={inputCls + ' flex-1'}
                 />
                 <span className="text-xs text-gray-400 flex-shrink-0 whitespace-nowrap">
-                  Hiện tại: {fmtVnd(prevFeeVnd)}
+                  Hiện tại: {prevFeeVnd ? fmtVND(parseFloat(prevFeeVnd) || 0) + ' ₫' : '—'}
                 </span>
               </div>
             </div>
@@ -147,13 +143,14 @@ export default function PolicyPage() {
               <label className="block text-xs text-gray-500 mb-1">Phí mặc định / lao động tại Bangladesh (USD)</label>
               <div className="flex items-center gap-3">
                 <input
-                  type="number"
-                  value={feeUsd}
-                  onChange={(e) => setFeeUsd(e.target.value)}
+                  type="text"
+                  inputMode="numeric"
+                  value={feeUsd ? fmtUSD(parseFloat(feeUsd) || 0) : ''}
+                  onChange={(e) => setFeeUsd(e.target.value.replace(/,/g, ''))}
                   className={inputCls + ' flex-1'}
                 />
                 <span className="text-xs text-gray-400 flex-shrink-0 whitespace-nowrap">
-                  Hiện tại: ${prevFeeUsd}
+                  Hiện tại: ${prevFeeUsd ? fmtUSD(parseFloat(prevFeeUsd) || 0) : '—'}
                 </span>
               </div>
             </div>

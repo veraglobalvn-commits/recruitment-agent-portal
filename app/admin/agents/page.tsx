@@ -9,10 +9,15 @@ interface AgentRow {
   id: string;
   full_name: string | null;
   short_name: string | null;
+  labor_percentage: number | null;
   totalOrders: number;
   totalCandidates: number;
   passed: number;
   target: number;
+}
+
+function isMissingAgent(ag: AgentRow) {
+  return !ag.labor_percentage || ag.labor_percentage <= 0;
 }
 
 function ProgressBar({ value, max }: { value: number; max: number }) {
@@ -35,7 +40,7 @@ export default function AgentsPage() {
     setLoading(true);
     try {
       const [agentsRes, ordersRes, candidatesRes] = await Promise.all([
-        supabase.from('agents').select('id, full_name, short_name').eq('role', 'agent'),
+        supabase.from('agents').select('id, full_name, short_name, labor_percentage').eq('role', 'agent'),
         supabase.from('orders').select('id, agent_ids, total_labor'),
         supabase.from('candidates').select('id_ld, agent_id, interview_status'),
       ]);
@@ -55,6 +60,7 @@ export default function AgentsPage() {
           id: ag.id,
           full_name: ag.full_name,
           short_name: ag.short_name,
+          labor_percentage: ag.labor_percentage,
           totalOrders: agOrders.length,
           totalCandidates: agCands.length,
           passed,
@@ -126,7 +132,7 @@ export default function AgentsPage() {
               <Link
                 key={ag.id}
                 href={`/admin/agents/${ag.id}`}
-                className="flex items-center gap-3 p-4 bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow active:scale-[0.99]"
+                className={`flex items-center gap-3 p-4 bg-white rounded-2xl border shadow-sm hover:shadow-md transition-shadow active:scale-[0.99] ${isMissingAgent(ag) ? 'border-red-200 bg-red-50/30' : 'border-gray-100'}`}
               >
                 <div className="w-11 h-11 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-sm flex-shrink-0">
                   {(ag.short_name || ag.full_name || '?')[0].toUpperCase()}
@@ -157,7 +163,7 @@ export default function AgentsPage() {
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {filtered.map((ag) => (
-                  <tr key={ag.id} className="hover:bg-gray-50 transition-colors">
+                  <tr key={ag.id} className={`transition-colors ${isMissingAgent(ag) ? 'bg-red-50/30 hover:bg-red-50/50' : 'hover:bg-gray-50'}`}>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
                         <div className="w-9 h-9 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-xs flex-shrink-0">

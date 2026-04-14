@@ -30,6 +30,10 @@ function StatusPill({ label }: { label: string | null }) {
   return <span className={`text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap ${c[label] ?? 'bg-gray-100 text-gray-600'}`}>{label}</span>;
 }
 
+function isMissingOrder(o: AdminOrder) {
+  return !o.job_type || !o.service_fee_per_person || !o.agent_ids?.length;
+}
+
 const STATUS_FILTERS: { key: StatusFilter; label: string }[] = [
   { key: 'all', label: 'Tất cả' },
   { key: 'Đang tuyển', label: 'Đang tuyển' },
@@ -161,7 +165,7 @@ export default function OrdersPage() {
                 <Link
                   key={o.id}
                   href={`/admin/orders/${encodeURIComponent(o.id)}`}
-                  className="block p-4 bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow active:scale-[0.99]"
+                  className={`block p-4 bg-white rounded-2xl border shadow-sm hover:shadow-md transition-shadow active:scale-[0.99] ${isMissingOrder(o) ? 'border-red-200 bg-red-50/30' : 'border-gray-100'}`}
                 >
                   <div className="flex justify-between items-start mb-1.5 gap-2">
                     <span className="font-semibold text-sm text-blue-600 truncate">{o.id}</span>
@@ -204,7 +208,7 @@ export default function OrdersPage() {
                       .map((id) => agentMap.get(id))
                       .filter((a): a is AgentOption => a !== undefined);
                     return (
-                      <tr key={o.id} className="hover:bg-gray-50 transition-colors">
+                      <tr key={o.id} className={`transition-colors ${isMissingOrder(o) ? 'bg-red-50/30 hover:bg-red-50/50' : 'hover:bg-gray-50'}`}>
                         <td className="px-4 py-3">
                           <Link href={`/admin/orders/${encodeURIComponent(o.id)}`} className="font-medium text-blue-600 hover:underline text-xs whitespace-nowrap">
                             {o.id}

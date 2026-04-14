@@ -17,6 +17,7 @@ const NAV = [
   { href: '/admin/agents', label: 'Agent BD', icon: '👥' },
   { href: '/admin/users', label: 'Tài khoản', icon: '🔑' },
   { href: '/admin/candidates', label: 'Ứng viên', icon: '🧑‍💼' },
+  { href: '/admin/debt', label: 'Công nợ', icon: '💰' },
   { href: '/admin/reports', label: 'Báo cáo', icon: '📈' },
   { href: '/admin/policy', label: 'Chính sách', icon: '⚙️' },
 ];
