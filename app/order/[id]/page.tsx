@@ -378,6 +378,16 @@ export default function OrderDetail() {
               <p className="text-xs text-gray-500 truncate">{orderData.company}</p>
             )}
           </div>
+          {orderData?.url_order && (
+            <a
+              href={orderData.url_order}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex-shrink-0 text-xs bg-blue-100 text-blue-700 px-3 py-2 rounded-lg hover:bg-blue-200 min-h-[44px] flex items-center"
+            >
+              📄 YCTD
+            </a>
+          )}
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={isUploading}
@@ -432,19 +442,36 @@ export default function OrderDetail() {
         {orderData && (
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
             <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">Hiệu quả tuyển dụng</h3>
+
+            {/* Order-level stats */}
+            <div className="grid grid-cols-3 gap-2 mb-4">
+              {[
+                { label: 'Cần tuyển', value: Number(orderData.total_labor) || 0, color: 'text-slate-800' },
+                { label: 'Đã trúng tuyển', value: candidates.filter(c => c.interview_status === 'Passed').length, color: 'text-green-600' },
+                { label: 'Còn thiếu', value: Number(orderData.missing) || 0, color: 'text-red-500' },
+              ].map(({ label, value, color }) => (
+                <div key={label} className="bg-gray-50 rounded-xl p-3 text-center">
+                  <p className="text-xs text-gray-400 mb-1">{label}</p>
+                  <p className={`text-xl font-bold ${color}`}>{value}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Per-agent breakdown */}
             {agents.length === 0 ? (
-              <p className="text-gray-400 text-sm text-center py-4">Bạn chưa được phân công cho đơn hàng này</p>
+              <p className="text-gray-400 text-sm text-center py-2">Bạn chưa được phân công cho đơn hàng này</p>
             ) : (
               <div className="space-y-4">
                 {agents.map((agent) => {
+                  const totalLabor = Number(orderData.total_labor) || 0;
                   const allocatedLabor = agent.labor_percentage
-                    ? Math.round((agent.labor_percentage / 100) * Number(orderData.total_labor))
+                    ? Math.round((agent.labor_percentage / 100) * totalLabor)
                     : 0;
-                  const passedCount = candidates.filter(
+                  const agentPassedCount = candidates.filter(
                     c => c.agent_id === agent.id && c.interview_status === 'Passed'
                   ).length;
                   const percentage = allocatedLabor > 0
-                    ? Math.min(100, (passedCount / allocatedLabor) * 100)
+                    ? Math.min(100, (agentPassedCount / allocatedLabor) * 100)
                     : 0;
 
                   return (
@@ -460,11 +487,11 @@ export default function OrderDetail() {
                         <div className="flex-1 min-w-0">
                           <p className="font-semibold text-gray-800 text-sm">{agent.short_name || agent.full_name || 'Agent'}</p>
                           <p className="text-xs text-gray-500">
-                            Phân công: {allocatedLabor} người ({agent.labor_percentage}%)
+                            Phân công: {allocatedLabor} người ({agent.labor_percentage ?? 0}%)
                           </p>
                         </div>
                         <div className="text-right">
-                          <p className="text-lg font-bold text-gray-800">{passedCount} / {allocatedLabor}</p>
+                          <p className="text-lg font-bold text-gray-800">{agentPassedCount} / {allocatedLabor}</p>
                           <p className="text-xs text-gray-500">{percentage.toFixed(1)}%</p>
                         </div>
                       </div>

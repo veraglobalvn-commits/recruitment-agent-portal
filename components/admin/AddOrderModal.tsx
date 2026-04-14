@@ -77,14 +77,32 @@ export default function AddOrderModal({ onClose, onSaved, prefillCompanyId }: Ad
     setShowCompanyDropdown(false);
   };
 
+  const generateOrderId = async (shortName: string | null): Promise<string> => {
+    const now = new Date();
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const yyyy = String(now.getFullYear());
+    const prefix = shortName
+      ? `${shortName.toUpperCase().replace(/ /g, '_')}_${mm}${yyyy}`
+      : `ORD_${mm}${yyyy}`;
+    const { data } = await supabase.from('orders').select('id').like('id', `${prefix}%`);
+    if (!data || data.length === 0) return prefix;
+    const maxNum = data.reduce((max: number, row: { id: string }) => {
+      const suffix = row.id.slice(prefix.length);
+      const num = suffix ? parseInt(suffix.replace(/^_/, ''), 10) || 1 : 1;
+      return Math.max(max, num);
+    }, 1);
+    return `${prefix}_${maxNum + 1}`;
+  };
+
   const handleSave = async (andView = false) => {
     if (!selectedCompany) { setError('Chọn công ty là bắt buộc'); return; }
     if (!form.job_type.trim()) { setError('Vị trí công việc là bắt buộc'); return; }
     setSaving(true);
     setError(null);
     try {
+      const orderId = await generateOrderId(selectedCompany.short_name);
       const payload = {
-        id: `ORD-${Date.now()}`,
+        id: orderId,
         company_id: selectedCompany.id,
         company_name: selectedCompany.company_name,
         job_type: form.job_type.trim(),

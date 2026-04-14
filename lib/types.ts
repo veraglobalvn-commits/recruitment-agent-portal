@@ -81,17 +81,21 @@ export interface Company {
   phone: string | null;
   email: string | null;
   industry: string | null;
+  business_type: string | null;
   business_reg_authority: string | null;
   business_reg_date: string | null;
   business_reg_img: string | null;
   company_media: string[];
   avatar_url: string | null;
-  video_url: string | null;
+  factory_video_url: string | null;
+  job_video_url: string | null;
   doc_links: DocLink[];
   en_company_name: string | null;
   en_legal_rep: string | null;
   en_address: string | null;
   en_title: string | null;
+  en_industry: string | null;
+  en_business_type: string | null;
   created_at: string;
 }
 
@@ -112,6 +116,7 @@ export interface AdminOrder {
   company_id: string | null;
   company_name: string | null;
   job_type: string | null;
+  job_type_en: string | null;
   total_labor: number | null;
   labor_missing: number | null;
   status: string | null;
@@ -123,6 +128,16 @@ export interface AdminOrder {
   salary_usd: number | null;
   url_order: string | null;
   legal_status: string | null;
+  meal: string | null;
+  meal_en: string | null;
+  dormitory: string | null;
+  dormitory_en: string | null;
+  dormitory_note: string | null;
+  probation: string | null;
+  probation_months: number | null;
+  probation_salary_pct: number | null;
+  recruitment_info: string | null;
+  recruitment_info_en: string | null;
   created_at: string;
 }
 

@@ -76,6 +76,9 @@ export default function CompanyFormModal({ onClose, onSaved }: CompanyFormModalP
   const set = (k: keyof typeof EMPTY_FORM, v: string) =>
     setForm((f) => ({ ...f, [k]: v }));
 
+  const setShortName = (v: string) =>
+    setForm((f) => ({ ...f, short_name: v.toUpperCase().replace(/ /g, '_') }));
+
   // OCR: compress → send → pre-fill
   const handleScanFile = useCallback(async (file: File) => {
     setOcrLoading(true);
@@ -263,7 +266,17 @@ export default function CompanyFormModal({ onClose, onSaved }: CompanyFormModalP
               )}
               <Field label="Tên công ty" value={form.company_name} onChange={(v) => set('company_name', v)} placeholder="CÔNG TY TNHH..." required />
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Tên viết tắt" value={form.short_name} onChange={(v) => set('short_name', v)} placeholder="VD: Vera" />
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Tên viết tắt</label>
+                  <input
+                    type="text"
+                    value={form.short_name}
+                    onChange={(e) => setShortName(e.target.value)}
+                    placeholder="VD: AN_DUONG"
+                    className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[44px] font-mono"
+                  />
+                  <p className="text-xs text-gray-400 mt-0.5">Dùng gạch dưới, VD: AN_DUONG</p>
+                </div>
                 <Field label="Mã số thuế" value={form.tax_code} onChange={(v) => set('tax_code', v)} placeholder="0123456789" />
               </div>
               <div className="grid grid-cols-2 gap-3">
