@@ -188,33 +188,51 @@ export default function OrderDetailPage() {
     if (!order) return;
     setSaving(true);
     setSaveMsg(null);
-const { error } = await supabase.from('orders').update({ 
-    job_type: form.job_type.trim() || null, 
-    job_type_en: form.job_type_en.trim() || null, 
-    total_labor: form.total_labor ? parseInt(form.total_labor) : null, 
-    labor_missing: form.labor_missing ? parseInt(form.labor_missing) : null, 
-    salary_usd: form.salary_usd ? parseFloat(form.salary_usd) : null, 
-    status: form.status || 'Đang tuyển', 
-    legal_status: form.legal_status.trim() || null, 
-    agent_ids: form.agent_ids.length > 0 ? form.agent_ids : null, 
-    total_fee_vn: form.total_fee_vn ? parseFloat(form.total_fee_vn) : null, 
-    service_fee_per_person: form.service_fee_per_person ? parseFloat(form.service_fee_per_person) : null, 
-    payment_status_vn: form.payment_status_vn || 'Chưa TT', 
-    url_demand_letter: form.url_demand_letter.trim() || null, 
-    url_order: form.url_order.trim() || null, 
-    meal: form.meal || null, 
-    meal_en: form.meal_en.trim() || null, 
-    dormitory_en: form.dormitory_en.trim() || null, 
-    dormitory_note: form.dormitory_note.trim() || null, 
-    probation: form.probation || 'Không', 
-    probation_months: form.probation === 'Có' && form.probation_months ? parseInt(form.probation_months) : null, 
-    probation_salary_pct: form.probation === 'Có' && form.probation_salary_pct ? parseInt(form.probation_salary_pct) : null, 
-    recruitment_info: form.recruitment_info.trim() || null, 
-    recruitment_info_en: form.recruitment_info_en.trim() || null, 
-}).eq('id', id);
+
+    // Core fields — always exist in DB
+    const { error } = await supabase.from('orders').update({
+      job_type: form.job_type.trim() || null,
+      job_type_en: form.job_type_en.trim() || null,
+      total_labor: form.total_labor ? parseInt(form.total_labor) : null,
+      labor_missing: form.labor_missing ? parseInt(form.labor_missing) : null,
+      salary_usd: form.salary_usd ? parseFloat(form.salary_usd) : null,
+      status: form.status || 'Đang tuyển',
+      legal_status: form.legal_status.trim() || null,
+      agent_ids: form.agent_ids.length > 0 ? form.agent_ids : null,
+      total_fee_vn: form.total_fee_vn ? parseFloat(form.total_fee_vn) : null,
+      service_fee_per_person: form.service_fee_per_person ? parseFloat(form.service_fee_per_person) : null,
+      payment_status_vn: form.payment_status_vn || 'Chưa TT',
+      url_demand_letter: form.url_demand_letter.trim() || null,
+      url_order: form.url_order.trim() || null,
+      recruitment_info: form.recruitment_info.trim() || null,
+    }).eq('id', id);
+
+    if (error) {
+      setSaving(false);
+      setSaveMsg(`❌ ${error.message}`);
+      return;
+    }
+
+    // Extended fields — added via migration (graceful fallback if migration not yet run)
+    const { error: extError } = await supabase.from('orders').update({
+      meal: form.meal || null,
+      meal_en: form.meal_en.trim() || null,
+      dormitory: form.dormitory || null,
+      dormitory_en: form.dormitory_en.trim() || null,
+      dormitory_note: form.dormitory_note.trim() || null,
+      probation: form.probation || 'Không',
+      probation_months: form.probation === 'Có' && form.probation_months ? parseInt(form.probation_months) : null,
+      probation_salary_pct: form.probation === 'Có' && form.probation_salary_pct ? parseInt(form.probation_salary_pct) : null,
+      recruitment_info_en: form.recruitment_info_en.trim() || null,
+    }).eq('id', id);
+
     setSaving(false);
-    if (error) { setSaveMsg(`❌ ${error.message}`); return; }
-    setSaveMsg('✅ Đã lưu');
+    if (extError) {
+      // Migration chưa chạy — core data đã lưu, chỉ mất extended fields
+      setSaveMsg(`⚠️ Lưu một phần (chạy DB migration để lưu đầy đủ): ${extError.message}`);
+      return;
+    }
+    setSaveMsg('✅ Saved');
     setDirty(false);
     setTimeout(() => setSaveMsg(null), 3000);
   }, [id, order, form]);
@@ -235,7 +253,7 @@ const { error } = await supabase.from('orders').update({
       const { error } = await supabase.from('candidates').update({ interview_status: status }).eq('id_ld', candidateId);
       if (error) throw new Error(error.message);
     } catch (err) {
-      alert(`Lỗi: ${err instanceof Error ? err.message : String(err)}`);
+      alert(`Error: ${err instanceof Error ? err.message : String(err)}`);
       setCandidates((prev) => prev.map((c) => c.id_ld === candidateId ? { ...c, interview_status: c.interview_status } : c));
     }
   }, []);
@@ -253,12 +271,12 @@ const { error } = await supabase.from('orders').update({
       const { error } = await supabase.from('agents').update({ labor_percentage: percentage }).eq('id', agentId);
       if (error) throw error;
     } catch (err) {
-      alert(`Lỗi lưu số người: ${err instanceof Error ? err.message : String(err)}`);
+      alert(`Save error: ${err instanceof Error ? err.message : String(err)}`);
     }
   }, [form.total_labor]);
 
   const handleTranslate = useCallback(async () => {
-    if (!order?.company_id) { alert('Đơn hàng chưa có công ty'); return; }
+    if (!order?.company_id) { alert('Order has no company'); return; }
     setTranslating(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -280,7 +298,7 @@ const { error } = await supabase.from('orders').update({
           probation_info: probationInfo,
         }),
       });
-      if (!res.ok) { alert('Dịch thất bại'); return; }
+      if (!res.ok) { alert('Translation failed'); return; }
       const data = await res.json() as {
         job_type_en: string | null;
         meal_en: string | null;
@@ -295,10 +313,10 @@ const { error } = await supabase.from('orders').update({
         recruitment_info_en: data.recruitment_info_en ?? f.recruitment_info_en,
       }));
       setDirty(true);
-      setSaveMsg('✅ Đã dịch tự động');
+      setSaveMsg('✅ Translated automatically');
       setTimeout(() => setSaveMsg(null), 3000);
     } catch {
-      alert('Lỗi dịch thuật');
+      alert('Translation error');
     } finally {
       setTranslating(false);
     }
@@ -306,7 +324,7 @@ const { error } = await supabase.from('orders').update({
 
   const handleGenerateDoc = useCallback(async () => {
     const docUrl = process.env.NEXT_PUBLIC_N8N_RECRUITMENT_DOC_URL;
-    if (!docUrl) { alert('Chưa cấu hình N8N_RECRUITMENT_DOC_URL'); return; }
+    if (!docUrl) { alert('N8N_RECRUITMENT_DOC_URL not configured'); return; }
     if (!order) return;
     setGeneratingDoc(true);
     try {
@@ -348,10 +366,10 @@ const { error } = await supabase.from('orders').update({
       const { error } = await supabase.from('orders').update({ url_order: data.url }).eq('id', id);
       if (error) throw new Error(error.message);
       setForm((f) => ({ ...f, url_order: data.url! }));
-      setSaveMsg('✅ Đã tạo tài liệu');
+      setSaveMsg('✅ Document created');
       setTimeout(() => setSaveMsg(null), 3000);
     } catch (err) {
-      alert(`Lỗi tạo tài liệu: ${err instanceof Error ? err.message : String(err)}`);
+      alert(`Document creation error: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setGeneratingDoc(false);
     }
@@ -391,7 +409,7 @@ const { error } = await supabase.from('orders').update({
         }).catch(() => {});
       }
     } catch (err) {
-      alert(`Upload lỗi: ${err instanceof Error ? err.message : String(err)}`);
+      alert(`Upload error: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       if (videoInputRef.current) videoInputRef.current.value = '';
       setVideoUploadingCandidate(null);
@@ -443,7 +461,7 @@ const { error } = await supabase.from('orders').update({
             dirty ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-100 text-gray-400 cursor-default'
           }`}
         >
-          {saving ? '...' : dirty ? 'Lưu *' : 'Đã lưu'}
+          {saving ? '...' : dirty ? 'Save *' : 'Saved'}
         </button>
       </div>
 
@@ -605,7 +623,7 @@ const { error } = await supabase.from('orders').update({
           <div className="p-4">
             {isLaborUnbalanced && (
               <div className="mb-3 p-2 bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg text-center">
-                ⚠️ Tổng số lao động phân công ({totalAllocatedLabor}) không bằng tổng số cần tuyển ({totalLabor})
+                ⚠️ Tổng phân công ({totalAllocatedLabor}) không khớp tổng cần tuyển ({totalLabor})
               </div>
             )}
             {form.url_order && (
@@ -662,7 +680,7 @@ const { error } = await supabase.from('orders').update({
             </div>
             {form.agent_ids.length === 0 && (
               <div className="text-center py-4">
-                <p className="text-xs text-gray-400 mb-2">Chưa chọn agent nào</p>
+                <p className="text-xs text-gray-400 mb-2">Chưa có agent phụ trách</p>
                 <button onClick={() => setShowAgentDropdown(!showAgentDropdown)} className="text-xs text-blue-600 hover:underline">+ Thêm agent</button>
               </div>
             )}
@@ -736,7 +754,7 @@ const { error } = await supabase.from('orders').update({
           </div>
           <div className="p-4">
             {candidates.length === 0 ? (
-              <p className="text-center text-gray-400 text-sm py-8">Chưa có ứng viên nào</p>
+              <p className="text-center text-gray-400 text-sm py-8">Chưa có ứng viên</p>
             ) : (
               <div className="space-y-3">
                 {candidates.map((c) => (
