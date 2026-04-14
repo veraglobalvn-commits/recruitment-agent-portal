@@ -21,17 +21,7 @@ const PROBATION_OPTIONS = ['Không', '1 tháng', '2 tháng', '3 tháng', '6 thá
 const DEPARTURE_STATUS_OPTIONS: OrderHandover['departure_status'][] = ['Chưa xuất cảnh', 'Đã xuất cảnh', 'Đã bàn giao'];
 const PAYMENT_STATUS_OPTIONS: OrderHandover['payment_status'][] = ['Chưa TT', 'Đã TT'];
 
-function fmtVnd(val: number | null | undefined) {
-  if (!val) return '—';
-  if (val >= 1_000_000_000) return `${(val / 1_000_000_000).toFixed(1)}B ₫`;
-  if (val >= 1_000_000) return `${(val / 1_000_000).toFixed(0)}M ₫`;
-  return val.toLocaleString('vi-VN') + ' ₫';
-}
-
-function fmtUSD(val: number | null | undefined) {
-  if (!val) return '';
-  return val.toLocaleString('en-US');
-}
+import { fmtVND, fmtUSD } from '@/lib/formatters';
 
 function StatusPill({ label }: { label: string | null }) {
   if (!label) return <span className="text-gray-400 text-xs">—</span>;
@@ -676,17 +666,17 @@ export default function OrderDetailPage() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Phí DV / người (VNĐ)</label>
-                <input type="text" value={form.service_fee_per_person ? fmtVnd(parseFloat(form.service_fee_per_person)) : ''} onChange={(e) => setField('service_fee_per_person', e.target.value.replace(/\./g, '').replace(/,/g, ''))} className={inputCls} />
+                <input type="text" value={form.service_fee_per_person ? fmtVND(parseFloat(form.service_fee_per_person)) : ''} onChange={(e) => setField('service_fee_per_person', e.target.value.replace(/\./g, '').replace(/,/g, ''))} className={inputCls} />
               </div>
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Tổng phí DV VN (VNĐ)</label>
-                <input type="text" value={form.total_fee_vn ? fmtVnd(parseFloat(form.total_fee_vn)) : ''} onChange={(e) => setField('total_fee_vn', e.target.value.replace(/\./g, '').replace(/,/g, ''))} className={inputCls} />
-                {form.total_fee_vn && <p className="text-xs text-gray-400 mt-0.5 text-right">{fmtVnd(parseFloat(form.total_fee_vn))}</p>}
+                <input type="text" value={form.total_fee_vn ? fmtVND(parseFloat(form.total_fee_vn)) : ''} onChange={(e) => setField('total_fee_vn', e.target.value.replace(/\./g, '').replace(/,/g, ''))} className={inputCls} />
+                {form.total_fee_vn && <p className="text-xs text-gray-400 mt-0.5 text-right">{fmtVND(parseFloat(form.total_fee_vn))}</p>}
               </div>
             </div>
             {form.total_labor && form.service_fee_per_person && (
               <p className="text-xs text-gray-400 text-center">
-                {form.total_labor} LĐ × {fmtVnd(parseFloat(form.service_fee_per_person))} = {fmtVnd(parseFloat(form.total_labor) * parseFloat(form.service_fee_per_person))}
+                {form.total_labor} LĐ × {fmtVND(parseFloat(form.service_fee_per_person))} = {fmtVND(parseFloat(form.total_labor) * parseFloat(form.service_fee_per_person))}
               </p>
             )}
             {/* Payment status computed */}
@@ -708,7 +698,7 @@ export default function OrderDetailPage() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Phí DV / Người (USD)</label>
-                <input type="text" value={form.service_fee_bd_per_person ? fmtVnd(parseFloat(form.service_fee_bd_per_person)) : ''} onChange={(e) => setField('service_fee_bd_per_person', e.target.value.replace(/\./g, '').replace(/,/g, ''))} className={inputCls} />
+                <input type="text" value={form.service_fee_bd_per_person ? fmtUSD(parseFloat(form.service_fee_bd_per_person)) : ''} onChange={(e) => setField('service_fee_bd_per_person', e.target.value.replace(/\./g, '').replace(/,/g, ''))} className={inputCls} />
               </div>
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Tổng phí DV Bangladesh (USD)</label>
@@ -783,9 +773,9 @@ export default function OrderDetailPage() {
                 </tbody>
               </table>
               <div className="px-4 py-2 bg-gray-50 flex items-center justify-between">
-                <span className="text-xs text-gray-500">Tổng đã TT: {fmtVnd(totalPaidVnd)}</span>
+                <span className="text-xs text-gray-500">Tổng đã TT: {fmtVND(totalPaidVnd)}</span>
                 <span className={`text-xs font-semibold ${paymentPct >= 100 ? 'text-green-600' : 'text-blue-600'}`}>
-                  {paymentPct}% / {fmtVnd(totalFeeVndNum)}
+                  {paymentPct}% / {fmtVND(totalFeeVndNum)}
                 </span>
               </div>
             </div>
