@@ -22,6 +22,8 @@ export default function AddOrderModal({ onClose, onSaved, prefillCompanyId }: Ad
   const [companySearch, setCompanySearch] = useState('');
   const [selectedCompany, setSelectedCompany] = useState<CompanyOption | null>(null);
   const [showCompanyDropdown, setShowCompanyDropdown] = useState(false);
+  const [defaultFeeVnd, setDefaultFeeVnd] = useState('18270000');
+  const [defaultFeeUsd, setDefaultFeeUsd] = useState('1500');
   const [form, setForm] = useState({
     job_type: '',
     total_labor: '',
@@ -36,12 +38,18 @@ export default function AddOrderModal({ onClose, onSaved, prefillCompanyId }: Ad
 
   useEffect(() => {
     const load = async () => {
-      const [compRes, agRes] = await Promise.all([
+      const [compRes, agRes, policyRes] = await Promise.all([
         supabase.from('companies').select('id, company_name, short_name').is('deleted_at', null).order('company_name'),
         supabase.from('agents').select('id, full_name, short_name').neq('role', 'admin').order('full_name'),
+        supabase.from('policy_settings').select('key, value').in('key', ['default_fee_vnd', 'default_fee_usd']),
       ]);
       setCompanies((compRes.data ?? []) as CompanyOption[]);
       setAgents((agRes.data ?? []) as AgentOption[]);
+      if (policyRes.data) {
+        const map = Object.fromEntries((policyRes.data as { key: string; value: string }[]).map(r => [r.key, r.value]));
+        if (map.default_fee_vnd) setDefaultFeeVnd(map.default_fee_vnd);
+        if (map.default_fee_usd) setDefaultFeeUsd(map.default_fee_usd);
+      }
     };
     load();
   }, []);
@@ -101,17 +109,24 @@ export default function AddOrderModal({ onClose, onSaved, prefillCompanyId }: Ad
     setError(null);
     try {
       const orderId = await generateOrderId(selectedCompany.short_name);
+      const laborCount = form.total_labor ? parseInt(form.total_labor) : null;
+      const feeVnd = parseFloat(defaultFeeVnd) || null;
+      const feeUsd = parseFloat(defaultFeeUsd) || null;
       const payload = {
         id: orderId,
         company_id: selectedCompany.id,
         company_name: selectedCompany.company_name,
         job_type: form.job_type.trim(),
-        total_labor: form.total_labor ? parseInt(form.total_labor) : null,
+        total_labor: laborCount,
         salary_usd: form.salary_usd ? parseFloat(form.salary_usd) : null,
         agent_ids: form.agent_ids.length > 0 ? form.agent_ids : null,
         status: 'Đang tuyển',
         payment_status_vn: 'Chưa TT',
-        labor_missing: form.total_labor ? parseInt(form.total_labor) : null,
+        labor_missing: laborCount,
+        service_fee_per_person: feeVnd,
+        service_fee_bd_per_person: feeUsd,
+        total_fee_vn: laborCount && feeVnd ? laborCount * feeVnd : null,
+        total_fee_bd: laborCount && feeUsd ? laborCount * feeUsd : null,
       };
       const { data, error: dbErr } = await supabase
         .from('orders')
@@ -167,8 +182,7 @@ export default function AddOrderModal({ onClose, onSaved, prefillCompanyId }: Ad
                   value={companySearch}
                   onChange={(e) => { setCompanySearch(e.target.value); setShowCompanyDropdown(true); }}
                   onFocus={() => setShowCompanyDropdown(true)}
-                  placeholder="Tìm công ty..."
-                  className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 min-h-[44px] focus:outline-none focus:ring-2 focus:ring-blue-400"
+                      className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 min-h-[44px] focus:outline-none focus:ring-2 focus:ring-blue-400"
                 />
                 {showCompanyDropdown && filteredCompanies.length > 0 && (
                   <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto z-10">
@@ -194,7 +208,6 @@ export default function AddOrderModal({ onClose, onSaved, prefillCompanyId }: Ad
               type="text"
               value={form.job_type}
               onChange={(e) => set('job_type', e.target.value)}
-              placeholder="VD: Công nhân nhà máy"
               className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 min-h-[44px] focus:outline-none focus:ring-2 focus:ring-blue-400"
             />
           </div>
@@ -206,7 +219,6 @@ export default function AddOrderModal({ onClose, onSaved, prefillCompanyId }: Ad
                 type="number"
                 value={form.total_labor}
                 onChange={(e) => set('total_labor', e.target.value)}
-                placeholder="VD: 50"
                 className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 min-h-[44px] focus:outline-none focus:ring-2 focus:ring-blue-400"
               />
             </div>
@@ -216,7 +228,6 @@ export default function AddOrderModal({ onClose, onSaved, prefillCompanyId }: Ad
                 type="number"
                 value={form.salary_usd}
                 onChange={(e) => set('salary_usd', e.target.value)}
-                placeholder="VD: 650"
                 className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 min-h-[44px] focus:outline-none focus:ring-2 focus:ring-blue-400"
               />
             </div>

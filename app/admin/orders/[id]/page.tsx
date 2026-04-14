@@ -3,12 +3,12 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import type { Candidate, AdminOrder, AgentOption } from '@/lib/types';
+import type { Candidate, AdminOrder, AgentOption, OrderHandover } from '@/lib/types';
 import CandidateCard from '@/components/CandidateCard';
 import Link from 'next/link';
 
 const STATUS_OPTIONS = ['Đang tuyển', 'Đã tuyển đủ'];
-const PAYMENT_OPTIONS = ['Chưa TT', 'TT lan 1', 'TT lan 2', 'TT lan 3', 'Đã TT'];
+const AGENT_ORDER_STATUS_OPTIONS = ['Finished', 'Cancelled'];
 
 const MEAL_OPTIONS = [
   '1 bữa chính, 1 bữa tăng ca',
@@ -17,6 +17,9 @@ const MEAL_OPTIONS = [
 ];
 
 const DORMITORY_OPTIONS = ['Miễn phí', 'Có phí', 'Không hỗ trợ'];
+const PROBATION_OPTIONS = ['Không', '1 tháng', '2 tháng', '3 tháng', '6 tháng'];
+const DEPARTURE_STATUS_OPTIONS: OrderHandover['departure_status'][] = ['Chưa xuất cảnh', 'Đã xuất cảnh', 'Đã bàn giao'];
+const PAYMENT_STATUS_OPTIONS: OrderHandover['payment_status'][] = ['Chưa TT', 'Đã TT'];
 
 function fmtVnd(val: number | null | undefined) {
   if (!val) return '—';
@@ -32,9 +35,6 @@ function StatusPill({ label }: { label: string | null }) {
     'Đã tuyển đủ': 'bg-green-100 text-green-700',
     'Chưa TT': 'bg-red-100 text-red-600',
     'Đã TT': 'bg-green-100 text-green-700',
-    'TT lan 1': 'bg-blue-100 text-blue-700',
-    'TT lan 2': 'bg-indigo-100 text-indigo-700',
-    'TT lan 3': 'bg-purple-100 text-purple-700',
   };
   return <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${c[label] ?? 'bg-gray-100 text-gray-600'}`}>{label}</span>;
 }
@@ -68,6 +68,7 @@ export default function OrderDetailPage() {
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [agents, setAgents] = useState<AgentOption[]>([]);
   const [agentLaborAllocations, setAgentLaborAllocations] = useState<Record<string, string>>({});
+  const [handovers, setHandovers] = useState<OrderHandover[]>([]);
   const [loading, setLoading] = useState(true);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -75,12 +76,10 @@ export default function OrderDetailPage() {
   const [videoUploadingCandidate, setVideoUploadingCandidate] = useState<string | null>(null);
   const [playingVideo, setPlayingVideo] = useState<string | null>(null);
   const [showAgentDropdown, setShowAgentDropdown] = useState(false);
-  const [translating, setTranslating] = useState(false);
-  const [generatingDoc, setGeneratingDoc] = useState(false);
+  const [showHandoverPicker, setShowHandoverPicker] = useState(false);
+  const [pickerSelected, setPickerSelected] = useState<string[]>([]);
 
   const videoInputRef = useRef<HTMLInputElement>(null);
-
-  const agentMap = new Map(agents.map((a) => [a.id, a]));
 
   const [form, setForm] = useState({
     job_type: '',
@@ -89,12 +88,11 @@ export default function OrderDetailPage() {
     labor_missing: '',
     salary_usd: '',
     status: 'Đang tuyển',
-    legal_status: '',
     agent_ids: [] as string[],
     total_fee_vn: '',
     service_fee_per_person: '',
-    payment_status_vn: 'Chưa TT',
-    url_demand_letter: '',
+    service_fee_bd_per_person: '',
+    total_fee_bd: '',
     url_order: '',
     meal: '1 bữa chính, 1 bữa tăng ca',
     meal_en: '',
@@ -102,10 +100,8 @@ export default function OrderDetailPage() {
     dormitory_en: '',
     dormitory_note: '',
     probation: 'Không',
-    probation_months: '',
     probation_salary_pct: '',
-    recruitment_info: '',
-    recruitment_info_en: '',
+    agent_order_status: '',
   });
 
   const setField = (k: keyof typeof form, v: string) => {
@@ -120,22 +116,26 @@ export default function OrderDetailPage() {
   }, 0);
   const isLaborUnbalanced = totalLabor > 0 && totalAllocatedLabor !== totalLabor;
 
-  // Auto-calc total_fee_vn = total_labor × service_fee_per_person
+  // Auto-calc fees (VN + BD)
   useEffect(() => {
-    const labor = parseInt(form.total_labor) || 0;
-    const fee = parseFloat(form.service_fee_per_person) || 0;
-    if (labor > 0 && fee > 0) {
-      const calc = String(labor * fee);
-      setForm((f) => (f.total_fee_vn === calc ? f : { ...f, total_fee_vn: calc }));
-    }
-  }, [form.total_labor, form.service_fee_per_person]);
+    const n = parseInt(form.total_labor) || 0;
+    const vnd = parseFloat(form.service_fee_per_person) || 0;
+    const usd = parseFloat(form.service_fee_bd_per_person) || 0;
+    setForm((f) => {
+      const newVnd = n > 0 && vnd > 0 ? String(n * vnd) : f.total_fee_vn;
+      const newUsd = n > 0 && usd > 0 ? String(n * usd) : f.total_fee_bd;
+      if (newVnd === f.total_fee_vn && newUsd === f.total_fee_bd) return f;
+      return { ...f, total_fee_vn: newVnd, total_fee_bd: newUsd };
+    });
+  }, [form.total_labor, form.service_fee_per_person, form.service_fee_bd_per_person]);
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [ordRes, candRes, agRes] = await Promise.all([
+    const [ordRes, candRes, agRes, handRes] = await Promise.all([
       supabase.from('orders').select('*').eq('id', id).single(),
       supabase.from('candidates').select('*').eq('order_id', id),
       supabase.from('agents').select('id, full_name, short_name, labor_percentage').neq('role', 'admin'),
+      supabase.from('order_handovers').select('*').eq('order_id', id).order('batch_no'),
     ]);
 
     if (ordRes.data) {
@@ -148,12 +148,11 @@ export default function OrderDetailPage() {
         labor_missing: o.labor_missing?.toString() ?? '',
         salary_usd: o.salary_usd?.toString() ?? '',
         status: o.status ?? 'Đang tuyển',
-        legal_status: o.legal_status ?? '',
         agent_ids: o.agent_ids ?? [],
         total_fee_vn: o.total_fee_vn?.toString() ?? '',
         service_fee_per_person: o.service_fee_per_person?.toString() ?? '',
-        payment_status_vn: o.payment_status_vn ?? 'Chưa TT',
-        url_demand_letter: o.url_demand_letter ?? '',
+        service_fee_bd_per_person: o.service_fee_bd_per_person?.toString() ?? '',
+        total_fee_bd: o.total_fee_bd?.toString() ?? '',
         url_order: o.url_order ?? '',
         meal: o.meal ?? '1 bữa chính, 1 bữa tăng ca',
         meal_en: o.meal_en ?? '',
@@ -161,10 +160,8 @@ export default function OrderDetailPage() {
         dormitory_en: o.dormitory_en ?? '',
         dormitory_note: o.dormitory_note ?? '',
         probation: o.probation ?? 'Không',
-        probation_months: o.probation_months?.toString() ?? '',
         probation_salary_pct: o.probation_salary_pct?.toString() ?? '',
-        recruitment_info: o.recruitment_info ?? '',
-        recruitment_info_en: o.recruitment_info_en ?? '',
+        agent_order_status: o.agent_order_status ?? '',
       });
     }
     setCandidates((candRes.data ?? []) as Candidate[]);
@@ -178,18 +175,59 @@ export default function OrderDetailPage() {
       allocations[ag.id] = allocation.toString();
     });
     setAgentLaborAllocations(allocations);
+    setHandovers((handRes.data ?? []) as OrderHandover[]);
     setDirty(false);
     setLoading(false);
   }, [id]);
 
   useEffect(() => { load(); }, [load]);
 
+  const handleTranslateSilent = useCallback(async () => {
+    if (!order?.company_id) return;
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const probationMonths = form.probation !== 'Không' ? parseInt(form.probation) : 0;
+      const probationInfo = form.probation !== 'Không' && probationMonths
+        ? `${probationMonths} tháng, ${form.probation_salary_pct || 100}% lương`
+        : '';
+      const res = await fetch('/api/translate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
+        body: JSON.stringify({
+          company_id: order.company_id,
+          job_type: form.job_type,
+          meal: form.meal,
+          dormitory: form.dormitory,
+          probation_info: probationInfo,
+        }),
+      });
+      if (!res.ok) return;
+      const data = await res.json() as {
+        job_type_en: string | null;
+        meal_en: string | null;
+        dormitory_en: string | null;
+      };
+      setForm((f) => ({
+        ...f,
+        job_type_en: data.job_type_en ?? f.job_type_en,
+        meal_en: data.meal_en ?? f.meal_en,
+        dormitory_en: data.dormitory_en ?? f.dormitory_en,
+      }));
+    } catch {
+      // silent fail
+    }
+  }, [order, form]);
+
   const handleSave = useCallback(async () => {
     if (!order) return;
     setSaving(true);
     setSaveMsg(null);
 
-    // Core fields — always exist in DB
+    const probationMonths = form.probation !== 'Không' ? parseInt(form.probation) : null;
+
     const { error } = await supabase.from('orders').update({
       job_type: form.job_type.trim() || null,
       job_type_en: form.job_type_en.trim() || null,
@@ -197,45 +235,31 @@ export default function OrderDetailPage() {
       labor_missing: form.labor_missing ? parseInt(form.labor_missing) : null,
       salary_usd: form.salary_usd ? parseFloat(form.salary_usd) : null,
       status: form.status || 'Đang tuyển',
-      legal_status: form.legal_status.trim() || null,
       agent_ids: form.agent_ids.length > 0 ? form.agent_ids : null,
       total_fee_vn: form.total_fee_vn ? parseFloat(form.total_fee_vn) : null,
       service_fee_per_person: form.service_fee_per_person ? parseFloat(form.service_fee_per_person) : null,
-      payment_status_vn: form.payment_status_vn || 'Chưa TT',
-      url_demand_letter: form.url_demand_letter.trim() || null,
       url_order: form.url_order.trim() || null,
-      recruitment_info: form.recruitment_info.trim() || null,
-    }).eq('id', id);
-
-    if (error) {
-      setSaving(false);
-      setSaveMsg(`❌ ${error.message}`);
-      return;
-    }
-
-    // Extended fields — added via migration (graceful fallback if migration not yet run)
-    const { error: extError } = await supabase.from('orders').update({
       meal: form.meal || null,
       meal_en: form.meal_en.trim() || null,
       dormitory: form.dormitory || null,
       dormitory_en: form.dormitory_en.trim() || null,
       dormitory_note: form.dormitory_note.trim() || null,
       probation: form.probation || 'Không',
-      probation_months: form.probation === 'Có' && form.probation_months ? parseInt(form.probation_months) : null,
-      probation_salary_pct: form.probation === 'Có' && form.probation_salary_pct ? parseInt(form.probation_salary_pct) : null,
-      recruitment_info_en: form.recruitment_info_en.trim() || null,
+      probation_months: probationMonths,
+      probation_salary_pct: form.probation !== 'Không' && form.probation_salary_pct ? parseInt(form.probation_salary_pct) : null,
+      service_fee_bd_per_person: form.service_fee_bd_per_person ? parseFloat(form.service_fee_bd_per_person) : null,
+      total_fee_bd: form.total_fee_bd ? parseFloat(form.total_fee_bd) : null,
+      agent_order_status: form.agent_order_status || null,
     }).eq('id', id);
 
     setSaving(false);
-    if (extError) {
-      // Migration chưa chạy — core data đã lưu, chỉ mất extended fields
-      setSaveMsg(`⚠️ Lưu một phần (chạy DB migration để lưu đầy đủ): ${extError.message}`);
-      return;
-    }
-    setSaveMsg('✅ Saved');
+    if (error) { setSaveMsg(`❌ ${error.message}`); return; }
+    setSaveMsg('✅ Đã lưu');
     setDirty(false);
     setTimeout(() => setSaveMsg(null), 3000);
-  }, [id, order, form]);
+    // Auto-translate silently
+    handleTranslateSilent();
+  }, [id, order, form, handleTranslateSilent]);
 
   useEffect(() => {
     if (!dirty) return;
@@ -253,17 +277,12 @@ export default function OrderDetailPage() {
       const { error } = await supabase.from('candidates').update({ interview_status: status }).eq('id_ld', candidateId);
       if (error) throw new Error(error.message);
     } catch (err) {
-      alert(`Error: ${err instanceof Error ? err.message : String(err)}`);
-      setCandidates((prev) => prev.map((c) => c.id_ld === candidateId ? { ...c, interview_status: c.interview_status } : c));
+      alert(`Lỗi: ${err instanceof Error ? err.message : String(err)}`);
     }
   }, []);
 
   const handleAgentAllocationChange = useCallback(async (agentId: string, value: string) => {
     const numValue = value ? parseInt(value, 10) : null;
-    if (numValue !== null && numValue < 0) {
-      alert('Số người phải lớn hơn hoặc bằng 0');
-      return;
-    }
     setAgentLaborAllocations((prev: Record<string, string>) => ({ ...prev, [agentId]: value }));
     try {
       const tl = parseInt(form.total_labor) || 0;
@@ -271,109 +290,42 @@ export default function OrderDetailPage() {
       const { error } = await supabase.from('agents').update({ labor_percentage: percentage }).eq('id', agentId);
       if (error) throw error;
     } catch (err) {
-      alert(`Save error: ${err instanceof Error ? err.message : String(err)}`);
+      alert(`Lỗi lưu: ${err instanceof Error ? err.message : String(err)}`);
     }
   }, [form.total_labor]);
 
-  const handleTranslate = useCallback(async () => {
-    if (!order?.company_id) { alert('Order has no company'); return; }
-    setTranslating(true);
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const probationInfo = form.probation === 'Có' && form.probation_months
-        ? `${form.probation_months} tháng, ${form.probation_salary_pct || 100}% lương`
-        : '';
-      const res = await fetch('/api/translate', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
-        },
-        body: JSON.stringify({
-          company_id: order.company_id,
-          job_type: form.job_type,
-          meal: form.meal,
-          dormitory: form.dormitory,
-          recruitment_info: form.recruitment_info,
-          probation_info: probationInfo,
-        }),
-      });
-      if (!res.ok) { alert('Translation failed'); return; }
-      const data = await res.json() as {
-        job_type_en: string | null;
-        meal_en: string | null;
-        dormitory_en: string | null;
-        recruitment_info_en: string | null;
-      };
-      setForm((f) => ({
-        ...f,
-        job_type_en: data.job_type_en ?? f.job_type_en,
-        meal_en: data.meal_en ?? f.meal_en,
-        dormitory_en: data.dormitory_en ?? f.dormitory_en,
-        recruitment_info_en: data.recruitment_info_en ?? f.recruitment_info_en,
-      }));
-      setDirty(true);
-      setSaveMsg('✅ Translated automatically');
-      setTimeout(() => setSaveMsg(null), 3000);
-    } catch {
-      alert('Translation error');
-    } finally {
-      setTranslating(false);
+  // Handover CRUD
+  const createHandover = async () => {
+    if (pickerSelected.length === 0) return;
+    const maxBatch = handovers.reduce((m, h) => Math.max(m, h.batch_no), 0);
+    const feePerPerson = parseFloat(form.service_fee_per_person) || 0;
+    const feeVnd = pickerSelected.length * feePerPerson || null;
+    const { data, error } = await supabase.from('order_handovers').insert({
+      order_id: id,
+      batch_no: maxBatch + 1,
+      candidate_ids: pickerSelected,
+      labor_count: pickerSelected.length,
+      fee_vnd: feeVnd,
+      departure_status: 'Chưa xuất cảnh',
+      payment_status: 'Chưa TT',
+    }).select().single();
+    if (!error && data) {
+      setHandovers((h) => [...h, data as OrderHandover]);
     }
-  }, [order, form]);
+    setShowHandoverPicker(false);
+    setPickerSelected([]);
+  };
 
-  const handleGenerateDoc = useCallback(async () => {
-    const docUrl = process.env.NEXT_PUBLIC_N8N_RECRUITMENT_DOC_URL;
-    if (!docUrl) { alert('N8N_RECRUITMENT_DOC_URL not configured'); return; }
-    if (!order) return;
-    setGeneratingDoc(true);
-    try {
-      const agentList = agents
-        .filter((ag) => form.agent_ids.includes(ag.id))
-        .map((ag) => ({
-          name: ag.short_name || ag.full_name || ag.id,
-          allocated_labor: parseInt(agentLaborAllocations[ag.id] || '0') || 0,
-        }));
+  const updateHandover = async (handoverId: string, updates: Partial<OrderHandover>) => {
+    await supabase.from('order_handovers').update(updates).eq('id', handoverId);
+    setHandovers((hs) => hs.map((h) => h.id === handoverId ? { ...h, ...updates } : h));
+  };
 
-      const res = await fetch(docUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          order_id: order.id,
-          company_id: order.company_id,
-          company_name: order.company_name,
-          job_type: form.job_type,
-          job_type_en: form.job_type_en,
-          total_labor: parseInt(form.total_labor) || null,
-          salary_usd: form.salary_usd ? parseFloat(form.salary_usd) : null,
-          meal: form.meal,
-          meal_en: form.meal_en,
-          dormitory: form.dormitory,
-          dormitory_en: form.dormitory_en,
-          dormitory_note: form.dormitory_note || null,
-          probation: form.probation,
-          probation_months: form.probation === 'Có' ? parseInt(form.probation_months) || null : null,
-          probation_salary_pct: form.probation === 'Có' ? parseInt(form.probation_salary_pct) || null : null,
-          legal_status: form.legal_status,
-          recruitment_info: form.recruitment_info,
-          recruitment_info_en: form.recruitment_info_en,
-          agents: agentList,
-        }),
-      });
-      if (!res.ok) throw new Error(`n8n error: ${res.status}`);
-      const data = await res.json() as { url?: string };
-      if (!data.url) throw new Error('n8n did not return a URL');
-      const { error } = await supabase.from('orders').update({ url_order: data.url }).eq('id', id);
-      if (error) throw new Error(error.message);
-      setForm((f) => ({ ...f, url_order: data.url! }));
-      setSaveMsg('✅ Document created');
-      setTimeout(() => setSaveMsg(null), 3000);
-    } catch (err) {
-      alert(`Document creation error: ${err instanceof Error ? err.message : String(err)}`);
-    } finally {
-      setGeneratingDoc(false);
-    }
-  }, [order, form, agents, agentLaborAllocations, id]);
+  const deleteHandover = async (handoverId: string) => {
+    if (!confirm('Xoá lô bàn giao này?')) return;
+    await supabase.from('order_handovers').delete().eq('id', handoverId);
+    setHandovers((hs) => hs.filter((h) => h.id !== handoverId));
+  };
 
   const handleVideoUploadClick = useCallback((candidateId: string) => {
     setVideoUploadingCandidate(candidateId);
@@ -409,12 +361,28 @@ export default function OrderDetailPage() {
         }).catch(() => {});
       }
     } catch (err) {
-      alert(`Upload error: ${err instanceof Error ? err.message : String(err)}`);
+      alert(`Lỗi upload: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       if (videoInputRef.current) videoInputRef.current.value = '';
       setVideoUploadingCandidate(null);
     }
   };
+
+  // Computed agent order status
+  const getAgentOrderStatus = () => {
+    if (form.agent_order_status === 'Finished') return { label: 'Finished', cls: 'bg-green-100 text-green-700' };
+    if (form.agent_order_status === 'Cancelled') return { label: 'Cancelled', cls: 'bg-red-100 text-red-700' };
+    return candidates.length === 0
+      ? { label: 'Not started', cls: 'bg-gray-100 text-gray-500' }
+      : { label: 'On-going', cls: 'bg-blue-100 text-blue-700' };
+  };
+  const agentStatus = getAgentOrderStatus();
+
+  // Payment pct from handovers
+  const totalPaidVnd = handovers.filter(h => h.payment_status === 'Đã TT').reduce((s, h) => s + (h.fee_vnd || 0), 0);
+  const totalFeeVndNum = parseFloat(form.total_fee_vn) || 0;
+  const paymentPct = totalFeeVndNum > 0 ? Math.round((totalPaidVnd / totalFeeVndNum) * 100) : 0;
+  const totalHandedOver = handovers.filter(h => h.departure_status !== 'Chưa xuất cảnh').reduce((s, h) => s + h.labor_count, 0);
 
   if (loading) {
     return (
@@ -438,13 +406,57 @@ export default function OrderDetailPage() {
   const laborMissing = parseInt(form.labor_missing) || 0;
   const done = totalLabor - laborMissing;
   const passedCount = candidates.filter((c) => c.interview_status === 'Passed').length;
-
   const inputCls = 'w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[44px]';
+
+  // Candidate picker modal: candidates not yet in any handover
+  const alreadyInHandover = new Set(handovers.flatMap(h => h.candidate_ids));
+  const availableCandidates = candidates.filter(c => !alreadyInHandover.has(c.id_ld));
 
   return (
     <div className="pb-24">
       {playingVideo && <VideoPlayer url={playingVideo} onClose={() => setPlayingVideo(null)} />}
       <input type="file" accept="video/*" ref={videoInputRef} onChange={handleVideoChange} className="hidden" />
+
+      {/* Candidate picker modal */}
+      {showHandoverPicker && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowHandoverPicker(false)}>
+          <div className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl shadow-xl p-5 pb-8 max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-4 sm:hidden" />
+            <div className="flex justify-between items-center mb-3">
+              <h3 className="font-bold text-slate-800">Chọn lao động cho lô</h3>
+              <button onClick={() => setShowHandoverPicker(false)} className="text-gray-400 text-xl min-h-[44px] min-w-[44px] flex items-center justify-center">✕</button>
+            </div>
+            <p className="text-xs text-gray-500 mb-3">Đã chọn: {pickerSelected.length} người</p>
+            <div className="flex-1 overflow-y-auto space-y-1 border border-gray-200 rounded-lg p-2">
+              {availableCandidates.length === 0 ? (
+                <p className="text-sm text-gray-400 text-center py-4">Không còn lao động chưa xếp lô</p>
+              ) : (
+                availableCandidates.map(c => (
+                  <label key={c.id_ld} className="flex items-center gap-3 p-2 rounded hover:bg-gray-50 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={pickerSelected.includes(c.id_ld)}
+                      onChange={() => setPickerSelected(p => p.includes(c.id_ld) ? p.filter(x => x !== c.id_ld) : [...p, c.id_ld])}
+                      className="rounded text-blue-600"
+                    />
+                    <div>
+                      <p className="text-sm font-medium text-slate-800">{c.full_name || '—'}</p>
+                      <p className="text-xs text-gray-400">PP: {c.pp_no || '—'}</p>
+                    </div>
+                  </label>
+                ))
+              )}
+            </div>
+            <button
+              onClick={createHandover}
+              disabled={pickerSelected.length === 0}
+              className="mt-4 w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold py-3 rounded-xl text-sm min-h-[44px]"
+            >
+              Tạo lô ({pickerSelected.length} người)
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="sticky top-0 z-20 bg-white border-b border-gray-100 px-4 py-3 flex items-center gap-3">
         <button onClick={() => router.back()} className="min-h-[44px] min-w-[44px] flex items-center justify-center text-gray-500 hover:text-gray-800 text-xl">←</button>
@@ -453,6 +465,7 @@ export default function OrderDetailPage() {
           {order.company_name && <p className="text-xs text-gray-400 truncate">{order.company_name}</p>}
         </div>
         <StatusPill label={form.status} />
+        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${agentStatus.cls}`}>{agentStatus.label}</span>
         {saveMsg && <span className="text-xs text-green-600 font-medium hidden sm:inline">{saveMsg}</span>}
         <button
           onClick={handleSave}
@@ -461,7 +474,7 @@ export default function OrderDetailPage() {
             dirty ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-100 text-gray-400 cursor-default'
           }`}
         >
-          {saving ? '...' : dirty ? 'Save *' : 'Saved'}
+          {saving ? '...' : dirty ? 'Lưu *' : 'Đã lưu'}
         </button>
       </div>
 
@@ -483,10 +496,13 @@ export default function OrderDetailPage() {
             <div className="mb-3">
               <div className="flex items-center justify-between text-xs mb-1">
                 <span className="text-gray-500">Tiến độ tuyển dụng</span>
-                <span className="font-semibold text-slate-700">{done}/{totalLabor} · {passedCount} passed</span>
+                <span className="font-semibold text-slate-700">{done}/{totalLabor} · {passedCount} trúng tuyển</span>
               </div>
               <ProgressBar value={done} max={totalLabor} />
             </div>
+          )}
+          {totalHandedOver > 0 && (
+            <p className="text-xs text-gray-500">Đã bàn giao: <span className="font-semibold text-slate-700">{totalHandedOver}</span> lao động</p>
           )}
         </div>
 
@@ -494,33 +510,30 @@ export default function OrderDetailPage() {
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="px-4 py-3 border-b border-gray-50 flex items-center justify-between">
             <h2 className="text-sm font-semibold text-slate-700">Thông tin đơn hàng</h2>
-            <div className="flex items-center gap-2">
-              {saving && <span className="text-xs text-blue-500 animate-pulse">Đang lưu...</span>}
-              <button
-                onClick={handleTranslate}
-                disabled={translating}
-                className="text-xs bg-indigo-600 hover:bg-indigo-700 text-white px-2.5 py-1 rounded-lg min-h-[32px] disabled:opacity-50"
-              >
-                {translating ? '⏳' : '✨ Dịch EN'}
-              </button>
-            </div>
+            {saving && <span className="text-xs text-blue-500 animate-pulse">Đang lưu...</span>}
           </div>
           <div className="p-4 space-y-3">
             {/* Job type VN + EN */}
             <div className="grid grid-cols-2 gap-3">
-              <div><label className="block text-xs text-gray-500 mb-1">Vị trí / Loại lao động</label><input type="text" value={form.job_type} onChange={(e) => setField('job_type', e.target.value)} placeholder="Công nhân nhà máy" className={inputCls} /></div>
-              <div><label className="block text-xs text-gray-500 mb-1">Job Type (EN)</label><input type="text" value={form.job_type_en} onChange={(e) => setField('job_type_en', e.target.value)} placeholder="Auto / manual" className={inputCls} /></div>
+              <div><label className="block text-xs text-gray-500 mb-1">Vị trí / Loại lao động</label><input type="text" value={form.job_type} onChange={(e) => setField('job_type', e.target.value)} className={inputCls} /></div>
+              <div><label className="block text-xs text-gray-500 mb-1">Job Type (EN)</label><input type="text" value={form.job_type_en} onChange={(e) => setField('job_type_en', e.target.value)} className={inputCls} /></div>
             </div>
             {/* Numbers */}
             <div className="grid grid-cols-3 gap-3">
-              <div><label className="block text-xs text-gray-500 mb-1">Số LĐ</label><input type="number" value={form.total_labor} onChange={(e) => setField('total_labor', e.target.value)} placeholder="50" className={inputCls} /></div>
-              <div><label className="block text-xs text-gray-500 mb-1">Còn thiếu</label><input type="number" value={form.labor_missing} onChange={(e) => setField('labor_missing', e.target.value)} placeholder="20" className={inputCls} /></div>
-              <div><label className="block text-xs text-gray-500 mb-1">Lương (USD)</label><input type="number" value={form.salary_usd} onChange={(e) => setField('salary_usd', e.target.value)} placeholder="650" className={inputCls} /></div>
+              <div><label className="block text-xs text-gray-500 mb-1">Số LĐ</label><input type="number" value={form.total_labor} onChange={(e) => setField('total_labor', e.target.value)} className={inputCls} /></div>
+              <div><label className="block text-xs text-gray-500 mb-1">Còn thiếu</label><input type="number" value={form.labor_missing} onChange={(e) => setField('labor_missing', e.target.value)} className={inputCls} /></div>
+              <div><label className="block text-xs text-gray-500 mb-1">Lương (USD)</label><input type="number" value={form.salary_usd} onChange={(e) => setField('salary_usd', e.target.value)} className={inputCls} /></div>
             </div>
-            {/* Status + Legal */}
+            {/* Status + Agent order status */}
             <div className="grid grid-cols-2 gap-3">
               <div><label className="block text-xs text-gray-500 mb-1">Trạng thái</label><select value={form.status} onChange={(e) => setField('status', e.target.value)} className={`${inputCls} bg-white`}>{STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}</select></div>
-              <div><label className="block text-xs text-gray-500 mb-1">Pháp lý</label><input type="text" value={form.legal_status} onChange={(e) => setField('legal_status', e.target.value)} placeholder="VD: Đã phê duyệt" className={inputCls} /></div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Trạng thái Agent</label>
+                <select value={form.agent_order_status} onChange={(e) => setField('agent_order_status', e.target.value)} className={`${inputCls} bg-white`}>
+                  <option value="">Tự động</option>
+                  {AGENT_ORDER_STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
             </div>
             {/* Meal */}
             <div className="grid grid-cols-2 gap-3">
@@ -530,7 +543,7 @@ export default function OrderDetailPage() {
                   {MEAL_OPTIONS.map((m) => <option key={m} value={m}>{m}</option>)}
                 </select>
               </div>
-              <div><label className="block text-xs text-gray-500 mb-1">Meal (EN)</label><input type="text" readOnly value={form.meal_en} placeholder="Auto-filled" className={`${inputCls} bg-gray-50`} /></div>
+              <div><label className="block text-xs text-gray-500 mb-1">Meal (EN)</label><input type="text" value={form.meal_en} onChange={(e) => setField('meal_en', e.target.value)} className={inputCls} /></div>
             </div>
             {/* Dormitory */}
             <div>
@@ -539,41 +552,25 @@ export default function OrderDetailPage() {
                 <select value={form.dormitory} onChange={(e) => setField('dormitory', e.target.value)} className={`${inputCls} bg-white flex-1`}>
                   {DORMITORY_OPTIONS.map((d) => <option key={d} value={d}>{d}</option>)}
                 </select>
-                {form.dormitory === 'Không hỗ trợ' && (
-                  <input
-                    type="text"
-                    value={form.dormitory_note}
-                    onChange={(e) => setField('dormitory_note', e.target.value)}
-                    placeholder="Chi tiết nhà ở..."
-                    className={`${inputCls} flex-1`}
-                  />
+                {form.dormitory === 'Có phí' && (
+                  <input type="text" value={form.dormitory_note} onChange={(e) => setField('dormitory_note', e.target.value)} className={`${inputCls} flex-1`} />
                 )}
               </div>
             </div>
-            {/* Probation */}
+            {/* Probation dropdown */}
             <div>
-              <label className="block text-xs text-gray-500 mb-2">Thử việc</label>
-              <div className="flex items-center gap-2 mb-2">
-                <button
-                  onClick={() => setField('probation', form.probation === 'Có' ? 'Không' : 'Có')}
-                  className={`px-3 py-1.5 rounded-lg text-sm font-medium min-h-[36px] transition-colors ${
-                    form.probation === 'Có' ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-500'
-                  }`}
-                >
-                  {form.probation === 'Có' ? 'Có thử việc' : 'Không thử việc'}
-                </button>
+              <label className="block text-xs text-gray-500 mb-1">Thử việc</label>
+              <div className="flex gap-2">
+                <select value={form.probation} onChange={(e) => setField('probation', e.target.value)} className={`${inputCls} bg-white flex-1`}>
+                  {PROBATION_OPTIONS.map((p) => <option key={p} value={p}>{p}</option>)}
+                </select>
+                {form.probation !== 'Không' && (
+                  <div className="flex items-center gap-1 flex-1">
+                    <input type="number" min="0" max="100" value={form.probation_salary_pct} onChange={(e) => setField('probation_salary_pct', e.target.value)} className={`${inputCls} flex-1`} />
+                    <span className="text-xs text-gray-500 flex-shrink-0">% lương</span>
+                  </div>
+                )}
               </div>
-              {form.probation === 'Có' && (
-                <div className="grid grid-cols-2 gap-3">
-                  <div><label className="block text-xs text-gray-500 mb-1">Số tháng thử việc</label><input type="number" value={form.probation_months} onChange={(e) => setField('probation_months', e.target.value)} placeholder="2" className={inputCls} /></div>
-                  <div><label className="block text-xs text-gray-500 mb-1">% lương thử việc</label><input type="number" min="0" max="100" value={form.probation_salary_pct} onChange={(e) => setField('probation_salary_pct', e.target.value)} placeholder="85" className={inputCls} /></div>
-                </div>
-              )}
-            </div>
-            {/* Recruitment info */}
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">Thông tin tuyển dụng</label>
-              <textarea value={form.recruitment_info} onChange={(e) => setField('recruitment_info', e.target.value)} placeholder="Yêu cầu sức khỏe, kinh nghiệm, v.v." rows={3} className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-400" />
             </div>
           </div>
         </div>
@@ -582,42 +579,24 @@ export default function OrderDetailPage() {
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="px-4 py-3 border-b border-gray-50 flex items-center justify-between">
             <h2 className={`text-sm font-semibold ${isLaborUnbalanced ? 'text-red-600' : 'text-slate-700'}`}>Agent phụ trách</h2>
-            <div className="flex items-center gap-2">
-              {form.agent_ids.length > 0 && (
-                <button
-                  onClick={handleGenerateDoc}
-                  disabled={generatingDoc}
-                  className="text-xs bg-green-600 hover:bg-green-700 text-white px-2.5 py-1 rounded-lg min-h-[32px] disabled:opacity-50 flex items-center gap-1"
-                >
-                  {generatingDoc ? '⏳ Đang tạo...' : '📄 Tạo YCTD'}
-                </button>
+            <div className="relative">
+              <button onClick={() => setShowAgentDropdown(!showAgentDropdown)} className="text-xs text-blue-600 hover:underline">
+                + Thêm agent
+              </button>
+              {showAgentDropdown && (
+                <div className="absolute right-0 top-full mt-1 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
+                  {agents.filter((ag) => !form.agent_ids.includes(ag.id)).length === 0 ? (
+                    <div className="p-2 text-xs text-gray-400 text-center">Không có agent nào</div>
+                  ) : (
+                    agents.filter((ag) => !form.agent_ids.includes(ag.id)).map((ag) => (
+                      <button key={ag.id} onClick={() => { setForm((f) => ({ ...f, agent_ids: [...f.agent_ids, ag.id] })); setDirty(true); setShowAgentDropdown(false); }}
+                        className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 first:rounded-t-lg last:rounded-b-lg">
+                        {ag.short_name || ag.full_name}
+                      </button>
+                    ))
+                  )}
+                </div>
               )}
-              <div className="relative">
-                <button onClick={() => setShowAgentDropdown(!showAgentDropdown)} className="text-xs text-blue-600 hover:underline">
-                  + Thêm agent
-                </button>
-                {showAgentDropdown && (
-                  <div className="absolute right-0 top-full mt-1 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
-                    {agents.filter((ag) => !form.agent_ids.includes(ag.id)).length === 0 ? (
-                      <div className="p-2 text-xs text-gray-400 text-center">Không có agent nào</div>
-                    ) : (
-                      agents.filter((ag) => !form.agent_ids.includes(ag.id)).map((ag) => (
-                        <button
-                          key={ag.id}
-                          onClick={() => {
-                            setForm((f) => ({ ...f, agent_ids: [...f.agent_ids, ag.id] }));
-                            setDirty(true);
-                            setShowAgentDropdown(false);
-                          }}
-                          className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 first:rounded-t-lg last:rounded-b-lg"
-                        >
-                          {ag.short_name || ag.full_name}
-                        </button>
-                      ))
-                    )}
-                  </div>
-                )}
-              </div>
             </div>
           </div>
           <div className="p-4">
@@ -628,10 +607,15 @@ export default function OrderDetailPage() {
             )}
             {form.url_order && (
               <div className="mb-3 p-2 bg-green-50 border border-green-200 rounded-lg flex items-center justify-between">
-                <span className="text-xs text-green-700 font-medium">📄 Yêu cầu tuyển dụng đã tạo</span>
+                <span className="text-xs text-green-700 font-medium">📄 Yêu cầu tuyển dụng</span>
                 <a href={form.url_order} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline">Xem ↗</a>
               </div>
             )}
+            {/* url_order input */}
+            <div className="mb-3">
+              <label className="block text-xs text-gray-500 mb-1">URL Yêu cầu tuyển dụng</label>
+              <input type="url" value={form.url_order} onChange={(e) => setField('url_order', e.target.value)} className={inputCls} />
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {agents.filter((ag) => form.agent_ids.includes(ag.id)).map((ag) => {
                 const allocation = agentLaborAllocations[ag.id] || '';
@@ -642,28 +626,14 @@ export default function OrderDetailPage() {
                 return (
                   <div key={ag.id} className="p-2 rounded border border-blue-200 bg-blue-50">
                     <div className="flex items-center gap-2 mb-2">
-                      <input
-                        type="checkbox"
-                        checked={true}
-                        onChange={() => {
-                          setForm((f) => ({ ...f, agent_ids: f.agent_ids.filter((x) => x !== ag.id) }));
-                          setDirty(true);
-                        }}
-                        className="rounded text-blue-600 focus:ring-blue-400"
-                      />
+                      <input type="checkbox" checked={true} onChange={() => { setForm((f) => ({ ...f, agent_ids: f.agent_ids.filter((x) => x !== ag.id) })); setDirty(true); }} className="rounded text-blue-600" />
                       <span className="text-sm text-gray-700 font-medium flex-1">{ag.short_name || ag.full_name}</span>
                     </div>
                     <div className="grid grid-cols-3 gap-2">
                       <div>
                         <label className="block text-xs text-gray-500 mb-1">Số người</label>
-                        <input
-                          type="number"
-                          min="0"
-                          value={allocation}
-                          onChange={(e) => handleAgentAllocationChange(ag.id, e.target.value)}
-                          placeholder="0"
-                          className="w-full text-xs border border-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-400"
-                        />
+                        <input type="number" min="0" value={allocation} onChange={(e) => handleAgentAllocationChange(ag.id, e.target.value)}
+                          className="w-full text-xs border border-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-400" />
                       </div>
                       <div className="text-right">
                         <p className="text-xs text-gray-500">Tỷ lệ</p>
@@ -692,23 +662,21 @@ export default function OrderDetailPage() {
           </div>
         </div>
 
-        {/* Thanh toán */}
+        {/* Phí dịch vụ Việt Nam */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="px-4 py-3 border-b border-gray-50">
-            <h2 className="text-sm font-semibold text-slate-700">Thanh toán</h2>
+            <h2 className="text-sm font-semibold text-slate-700">Phí dịch vụ Việt Nam</h2>
           </div>
           <div className="p-4 space-y-3">
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Phí DV / người (VNĐ)</label>
-                <input type="number" value={form.service_fee_per_person} onChange={(e) => setField('service_fee_per_person', e.target.value)} placeholder="10000000" className={inputCls} />
+                <input type="number" value={form.service_fee_per_person} onChange={(e) => setField('service_fee_per_person', e.target.value)} className={inputCls} />
               </div>
               <div>
-                <label className="block text-xs text-gray-500 mb-1">Tổng phí DV (tự tính)</label>
-                <input type="number" value={form.total_fee_vn} onChange={(e) => setField('total_fee_vn', e.target.value)} placeholder="500000000" className={inputCls} />
-                {form.total_fee_vn && (
-                  <p className="text-xs text-gray-400 mt-0.5 text-right">{fmtVnd(parseFloat(form.total_fee_vn))}</p>
-                )}
+                <label className="block text-xs text-gray-500 mb-1">Tổng phí DV VN (VNĐ)</label>
+                <input type="number" value={form.total_fee_vn} onChange={(e) => setField('total_fee_vn', e.target.value)} className={inputCls} />
+                {form.total_fee_vn && <p className="text-xs text-gray-400 mt-0.5 text-right">{fmtVnd(parseFloat(form.total_fee_vn))}</p>}
               </div>
             </div>
             {form.total_labor && form.service_fee_per_person && (
@@ -716,31 +684,107 @@ export default function OrderDetailPage() {
                 {form.total_labor} LĐ × {fmtVnd(parseFloat(form.service_fee_per_person))} = {fmtVnd(parseFloat(form.total_labor) * parseFloat(form.service_fee_per_person))}
               </p>
             )}
-            <div><label className="block text-xs text-gray-500 mb-1">Trạng thái TT</label><select value={form.payment_status_vn} onChange={(e) => setField('payment_status_vn', e.target.value)} className={`${inputCls} bg-white`}>{PAYMENT_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}</select></div>
+            {/* Payment status computed */}
+            <div className="flex items-center justify-between p-2.5 bg-gray-50 rounded-lg">
+              <span className="text-xs text-gray-600">Trạng thái thanh toán</span>
+              <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${paymentPct >= 100 ? 'bg-green-100 text-green-700' : paymentPct > 0 ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'}`}>
+                Đã thanh toán {paymentPct}%
+              </span>
+            </div>
           </div>
         </div>
 
-        {/* Tài liệu */}
+        {/* Phí dịch vụ Bangladesh */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="px-4 py-3 border-b border-gray-50">
-            <h2 className="text-sm font-semibold text-slate-700">Tài liệu</h2>
+            <h2 className="text-sm font-semibold text-slate-700">Phí dịch vụ Bangladesh</h2>
           </div>
           <div className="p-4 space-y-3">
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">Demand Letter (URL)</label>
-              <input type="url" value={form.url_demand_letter} onChange={(e) => setField('url_demand_letter', e.target.value)} placeholder="https://..." className={inputCls} />
-              {form.url_demand_letter && (
-                <a href={form.url_demand_letter} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline mt-1 inline-block">📄 Mở Demand Letter ↗</a>
-              )}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Phí DV / Người (USD)</label>
+                <input type="number" value={form.service_fee_bd_per_person} onChange={(e) => setField('service_fee_bd_per_person', e.target.value)} className={inputCls} />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Tổng phí DV Bangladesh (USD)</label>
+                <input type="number" value={form.total_fee_bd} onChange={(e) => setField('total_fee_bd', e.target.value)} className={inputCls} />
+              </div>
             </div>
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">Yêu cầu tuyển dụng (URL)</label>
-              <input type="url" value={form.url_order} onChange={(e) => setField('url_order', e.target.value)} placeholder="https://..." className={inputCls} />
-              {form.url_order && (
-                <a href={form.url_order} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline mt-1 inline-block">📎 Mở YCTD ↗</a>
-              )}
-            </div>
+            {form.total_labor && form.service_fee_bd_per_person && (
+              <p className="text-xs text-gray-400 text-center">
+                {form.total_labor} LĐ × ${form.service_fee_bd_per_person} = ${(parseFloat(form.total_labor) * parseFloat(form.service_fee_bd_per_person)).toLocaleString()}
+              </p>
+            )}
           </div>
+        </div>
+
+        {/* Lô bàn giao / Xuất cảnh */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="px-4 py-3 border-b border-gray-50 flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-slate-700">Lô bàn giao / Xuất cảnh ({handovers.length})</h2>
+            <button
+              onClick={() => { setPickerSelected([]); setShowHandoverPicker(true); }}
+              className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 min-h-[36px]"
+            >
+              + Tạo lô
+            </button>
+          </div>
+          {handovers.length === 0 ? (
+            <p className="text-center text-gray-400 text-sm py-6">Chưa có lô bàn giao nào</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-gray-100">
+                    <th className="px-3 py-2 text-left text-gray-500 font-medium">Lô</th>
+                    <th className="px-3 py-2 text-left text-gray-500 font-medium">Số LĐ</th>
+                    <th className="px-3 py-2 text-left text-gray-500 font-medium">Phí VNĐ</th>
+                    <th className="px-3 py-2 text-left text-gray-500 font-medium">Trạng thái XC</th>
+                    <th className="px-3 py-2 text-left text-gray-500 font-medium">Thanh toán</th>
+                    <th className="px-3 py-2 text-left text-gray-500 font-medium">Ngày TT</th>
+                    <th className="px-3 py-2"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {handovers.map(h => (
+                    <tr key={h.id} className="border-b border-gray-50">
+                      <td className="px-3 py-2 font-semibold text-slate-700">{h.batch_no}</td>
+                      <td className="px-3 py-2">{h.labor_count}</td>
+                      <td className="px-3 py-2">
+                        <input type="number" defaultValue={h.fee_vnd ?? ''} onBlur={(e) => updateHandover(h.id, { fee_vnd: e.target.value ? parseFloat(e.target.value) : null })}
+                          className="w-28 text-xs border border-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400" />
+                      </td>
+                      <td className="px-3 py-2">
+                        <select value={h.departure_status} onChange={(e) => updateHandover(h.id, { departure_status: e.target.value as OrderHandover['departure_status'] })}
+                          className="text-xs border border-gray-200 rounded px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-blue-400">
+                          {DEPARTURE_STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                      </td>
+                      <td className="px-3 py-2">
+                        <select value={h.payment_status} onChange={(e) => updateHandover(h.id, { payment_status: e.target.value as OrderHandover['payment_status'] })}
+                          className="text-xs border border-gray-200 rounded px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-blue-400">
+                          {PAYMENT_STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                      </td>
+                      <td className="px-3 py-2">
+                        <input type="date" defaultValue={h.payment_date ?? ''} onBlur={(e) => updateHandover(h.id, { payment_date: e.target.value || null })}
+                          className="text-xs border border-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400" />
+                      </td>
+                      <td className="px-3 py-2">
+                        <button onClick={() => deleteHandover(h.id)} className="text-gray-300 hover:text-red-500 min-w-[28px] min-h-[28px] flex items-center justify-center">🗑</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <div className="px-4 py-2 bg-gray-50 flex items-center justify-between">
+                <span className="text-xs text-gray-500">Tổng đã TT: {fmtVnd(totalPaidVnd)}</span>
+                <span className={`text-xs font-semibold ${paymentPct >= 100 ? 'text-green-600' : 'text-blue-600'}`}>
+                  {paymentPct}% / {fmtVnd(totalFeeVndNum)}
+                </span>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Ứng viên */}
@@ -748,7 +792,7 @@ export default function OrderDetailPage() {
           <div className="px-4 py-3 border-b border-gray-50 flex items-center justify-between">
             <h2 className="text-sm font-semibold text-slate-700">Ứng viên ({candidates.length})</h2>
             <div className="flex items-center gap-2">
-              <span className="text-xs text-green-600 font-medium">{passedCount} passed</span>
+              <span className="text-xs text-green-600 font-medium">{passedCount} trúng tuyển</span>
               <span className="text-xs text-gray-400">/ {candidates.length}</span>
             </div>
           </div>

@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import type { Candidate } from '@/lib/types';
+import type { Candidate, DocLink } from '@/lib/types';
 import Link from 'next/link';
 import Image from 'next/image';
 
@@ -13,6 +13,12 @@ interface AgentData {
   short_name: string | null;
   role: string | null;
   labor_percentage: number | null;
+  company_name: string | null;
+  company_address: string | null;
+  legal_rep: string | null;
+  legal_rep_title: string | null;
+  license_no: string | null;
+  doc_links: DocLink[] | null;
 }
 
 interface OrderBrief {
@@ -52,6 +58,7 @@ export default function AgentDetailPage() {
   const params = useParams();
   const router = useRouter();
   const id = decodeURIComponent(params.id as string);
+  const docInputRef = useRef<HTMLInputElement>(null);
 
   const [agent, setAgent] = useState<AgentData | null>(null);
   const [orders, setOrders] = useState<OrderBrief[]>([]);
@@ -61,12 +68,19 @@ export default function AgentDetailPage() {
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [uploadingDoc, setUploadingDoc] = useState(false);
+  const [docs, setDocs] = useState<DocLink[]>([]);
 
   const [form, setForm] = useState({
     full_name: '',
     short_name: '',
     labor_percentage: '',
     role: 'agent',
+    company_name: '',
+    company_address: '',
+    legal_rep: '',
+    legal_rep_title: '',
+    license_no: '',
   });
 
   const setField = (k: keyof typeof form, v: string) => {
@@ -78,7 +92,7 @@ export default function AgentDetailPage() {
     setLoading(true);
     setLoadError(null);
     const [agentRes, ordersRes, candidatesRes] = await Promise.all([
-      supabase.from('agents').select('id, full_name, short_name, role, labor_percentage').eq('id', id).maybeSingle(),
+      supabase.from('agents').select('id, full_name, short_name, role, labor_percentage, company_name, company_address, legal_rep, legal_rep_title, license_no, doc_links').eq('id', id).maybeSingle(),
       supabase.from('orders').select('id, company_name, job_type, total_labor, labor_missing, status, agent_ids'),
       supabase.from('candidates').select('*').eq('agent_id', id),
     ]);
@@ -93,11 +107,17 @@ export default function AgentDetailPage() {
     if (agentRes.data) {
       const a = agentRes.data as AgentData;
       setAgent(a);
+      setDocs((a.doc_links as DocLink[]) || []);
       setForm({
         full_name: a.full_name ?? '',
         short_name: a.short_name ?? '',
         labor_percentage: a.labor_percentage?.toString() ?? '',
         role: a.role ?? 'agent',
+        company_name: a.company_name ?? '',
+        company_address: a.company_address ?? '',
+        legal_rep: a.legal_rep ?? '',
+        legal_rep_title: a.legal_rep_title ?? '',
+        license_no: a.license_no ?? '',
       });
     } else {
       setLoadError(`Không tìm thấy agent với ID: "${id}"`);
@@ -131,6 +151,11 @@ export default function AgentDetailPage() {
       short_name: form.short_name.trim() || null,
       labor_percentage: laborPercentageValue,
       role: form.role,
+      company_name: form.company_name.trim() || null,
+      company_address: form.company_address.trim() || null,
+      legal_rep: form.legal_rep.trim() || null,
+      legal_rep_title: form.legal_rep_title.trim() || null,
+      license_no: form.license_no.trim() || null,
     }).eq('id', id);
     setSaving(false);
     if (error) { setSaveMsg(`❌ ${error.message}`); return; }
@@ -144,6 +169,35 @@ export default function AgentDetailPage() {
     const timer = setTimeout(() => { handleSave(); }, 1500);
     return () => clearTimeout(timer);
   }, [form, dirty, handleSave]);
+
+  const handleDocUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+    setUploadingDoc(true);
+
+    const newDocs: DocLink[] = [...docs];
+    for (const file of files) {
+      const ext = file.name.split('.').pop() || 'bin';
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const path = `agents/${id}/docs/${safeName}_${Date.now()}.${ext}`;
+      const { error: upErr } = await supabase.storage.from('agent-media').upload(path, file, { upsert: true });
+      if (upErr) { console.error(upErr); continue; }
+      const { data: urlData } = supabase.storage.from('agent-media').getPublicUrl(path);
+      const type: DocLink['type'] = ext === 'pdf' ? 'pdf' : ['doc', 'docx'].includes(ext) ? 'doc' : ['jpg', 'jpeg', 'png', 'webp'].includes(ext) ? 'image' : 'other';
+      newDocs.push({ name: file.name, url: urlData.publicUrl, type, uploaded_at: new Date().toISOString() });
+    }
+
+    const { error } = await supabase.from('agents').update({ doc_links: newDocs }).eq('id', id);
+    if (!error) setDocs(newDocs);
+    setUploadingDoc(false);
+    if (docInputRef.current) docInputRef.current.value = '';
+  };
+
+  const handleDocDelete = async (url: string) => {
+    const updated = docs.filter((d) => d.url !== url);
+    const { error } = await supabase.from('agents').update({ doc_links: updated }).eq('id', id);
+    if (!error) setDocs(updated);
+  };
 
   if (loading) {
     return (
@@ -218,15 +272,16 @@ export default function AgentDetailPage() {
           </div>
         )}
 
+        {/* Thông tin cơ bản */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="px-4 py-3 border-b border-gray-50 flex items-center justify-between">
             <h2 className="text-sm font-semibold text-slate-700">Thông tin cơ bản</h2>
             {saving && <span className="text-xs text-blue-500 animate-pulse">Đang lưu...</span>}
           </div>
           <div className="p-4 space-y-3">
-            <div><label className="block text-xs text-gray-500 mb-1">Họ tên</label><input type="text" value={form.full_name} onChange={(e) => setField('full_name', e.target.value)} placeholder="Nguyễn Văn A" className={inputCls} /></div>
-            <div><label className="block text-xs text-gray-500 mb-1">Tên viết tắt</label><input type="text" value={form.short_name} onChange={(e) => setField('short_name', e.target.value)} placeholder="VD: Nam" className={inputCls} /></div>
-            {isAgentBD && <div><label className="block text-xs text-gray-500 mb-1">% Lao động</label><input type="number" min="0" max="100" value={form.labor_percentage} onChange={(e) => setField('labor_percentage', e.target.value)} placeholder="VD: 50" className={inputCls} /></div>}
+            <div><label className="block text-xs text-gray-500 mb-1">Họ tên</label><input type="text" value={form.full_name} onChange={(e) => setField('full_name', e.target.value)} className={inputCls} /></div>
+            <div><label className="block text-xs text-gray-500 mb-1">Tên viết tắt</label><input type="text" value={form.short_name} onChange={(e) => setField('short_name', e.target.value)} className={inputCls} /></div>
+            {isAgentBD && <div><label className="block text-xs text-gray-500 mb-1">% Lao động</label><input type="number" min="0" max="100" value={form.labor_percentage} onChange={(e) => setField('labor_percentage', e.target.value)} className={inputCls} /></div>}
             <div>
               <label className="block text-xs text-gray-500 mb-1">Vai trò</label>
               <select value={form.role} onChange={(e) => setField('role', e.target.value)} className={inputCls + ' bg-white'}>
@@ -235,6 +290,54 @@ export default function AgentDetailPage() {
               </select>
             </div>
           </div>
+        </div>
+
+        {/* Thông tin công ty */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="px-4 py-3 border-b border-gray-50">
+            <h2 className="text-sm font-semibold text-slate-700">Thông tin công ty</h2>
+          </div>
+          <div className="p-4 space-y-3">
+            <div><label className="block text-xs text-gray-500 mb-1">Tên công ty</label><input type="text" value={form.company_name} onChange={(e) => setField('company_name', e.target.value)} className={inputCls} /></div>
+            <div><label className="block text-xs text-gray-500 mb-1">Địa chỉ</label><input type="text" value={form.company_address} onChange={(e) => setField('company_address', e.target.value)} className={inputCls} /></div>
+            <div><label className="block text-xs text-gray-500 mb-1">Người đại diện</label><input type="text" value={form.legal_rep} onChange={(e) => setField('legal_rep', e.target.value)} className={inputCls} /></div>
+            <div><label className="block text-xs text-gray-500 mb-1">Chức vụ</label><input type="text" value={form.legal_rep_title} onChange={(e) => setField('legal_rep_title', e.target.value)} className={inputCls} /></div>
+            <div><label className="block text-xs text-gray-500 mb-1">Số License</label><input type="text" value={form.license_no} onChange={(e) => setField('license_no', e.target.value)} className={inputCls} /></div>
+          </div>
+        </div>
+
+        {/* Giấy tờ */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="px-4 py-3 border-b border-gray-50 flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-slate-700">Giấy tờ ({docs.length})</h2>
+            <button
+              onClick={() => docInputRef.current?.click()}
+              disabled={uploadingDoc}
+              className="text-xs bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg font-medium hover:bg-blue-100 transition-colors min-h-[36px]"
+            >
+              {uploadingDoc ? 'Đang tải...' : '+ Thêm file'}
+            </button>
+            <input ref={docInputRef} type="file" multiple accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp" className="hidden" onChange={handleDocUpload} />
+          </div>
+          {docs.length === 0 ? (
+            <p className="text-center text-gray-400 text-sm py-8">Chưa có giấy tờ nào</p>
+          ) : (
+            <div className="divide-y divide-gray-50">
+              {docs.map((d) => (
+                <div key={d.url} className="px-4 py-3 flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
+                    <span className="text-xs text-gray-500 font-bold">{d.type === 'pdf' ? 'PDF' : d.type === 'doc' ? 'DOC' : d.type === 'image' ? 'IMG' : 'FILE'}</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-slate-700 truncate">{d.name}</p>
+                    <p className="text-xs text-gray-400">{new Date(d.uploaded_at).toLocaleDateString('vi-VN')}</p>
+                  </div>
+                  <a href={d.url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline min-h-[36px] flex items-center px-2">Tải</a>
+                  <button onClick={() => handleDocDelete(d.url)} className="text-xs text-red-400 hover:text-red-600 min-h-[36px] flex items-center px-2">Xoá</button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {isAgentBD && (

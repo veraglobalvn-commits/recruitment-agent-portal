@@ -18,6 +18,18 @@ function VideoPlayer({ url, onClose }: { url: string; onClose: () => void }) {
   );
 }
 
+interface CompanyVideos {
+  factory_video_url: string | null;
+  job_video_url: string | null;
+}
+
+function getAgentOrderStatus(order: Order, candidateCount: number): { label: string; cls: string } {
+  if (order.agent_order_status === 'Finished') return { label: 'Finished', cls: 'bg-green-100 text-green-700' };
+  if (order.agent_order_status === 'Cancelled') return { label: 'Cancelled', cls: 'bg-red-100 text-red-700' };
+  if (candidateCount === 0) return { label: 'Not started', cls: 'bg-gray-100 text-gray-600' };
+  return { label: 'On-going', cls: 'bg-blue-100 text-blue-700' };
+}
+
 export default function OrderDetail() {
   const params = useParams();
   const searchParams = useSearchParams();
@@ -29,7 +41,8 @@ export default function OrderDetail() {
 
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [orderData, setOrderData] = useState<Order | null>(null);
-  const [agents, setAgents] = useState<any[]>([]);
+  const [companyVideos, setCompanyVideos] = useState<CompanyVideos | null>(null);
+  const [currentAgent, setCurrentAgent] = useState<{ id: string; labor_percentage: number | null } | null>(null);
   const [currentAgentId, setCurrentAgentId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
@@ -66,10 +79,13 @@ export default function OrderDetail() {
       if (candRes.error) throw candRes.error;
 
       let agentIds: string[] = [];
+      let companyId: string | null = null;
       if (orderRes.data) {
+        companyId = orderRes.data.company_id ?? null;
         setOrderData({
           order_id: orderRes.data.id,
           company: orderRes.data.company_name,
+          company_id: companyId,
           total_labor: orderRes.data.total_labor,
           missing: orderRes.data.labor_missing,
           status: orderRes.data.status || 'N/A',
@@ -81,8 +97,23 @@ export default function OrderDetail() {
           meal: orderRes.data.meal,
           dormitory: orderRes.data.dormitory,
           recruitment_info: orderRes.data.recruitment_info,
+          probation: orderRes.data.probation,
+          probation_salary_pct: orderRes.data.probation_salary_pct,
+          agent_order_status: orderRes.data.agent_order_status,
         });
         agentIds = (orderRes.data as any).agent_ids || [];
+      }
+
+      // Fetch company videos
+      if (companyId) {
+        supabase
+          .from('companies')
+          .select('factory_video_url, job_video_url')
+          .eq('id', companyId)
+          .single()
+          .then(({ data }) => {
+            if (data) setCompanyVideos({ factory_video_url: data.factory_video_url, job_video_url: data.job_video_url });
+          });
       }
 
       const newCandidates: Candidate[] = (candRes.data || []).map((r: any) => ({
@@ -121,11 +152,8 @@ export default function OrderDetail() {
           .from('agents')
           .select('id, full_name, short_name, labor_percentage');
         if (agentsRes.data) {
-          const allAgents = agentsRes.data;
-          const currentAgent = allAgents.find((a: any) => a.id === agentId);
-          if (currentAgent) {
-            setAgents([currentAgent]);
-          }
+          const found = agentsRes.data.find((a: any) => a.id === agentId);
+          if (found) setCurrentAgent({ id: found.id, labor_percentage: found.labor_percentage });
         }
       }
     } catch (err) {
@@ -162,7 +190,7 @@ export default function OrderDetail() {
         return updated;
       });
     } catch (err) {
-      alert(`Xoá thất bại: ${err instanceof Error ? err.message : String(err)}`);
+      alert(`Delete failed: ${err instanceof Error ? err.message : String(err)}`);
     }
   }, [orderId]);
 
@@ -207,14 +235,13 @@ export default function OrderDetail() {
             }),
           });
 
-          // Ứng viên đã tồn tại → hỏi confirm trước khi ghi đè
           if (res.status === 409) {
             const warn = await res.json() as {
               duplicate: boolean;
               existing: { full_name: string; order_id: string; pp_no: string; visa_status: string | null; interview_status: string | null };
             };
             setDupWarning({
-              fullName: warn.existing.full_name || 'Không rõ',
+              fullName: warn.existing.full_name || 'Unknown',
               orderId: warn.existing.order_id,
               ppNo: warn.existing.pp_no || '—',
               visaStatus: warn.existing.visa_status,
@@ -234,11 +261,11 @@ export default function OrderDetail() {
           const result = await res.json() as { success?: boolean; error?: string };
           if (result.success) {
             sessionStorage.removeItem(`c_url_${orderId}`);
-            setUploadMsg('✅ Đã thêm ứng viên thành công');
+            setUploadMsg('✅ Candidate added successfully');
             setTimeout(() => setUploadMsg(null), 3000);
             fetchCandidates();
           } else {
-            setUploadMsg(`Upload thất bại: ${result.error || 'Unknown error'}`);
+            setUploadMsg(`Upload failed: ${result.error || 'Unknown error'}`);
           }
         } catch (err) {
           setUploadMsg(`Upload error: ${err instanceof Error ? err.message : String(err)}`);
@@ -274,15 +301,15 @@ export default function OrderDetail() {
       setPendingUpload(null);
       if (res.ok) {
         sessionStorage.removeItem(`c_url_${orderId}`);
-        setUploadMsg('✅ Đã cập nhật thông tin ứng viên');
+        setUploadMsg('✅ Candidate information updated');
         setTimeout(() => setUploadMsg(null), 3000);
         fetchCandidates();
       } else {
         const errData = await res.json() as { error?: string };
-        setUploadMsg(`Lỗi: ${errData.error || 'Không rõ'}`);
+        setUploadMsg(`Error: ${errData.error || 'Unknown'}`);
       }
     } catch (err) {
-      setUploadMsg(`Lỗi: ${err instanceof Error ? err.message : String(err)}`);
+      setUploadMsg(`Error: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setIsUploading(false);
     }
@@ -356,6 +383,17 @@ export default function OrderDetail() {
 
   if (loading) return <LoadingSkeleton type="order" />;
 
+  const passedCount = candidates.filter(c => c.interview_status === 'Passed').length;
+  const totalLabor = Number(orderData?.total_labor) || 0;
+  const agentStatus = orderData ? getAgentOrderStatus(orderData, candidates.length) : null;
+
+  const allocated = currentAgent?.labor_percentage
+    ? Math.round((currentAgent.labor_percentage / 100) * totalLabor)
+    : null;
+  const agentPassed = currentAgent
+    ? candidates.filter(c => c.agent_id === currentAgent.id && c.interview_status === 'Passed').length
+    : 0;
+
   return (
     <div className="min-h-screen bg-gray-50">
       {playingVideo && <VideoPlayer url={playingVideo} onClose={() => setPlayingVideo(null)} />}
@@ -378,6 +416,11 @@ export default function OrderDetail() {
               <p className="text-xs text-gray-500 truncate">{orderData.company}</p>
             )}
           </div>
+          {agentStatus && (
+            <span className={`flex-shrink-0 text-xs font-medium px-2 py-1 rounded-full ${agentStatus.cls}`}>
+              {agentStatus.label}
+            </span>
+          )}
           {orderData?.url_order && (
             <a
               href={orderData.url_order}
@@ -385,7 +428,7 @@ export default function OrderDetail() {
               rel="noopener noreferrer"
               className="flex-shrink-0 text-xs bg-blue-100 text-blue-700 px-3 py-2 rounded-lg hover:bg-blue-200 min-h-[44px] flex items-center"
             >
-              📄 YCTD
+              📄 View Recruitment Info
             </a>
           )}
           <button
@@ -403,52 +446,77 @@ export default function OrderDetail() {
         {/* Order Details */}
         {orderData && (
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-            <div className="px-4 py-3 bg-gray-50 border-b border-gray-100 flex flex-wrap gap-2">
-              {(demandLetterUrl || orderData.url_demand_letter) && (
-                <a
-                  href={demandLetterUrl || orderData.url_demand_letter || '#'}
-                  target="_blank" rel="noopener noreferrer"
-                  className="text-xs bg-blue-100 text-blue-700 px-3 py-2 rounded-lg hover:bg-blue-200 min-h-[36px] flex items-center"
-                >
-                  Demand Letter ↗
-                </a>
-              )}
-            </div>
+            {/* Video buttons + Demand Letter */}
+            {(companyVideos?.factory_video_url || companyVideos?.job_video_url || demandLetterUrl || orderData.url_demand_letter) && (
+              <div className="px-4 py-3 bg-gray-50 border-b border-gray-100 flex flex-wrap gap-2">
+                {companyVideos?.factory_video_url && (
+                  <button
+                    onClick={() => setPlayingVideo(companyVideos.factory_video_url!)}
+                    className="text-xs bg-indigo-100 text-indigo-700 px-3 py-2 rounded-lg hover:bg-indigo-200 min-h-[36px] flex items-center gap-1"
+                  >
+                    ▶ Factory Video
+                  </button>
+                )}
+                {companyVideos?.job_video_url && (
+                  <button
+                    onClick={() => setPlayingVideo(companyVideos.job_video_url!)}
+                    className="text-xs bg-purple-100 text-purple-700 px-3 py-2 rounded-lg hover:bg-purple-200 min-h-[36px] flex items-center gap-1"
+                  >
+                    ▶ Job Video
+                  </button>
+                )}
+                {(demandLetterUrl || orderData.url_demand_letter) && (
+                  <a
+                    href={demandLetterUrl || orderData.url_demand_letter || '#'}
+                    target="_blank" rel="noopener noreferrer"
+                    className="text-xs bg-blue-100 text-blue-700 px-3 py-2 rounded-lg hover:bg-blue-200 min-h-[36px] flex items-center"
+                  >
+                    Demand Letter ↗
+                  </a>
+                )}
+              </div>
+            )}
+
+            {/* Info grid */}
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-px bg-gray-100">
               {[
                 { label: 'Company', value: orderData.company },
-                { label: 'Total Labor', value: orderData.total_labor },
-                { label: 'Job Type', value: orderData.job_type_en },
+                { label: 'Total Workers', value: orderData.total_labor },
+                { label: 'Job Type', value: orderData.job_type_en || orderData.job_type },
                 { label: 'Salary (USD)', value: orderData.salary_usd ? `$${orderData.salary_usd.toLocaleString()}` : null },
                 { label: 'Meal', value: orderData.meal },
                 { label: 'Dormitory', value: orderData.dormitory },
               ].map(({ label, value }) => (
                 <div key={label} className="bg-white px-4 py-3">
                   <p className="text-gray-400 text-xs uppercase tracking-wider">{label}</p>
-                  <p className="font-semibold text-gray-800 text-sm mt-0.5">{value || 'N/A'}</p>
+                  <p className="font-semibold text-gray-800 text-sm mt-0.5">{value ?? 'N/A'}</p>
                 </div>
               ))}
             </div>
-            {orderData.recruitment_info && (
-              <div className="px-4 py-3 bg-gray-50 border-t border-gray-100">
-                <p className="text-gray-400 text-xs uppercase tracking-wider mb-1">Recruitment Info</p>
-                <p className="text-sm text-gray-800 whitespace-pre-wrap">{orderData.recruitment_info}</p>
+
+            {/* Probation badge */}
+            {orderData.probation && orderData.probation !== 'Không' && (
+              <div className="px-4 py-3 border-t border-gray-100">
+                <span className="inline-flex items-center gap-1.5 text-xs bg-amber-50 text-amber-700 border border-amber-200 px-3 py-1.5 rounded-full font-medium">
+                  Probation: {orderData.probation}
+                  {orderData.probation_salary_pct ? `, ${orderData.probation_salary_pct}% salary` : ''}
+                </span>
               </div>
             )}
           </div>
         )}
 
-        {/* Recruitment Efficiency */}
+        {/* Recruitment Productivity */}
         {orderData && (
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-            <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">Hiệu quả tuyển dụng</h3>
+            <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">Recruitment Productivity</h3>
 
-            {/* Order-level stats */}
+            {/* 3-card stats */}
             <div className="grid grid-cols-3 gap-2 mb-4">
               {[
-                { label: 'Cần tuyển', value: Number(orderData.total_labor) || 0, color: 'text-slate-800' },
-                { label: 'Đã trúng tuyển', value: candidates.filter(c => c.interview_status === 'Passed').length, color: 'text-green-600' },
-                { label: 'Còn thiếu', value: Number(orderData.missing) || 0, color: 'text-red-500' },
+                { label: 'Total Workers', value: totalLabor, color: 'text-slate-800' },
+                { label: 'Passed', value: passedCount, color: 'text-green-600' },
+                { label: 'Remaining', value: Number(orderData.missing) || 0, color: 'text-red-500' },
               ].map(({ label, value, color }) => (
                 <div key={label} className="bg-gray-50 rounded-xl p-3 text-center">
                   <p className="text-xs text-gray-400 mb-1">{label}</p>
@@ -457,54 +525,29 @@ export default function OrderDetail() {
               ))}
             </div>
 
-            {/* Per-agent breakdown */}
-            {agents.length === 0 ? (
-              <p className="text-gray-400 text-sm text-center py-2">Bạn chưa được phân công cho đơn hàng này</p>
-            ) : (
-              <div className="space-y-4">
-                {agents.map((agent) => {
-                  const totalLabor = Number(orderData.total_labor) || 0;
-                  const allocatedLabor = agent.labor_percentage
-                    ? Math.round((agent.labor_percentage / 100) * totalLabor)
-                    : 0;
-                  const agentPassedCount = candidates.filter(
-                    c => c.agent_id === agent.id && c.interview_status === 'Passed'
-                  ).length;
-                  const percentage = allocatedLabor > 0
-                    ? Math.min(100, (agentPassedCount / allocatedLabor) * 100)
-                    : 0;
-
-                  return (
-                    <div key={agent.id} className="space-y-2">
-                      <div className="flex items-center gap-3">
-                        {agent.avatar_url ? (
-                          <img src={agent.avatar_url} alt={agent.short_name || agent.full_name || 'Agent'} className="w-10 h-10 rounded-full object-cover border-2 border-gray-200" />
-                        ) : (
-                          <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-sm">
-                            {(agent.short_name || agent.full_name || 'A')[0].toUpperCase()}
-                          </div>
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <p className="font-semibold text-gray-800 text-sm">{agent.short_name || agent.full_name || 'Agent'}</p>
-                          <p className="text-xs text-gray-500">
-                            Phân công: {allocatedLabor} người ({agent.labor_percentage ?? 0}%)
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-lg font-bold text-gray-800">{agentPassedCount} / {allocatedLabor}</p>
-                          <p className="text-xs text-gray-500">{percentage.toFixed(1)}%</p>
-                        </div>
-                      </div>
-                      <div className="w-full bg-gray-200 rounded-full h-2.5">
-                        <div
-                          className="bg-blue-600 h-2.5 rounded-full transition-all duration-300"
-                          style={{ width: `${percentage}%` }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
+            {/* Agent quota */}
+            {currentAgent && currentAgentId && allocated !== null ? (
+              <div className="bg-blue-50 rounded-xl px-4 py-3 flex items-center justify-between gap-3">
+                <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider">Your Quota</p>
+                <div className="flex items-center gap-4 text-sm">
+                  <div className="text-center">
+                    <p className="text-xs text-gray-400">Allocated</p>
+                    <p className="font-bold text-slate-800">{allocated}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xs text-gray-400">Passed</p>
+                    <p className="font-bold text-green-600">{agentPassed}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xs text-gray-400">Remaining</p>
+                    <p className="font-bold text-red-500">{Math.max(0, allocated - agentPassed)}</p>
+                  </div>
+                </div>
               </div>
+            ) : (
+              currentAgentId === null || (currentAgentId && !currentAgent) ? null : (
+                <p className="text-gray-400 text-sm text-center py-2">You are not assigned to this order</p>
+              )
             )}
           </div>
         )}
@@ -543,7 +586,7 @@ export default function OrderDetail() {
 
       </div>
 
-      {/* Confirm modal khi ứng viên đã tồn tại */}
+      {/* Duplicate candidate confirm modal */}
       {dupWarning && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="bg-white w-full sm:max-w-sm rounded-t-3xl sm:rounded-2xl shadow-xl p-5 space-y-4">
@@ -551,19 +594,19 @@ export default function OrderDetail() {
             <div className="flex items-start gap-3 pt-1">
               <span className="text-2xl flex-shrink-0">⚠️</span>
               <div>
-                <h3 className="font-bold text-slate-800">Ứng viên đã tồn tại</h3>
+                <h3 className="font-bold text-slate-800">Candidate already exists</h3>
                 <p className="text-sm text-gray-600 mt-1">
-                  <span className="font-medium">{dupWarning.fullName}</span> (PP: {dupWarning.ppNo}) đã có trong đơn hàng{' '}
+                  <span className="font-medium">{dupWarning.fullName}</span> (PP: {dupWarning.ppNo}) is already in order{' '}
                   <span className="text-blue-600 font-medium">{dupWarning.orderId}</span>.
                 </p>
                 {(dupWarning.visaStatus || dupWarning.interviewStatus) && (
                   <p className="text-xs text-gray-500 mt-1">
                     {dupWarning.visaStatus && `Visa: ${dupWarning.visaStatus}`}
                     {dupWarning.visaStatus && dupWarning.interviewStatus && ' · '}
-                    {dupWarning.interviewStatus && `PV: ${dupWarning.interviewStatus}`}
+                    {dupWarning.interviewStatus && `Interview: ${dupWarning.interviewStatus}`}
                   </p>
                 )}
-                <p className="text-sm text-gray-600 mt-2">Bạn có muốn cập nhật thông tin từ hộ chiếu mới này không?</p>
+                <p className="text-sm text-gray-600 mt-2">Update with new passport info?</p>
               </div>
             </div>
             <div className="flex gap-2">
@@ -571,13 +614,13 @@ export default function OrderDetail() {
                 onClick={() => { setDupWarning(null); setPendingUpload(null); }}
                 className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 rounded-xl text-sm min-h-[44px]"
               >
-                Huỷ
+                Cancel
               </button>
               <button
                 onClick={handleConfirmUpdate}
                 className="flex-1 bg-amber-500 hover:bg-amber-600 text-white font-semibold py-3 rounded-xl text-sm min-h-[44px]"
               >
-                Cập nhật
+                Update
               </button>
             </div>
           </div>

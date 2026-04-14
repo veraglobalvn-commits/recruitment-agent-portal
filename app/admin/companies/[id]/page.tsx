@@ -94,12 +94,12 @@ function QuickAddOrderModal({ companyId, companyName, companyShortName, onClose,
           <div>
             <label className="block text-xs text-gray-500 mb-1">Vị trí / Loại lao động <span className="text-red-500">*</span></label>
             <input type="text" value={form.job_type} onChange={(e) => setForm(f => ({ ...f, job_type: e.target.value }))}
-              placeholder="VD: Công nhân nhà máy" className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 min-h-[44px] focus:outline-none focus:ring-2 focus:ring-blue-400" />
+              className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 min-h-[44px] focus:outline-none focus:ring-2 focus:ring-blue-400" />
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">Số lao động cần</label>
             <input type="number" value={form.total_labor} onChange={(e) => setForm(f => ({ ...f, total_labor: e.target.value }))}
-              placeholder="VD: 50" className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 min-h-[44px] focus:outline-none focus:ring-2 focus:ring-blue-400" />
+              className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 min-h-[44px] focus:outline-none focus:ring-2 focus:ring-blue-400" />
           </div>
         </div>
         <button onClick={handleSave} disabled={saving}
@@ -127,21 +127,26 @@ export default function CompanyDetailPage() {
   const [showAddOrder, setShowAddOrder] = useState(false);
   const [imgUploading, setImgUploading] = useState(false);
   const [docUploading, setDocUploading] = useState(false);
+  const [bctUploading, setBctUploading] = useState(false);
+  const [videoUploading, setVideoUploading] = useState<'factory' | 'job' | null>(null);
   const [deletingImg, setDeletingImg] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<'company' | null>(null);
+  const [bctDocs, setBctDocs] = useState<DocLink[]>([]);
 
   const imgInputRef = useRef<HTMLInputElement>(null);
   const docInputRef = useRef<HTMLInputElement>(null);
+  const bctInputRef = useRef<HTMLInputElement>(null);
+  const factoryVideoRef = useRef<HTMLInputElement>(null);
+  const jobVideoRef = useRef<HTMLInputElement>(null);
 
-  const [translating, setTranslating] = useState(false);
-
-  // Form state (mirrors company fields)
+  // Form state
   const [form, setForm] = useState({
     company_name: '', short_name: '', tax_code: '', legal_rep: '',
     legal_rep_title: '', address: '', phone: '', email: '',
     industry: '', business_type: '', business_reg_authority: '', business_reg_date: '',
-    factory_video_url: '', job_video_url: '',
+    en_company_name: '', en_industry: '', en_business_type: '',
+    en_address: '', en_legal_rep: '', en_title: '',
   });
 
   const setField = (k: keyof typeof form, v: string) => {
@@ -159,7 +164,8 @@ export default function CompanyDetailPage() {
 
     if (compRes.data) {
       const c = compRes.data as Company;
-      setCompany({ ...c, company_media: c.company_media ?? [], doc_links: c.doc_links ?? [] });
+      setCompany({ ...c, company_media: c.company_media ?? [], doc_links: c.doc_links ?? [], bct_bh_links: c.bct_bh_links ?? [] });
+      setBctDocs((c.bct_bh_links as DocLink[]) ?? []);
       setForm({
         company_name: c.company_name ?? '',
         short_name: c.short_name ?? '',
@@ -173,15 +179,18 @@ export default function CompanyDetailPage() {
         business_type: c.business_type ?? '',
         business_reg_authority: c.business_reg_authority ?? '',
         business_reg_date: c.business_reg_date ?? '',
-        factory_video_url: c.factory_video_url ?? '',
-        job_video_url: c.job_video_url ?? '',
+        en_company_name: c.en_company_name ?? '',
+        en_industry: c.en_industry ?? '',
+        en_business_type: c.en_business_type ?? '',
+        en_address: c.en_address ?? '',
+        en_legal_rep: c.en_legal_rep ?? '',
+        en_title: c.en_title ?? '',
       });
     }
     setOrders((ordRes.data ?? []) as CompanyOrderStat[]);
     setDirty(false);
     setLoading(false);
 
-    // Auto-open add order if redirected from form modal
     if (searchParams.get('addOrder') === '1') setShowAddOrder(true);
   }, [id, searchParams]);
 
@@ -203,14 +212,21 @@ export default function CompanyDetailPage() {
       business_type: form.business_type.trim() || null,
       business_reg_authority: form.business_reg_authority.trim() || null,
       business_reg_date: form.business_reg_date.trim() || null,
-      factory_video_url: form.factory_video_url.trim() || null,
-      job_video_url: form.job_video_url.trim() || null,
+      en_company_name: form.en_company_name.trim() || null,
+      en_industry: form.en_industry.trim() || null,
+      en_business_type: form.en_business_type.trim() || null,
+      en_address: form.en_address.trim() || null,
+      en_legal_rep: form.en_legal_rep.trim() || null,
+      en_title: form.en_title.trim() || null,
     }).eq('id', id);
     setSaving(false);
     if (error) { setSaveMsg(`❌ ${error.message}`); return; }
     setSaveMsg('✅ Đã lưu');
     setDirty(false);
     setTimeout(() => setSaveMsg(null), 3000);
+    // Auto-translate silently after save
+    handleTranslateSilent();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, form]);
 
   // Auto-save with debounce
@@ -220,8 +236,7 @@ export default function CompanyDetailPage() {
     return () => clearTimeout(timer);
   }, [form, dirty, handleSave]);
 
-  const handleTranslate = useCallback(async () => {
-    setTranslating(true);
+  const handleTranslateSilent = useCallback(async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch('/api/translate', {
@@ -232,7 +247,7 @@ export default function CompanyDetailPage() {
         },
         body: JSON.stringify({ company_id: id }),
       });
-      if (!res.ok) { alert('Dịch thất bại'); return; }
+      if (!res.ok) return;
       const translated = await res.json() as {
         en_company_name: string | null;
         en_industry: string | null;
@@ -241,13 +256,17 @@ export default function CompanyDetailPage() {
         en_legal_rep: string | null;
         en_title: string | null;
       };
-      setCompany((c) => c ? { ...c, ...translated } : c);
-      setSaveMsg('✅ Đã dịch tự động');
-      setTimeout(() => setSaveMsg(null), 3000);
+      setForm((f) => ({
+        ...f,
+        en_company_name: translated.en_company_name ?? f.en_company_name,
+        en_industry: translated.en_industry ?? f.en_industry,
+        en_business_type: translated.en_business_type ?? f.en_business_type,
+        en_address: translated.en_address ?? f.en_address,
+        en_legal_rep: translated.en_legal_rep ?? f.en_legal_rep,
+        en_title: translated.en_title ?? f.en_title,
+      }));
     } catch {
-      alert('Lỗi dịch thuật');
-    } finally {
-      setTranslating(false);
+      // silent fail
     }
   }, [id]);
 
@@ -300,7 +319,34 @@ export default function CompanyDetailPage() {
     setCompany((c) => c ? { ...c, avatar_url: url } : c);
   };
 
-  // Upload document
+  // Upload video file
+  const handleVideoUpload = async (type: 'factory' | 'job', file: File) => {
+    setVideoUploading(type);
+    try {
+      const ext = file.name.split('.').pop() || 'mp4';
+      const path = `companies/${id}/videos/${type}_${Date.now()}.${ext}`;
+      const { error: upErr } = await supabase.storage.from('agent-media').upload(path, file, { upsert: true });
+      if (upErr) throw new Error(upErr.message);
+      const { data: urlData } = supabase.storage.from('agent-media').getPublicUrl(path);
+      const col = type === 'factory' ? 'factory_video_url' : 'job_video_url';
+      const { error: dbErr } = await supabase.from('companies').update({ [col]: urlData.publicUrl }).eq('id', id);
+      if (dbErr) throw new Error(dbErr.message);
+      setCompany((c) => c ? { ...c, [col]: urlData.publicUrl } : c);
+    } catch (err) {
+      alert(`Lỗi upload video: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setVideoUploading(null);
+    }
+  };
+
+  // Delete video
+  const handleVideoDelete = async (type: 'factory' | 'job') => {
+    const col = type === 'factory' ? 'factory_video_url' : 'job_video_url';
+    await supabase.from('companies').update({ [col]: null }).eq('id', id);
+    setCompany((c) => c ? { ...c, [col]: null } : c);
+  };
+
+  // Upload document (general)
   const uploadDoc = async (file: File) => {
     setDocUploading(true);
     try {
@@ -331,6 +377,37 @@ export default function CompanyDetailPage() {
     const newDocs = (company?.doc_links ?? []).filter((d) => d.url !== doc.url);
     await supabase.from('companies').update({ doc_links: newDocs }).eq('id', id);
     setCompany((c) => c ? { ...c, doc_links: newDocs } : c);
+  };
+
+  // Upload BCT & BH doc
+  const uploadBctBh = async (files: File[]) => {
+    if (!files.length) return;
+    setBctUploading(true);
+    try {
+      const newDocs: DocLink[] = [...bctDocs];
+      for (const file of files) {
+        const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const path = `companies/${id}/bct_bh/${Date.now()}_${safeName}`;
+        const { error: upErr } = await supabase.storage.from('agent-media').upload(path, file, { upsert: false });
+        if (upErr) { console.error(upErr); continue; }
+        const { data: urlData } = supabase.storage.from('agent-media').getPublicUrl(path);
+        const ext = file.name.split('.').pop()?.toLowerCase() ?? 'other';
+        const type: DocLink['type'] = ext === 'pdf' ? 'pdf' : ['jpg', 'jpeg', 'png', 'webp'].includes(ext) ? 'image' : ['doc', 'docx'].includes(ext) ? 'doc' : 'other';
+        newDocs.push({ name: file.name, url: urlData.publicUrl, type, uploaded_at: new Date().toISOString() });
+      }
+      const { error: dbErr } = await supabase.from('companies').update({ bct_bh_links: newDocs }).eq('id', id);
+      if (!dbErr) setBctDocs(newDocs);
+    } catch (err) {
+      alert(`Lỗi upload BCT&BH: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setBctUploading(false);
+    }
+  };
+
+  const deleteBctBh = async (url: string) => {
+    const newDocs = bctDocs.filter((d) => d.url !== url);
+    const { error } = await supabase.from('companies').update({ bct_bh_links: newDocs }).eq('id', id);
+    if (!error) setBctDocs(newDocs);
   };
 
   // Soft delete company
@@ -368,16 +445,16 @@ export default function CompanyDetailPage() {
     }
   };
 
-  // Incomplete basic info
   const isMissingInfo = !company?.short_name || !company?.tax_code || !company?.legal_rep || !company?.legal_rep_title || !company?.address;
 
-  // Payment summary
   const totalFee = orders.reduce((s, o) => s + (o.total_fee_vn || 0), 0);
   const paidOrders = orders.filter((o) => o.payment_status_vn === 'Đã TT');
   const totalPaid = paidOrders.reduce((s, o) => s + (o.total_fee_vn || 0), 0);
 
   const docIcon = (type: DocLink['type']) =>
     ({ pdf: '📄', image: '🖼️', doc: '📝', other: '📎' })[type];
+
+  const inputCls = 'w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[44px]';
 
   if (loading) {
     return (
@@ -451,7 +528,7 @@ export default function CompanyDetailPage() {
           </div>
         </div>
 
-        {/* Section: Công nợ / Thanh toán */}
+        {/* Công nợ */}
         {orders.length > 0 && (
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
             <div className="px-4 py-3 border-b border-gray-50">
@@ -484,14 +561,11 @@ export default function CompanyDetailPage() {
           </div>
         )}
 
-        {/* Section: Đơn tuyển dụng */}
+        {/* Đơn tuyển dụng */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="px-4 py-3 border-b border-gray-50 flex items-center justify-between">
             <h2 className="text-sm font-semibold text-slate-700">Đơn tuyển dụng ({orders.length})</h2>
-            <button
-              onClick={() => setShowAddOrder(true)}
-              className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 min-h-[36px]"
-            >
+            <button onClick={() => setShowAddOrder(true)} className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 min-h-[36px]">
               + Thêm đơn
             </button>
           </div>
@@ -525,72 +599,65 @@ export default function CompanyDetailPage() {
           )}
         </div>
 
-        {/* Section: Thông tin cơ bản */}
+        {/* Thông tin cơ bản */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="px-4 py-3 border-b border-gray-50 flex items-center justify-between">
             <h2 className="text-sm font-semibold text-slate-700">Thông tin cơ bản</h2>
             {saving && <span className="text-xs text-blue-500 animate-pulse">Đang lưu...</span>}
           </div>
           <div className="p-4 space-y-3">
-            <div><label className="block text-xs text-gray-500 mb-1">Tên công ty</label><input type="text" value={form.company_name} onChange={(e) => setField('company_name', e.target.value)} className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[44px]" /></div>
+            <div><label className="block text-xs text-gray-500 mb-1">Tên công ty</label><input type="text" value={form.company_name} onChange={(e) => setField('company_name', e.target.value)} className={inputCls} /></div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Tên viết tắt</label>
                 <input type="text" value={form.short_name}
                   onChange={(e) => setField('short_name', e.target.value.toUpperCase().replace(/ /g, '_'))}
-                  placeholder="VD: AN_DUONG" className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[44px] font-mono" />
+                  className={inputCls + ' font-mono'} />
                 <p className="text-xs text-gray-400 mt-0.5">Dùng gạch dưới, VD: AN_DUONG</p>
               </div>
-              <div><label className="block text-xs text-gray-500 mb-1">Mã số thuế</label><input type="text" value={form.tax_code} onChange={(e) => setField('tax_code', e.target.value)} placeholder="0123456789" className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[44px]" /></div>
+              <div><label className="block text-xs text-gray-500 mb-1">Mã số thuế</label><input type="text" value={form.tax_code} onChange={(e) => setField('tax_code', e.target.value)} className={inputCls} /></div>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div><label className="block text-xs text-gray-500 mb-1">Người đại diện</label><input type="text" value={form.legal_rep} onChange={(e) => setField('legal_rep', e.target.value)} placeholder="Nguyễn Văn A" className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[44px]" /></div>
-              <div><label className="block text-xs text-gray-500 mb-1">Chức vụ</label><input type="text" value={form.legal_rep_title} onChange={(e) => setField('legal_rep_title', e.target.value)} placeholder="Giám đốc" className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[44px]" /></div>
+              <div><label className="block text-xs text-gray-500 mb-1">Người đại diện</label><input type="text" value={form.legal_rep} onChange={(e) => setField('legal_rep', e.target.value)} className={inputCls} /></div>
+              <div><label className="block text-xs text-gray-500 mb-1">Chức vụ</label><input type="text" value={form.legal_rep_title} onChange={(e) => setField('legal_rep_title', e.target.value)} className={inputCls} /></div>
             </div>
-            <div><label className="block text-xs text-gray-500 mb-1">Địa chỉ</label><input type="text" value={form.address} onChange={(e) => setField('address', e.target.value)} placeholder="Số 1, Đường..., Quận..." className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[44px]" /></div>
+            <div><label className="block text-xs text-gray-500 mb-1">Địa chỉ</label><input type="text" value={form.address} onChange={(e) => setField('address', e.target.value)} className={inputCls} /></div>
             <div className="grid grid-cols-2 gap-3">
-              <div><label className="block text-xs text-gray-500 mb-1">SĐT</label><input type="text" value={form.phone} onChange={(e) => setField('phone', e.target.value)} placeholder="0901..." className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[44px]" /></div>
-              <div><label className="block text-xs text-gray-500 mb-1">Email</label><input type="text" value={form.email} onChange={(e) => setField('email', e.target.value)} placeholder="contact@..." className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[44px]" /></div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div><label className="block text-xs text-gray-500 mb-1">Ngành nghề</label><input type="text" value={form.industry} onChange={(e) => setField('industry', e.target.value)} placeholder="Điện tử, Xây dựng..." className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[44px]" /></div>
-              <div><label className="block text-xs text-gray-500 mb-1">Loại hình DN</label><input type="text" value={form.business_type} onChange={(e) => setField('business_type', e.target.value)} placeholder="VD: TNHH, Cổ phần..." className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[44px]" /></div>
+              <div><label className="block text-xs text-gray-500 mb-1">SĐT</label><input type="text" value={form.phone} onChange={(e) => setField('phone', e.target.value)} className={inputCls} /></div>
+              <div><label className="block text-xs text-gray-500 mb-1">Email</label><input type="text" value={form.email} onChange={(e) => setField('email', e.target.value)} className={inputCls} /></div>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div><label className="block text-xs text-gray-500 mb-1">Cơ quan cấp ĐKKD</label><input type="text" value={form.business_reg_authority} onChange={(e) => setField('business_reg_authority', e.target.value)} placeholder="Sở KH&ĐT..." className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[44px]" /></div>
-              <div><label className="block text-xs text-gray-500 mb-1">Ngày cấp</label><input type="text" value={form.business_reg_date} onChange={(e) => setField('business_reg_date', e.target.value)} placeholder="01/01/2020" className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[44px]" /></div>
+              <div><label className="block text-xs text-gray-500 mb-1">Ngành nghề</label><input type="text" value={form.industry} onChange={(e) => setField('industry', e.target.value)} className={inputCls} /></div>
+              <div><label className="block text-xs text-gray-500 mb-1">Loại hình DN</label><input type="text" value={form.business_type} onChange={(e) => setField('business_type', e.target.value)} className={inputCls} /></div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className="block text-xs text-gray-500 mb-1">Cơ quan cấp ĐKKD</label><input type="text" value={form.business_reg_authority} onChange={(e) => setField('business_reg_authority', e.target.value)} className={inputCls} /></div>
+              <div><label className="block text-xs text-gray-500 mb-1">Ngày cấp</label><input type="text" value={form.business_reg_date} onChange={(e) => setField('business_reg_date', e.target.value)} className={inputCls} /></div>
             </div>
           </div>
         </div>
 
-        {/* Section: Thông tin tiếng Anh */}
+        {/* Thông tin tiếng Anh */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="px-4 py-3 border-b border-gray-50 flex items-center justify-between">
             <h2 className="text-sm font-semibold text-slate-700">Thông tin tiếng Anh</h2>
-            <button
-              onClick={handleTranslate}
-              disabled={translating}
-              className="text-xs bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg min-h-[36px] disabled:opacity-50 flex items-center gap-1"
-            >
-              {translating ? '⏳ Đang dịch...' : '✨ Dịch tự động'}
-            </button>
+            <span className="text-xs text-gray-400">Tự động cập nhật khi lưu</span>
           </div>
           <div className="p-4 space-y-3">
-            <p className="text-xs text-gray-400">Các trường EN được dùng trong tài liệu tuyển dụng. Bấm &ldquo;Dịch tự động&rdquo; để AI điền.</p>
-            <div><label className="block text-xs text-gray-500 mb-1">Company Name (EN)</label><input type="text" readOnly value={company.en_company_name ?? ''} placeholder="Auto-filled by AI" className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 bg-gray-50 text-gray-700 min-h-[44px] cursor-default" /></div>
+            <div><label className="block text-xs text-gray-500 mb-1">Company Name (EN)</label><input type="text" value={form.en_company_name} onChange={(e) => setField('en_company_name', e.target.value)} className={inputCls} /></div>
             <div className="grid grid-cols-2 gap-3">
-              <div><label className="block text-xs text-gray-500 mb-1">Industry (EN)</label><input type="text" readOnly value={company.en_industry ?? ''} placeholder="Auto-filled" className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 bg-gray-50 text-gray-700 min-h-[44px] cursor-default" /></div>
-              <div><label className="block text-xs text-gray-500 mb-1">Business Type (EN)</label><input type="text" readOnly value={company.en_business_type ?? ''} placeholder="Auto-filled" className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 bg-gray-50 text-gray-700 min-h-[44px] cursor-default" /></div>
+              <div><label className="block text-xs text-gray-500 mb-1">Industry (EN)</label><input type="text" value={form.en_industry} onChange={(e) => setField('en_industry', e.target.value)} className={inputCls} /></div>
+              <div><label className="block text-xs text-gray-500 mb-1">Business Type (EN)</label><input type="text" value={form.en_business_type} onChange={(e) => setField('en_business_type', e.target.value)} className={inputCls} /></div>
             </div>
-            <div><label className="block text-xs text-gray-500 mb-1">Address (EN)</label><input type="text" readOnly value={company.en_address ?? ''} placeholder="Auto-filled" className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 bg-gray-50 text-gray-700 min-h-[44px] cursor-default" /></div>
+            <div><label className="block text-xs text-gray-500 mb-1">Address (EN)</label><input type="text" value={form.en_address} onChange={(e) => setField('en_address', e.target.value)} className={inputCls} /></div>
             <div className="grid grid-cols-2 gap-3">
-              <div><label className="block text-xs text-gray-500 mb-1">Legal Rep (EN)</label><input type="text" readOnly value={company.en_legal_rep ?? ''} placeholder="Auto-filled" className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 bg-gray-50 text-gray-700 min-h-[44px] cursor-default" /></div>
-              <div><label className="block text-xs text-gray-500 mb-1">Title (EN)</label><input type="text" readOnly value={company.en_title ?? ''} placeholder="Auto-filled" className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 bg-gray-50 text-gray-700 min-h-[44px] cursor-default" /></div>
+              <div><label className="block text-xs text-gray-500 mb-1">Legal Rep (EN)</label><input type="text" value={form.en_legal_rep} onChange={(e) => setField('en_legal_rep', e.target.value)} className={inputCls} /></div>
+              <div><label className="block text-xs text-gray-500 mb-1">Title (EN)</label><input type="text" value={form.en_title} onChange={(e) => setField('en_title', e.target.value)} className={inputCls} /></div>
             </div>
           </div>
         </div>
 
-        {/* Section: Cơ sở vật chất & Tài liệu */}
+        {/* Cơ sở vật chất & Tài liệu */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="px-4 py-3 border-b border-gray-50">
             <h2 className="text-sm font-semibold text-slate-700">Cơ sở vật chất & Tài liệu</h2>
@@ -637,37 +704,61 @@ export default function CompanyDetailPage() {
 
             {/* Video — Nhà máy */}
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Video nhà máy (YouTube / Drive)</label>
-              <input
-                type="url"
-                value={form.factory_video_url}
-                onChange={(e) => setField('factory_video_url', e.target.value)}
-                placeholder="https://youtube.com/watch?v=..."
-                className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[44px]"
-              />
-              {form.factory_video_url && (
-                <a href={form.factory_video_url} target="_blank" rel="noopener noreferrer"
-                  className="text-xs text-blue-600 hover:underline mt-1 inline-block">▶ Xem video nhà máy</a>
+              <p className="text-xs text-gray-500 mb-2">Video nhà máy</p>
+              {company.factory_video_url ? (
+                <div className="flex items-center gap-2">
+                  <a href={company.factory_video_url} target="_blank" rel="noopener noreferrer"
+                    className="flex-1 flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-lg text-sm text-blue-600 hover:bg-gray-100 truncate min-h-[44px]">
+                    <span>▶</span>
+                    <span className="truncate">Xem video nhà máy</span>
+                  </a>
+                  <button onClick={() => handleVideoDelete('factory')}
+                    className="px-3 py-2 bg-red-50 text-red-500 rounded-lg text-sm hover:bg-red-100 min-h-[44px]">
+                    Xoá
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => factoryVideoRef.current?.click()}
+                  disabled={videoUploading === 'factory'}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 border-2 border-dashed border-gray-300 rounded-xl text-sm text-gray-500 hover:border-blue-400 hover:text-blue-500 transition-colors min-h-[52px]"
+                >
+                  {videoUploading === 'factory' ? '⏳ Đang tải...' : '📹 Upload video nhà máy'}
+                </button>
               )}
+              <input ref={factoryVideoRef} type="file" accept="video/*" className="hidden"
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) handleVideoUpload('factory', f); e.target.value = ''; }} />
             </div>
 
             {/* Video — Công việc */}
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Video công việc (YouTube / Drive)</label>
-              <input
-                type="url"
-                value={form.job_video_url}
-                onChange={(e) => setField('job_video_url', e.target.value)}
-                placeholder="https://youtube.com/watch?v=..."
-                className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[44px]"
-              />
-              {form.job_video_url && (
-                <a href={form.job_video_url} target="_blank" rel="noopener noreferrer"
-                  className="text-xs text-blue-600 hover:underline mt-1 inline-block">▶ Xem video công việc</a>
+              <p className="text-xs text-gray-500 mb-2">Video công việc</p>
+              {company.job_video_url ? (
+                <div className="flex items-center gap-2">
+                  <a href={company.job_video_url} target="_blank" rel="noopener noreferrer"
+                    className="flex-1 flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-lg text-sm text-blue-600 hover:bg-gray-100 truncate min-h-[44px]">
+                    <span>▶</span>
+                    <span className="truncate">Xem video công việc</span>
+                  </a>
+                  <button onClick={() => handleVideoDelete('job')}
+                    className="px-3 py-2 bg-red-50 text-red-500 rounded-lg text-sm hover:bg-red-100 min-h-[44px]">
+                    Xoá
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => jobVideoRef.current?.click()}
+                  disabled={videoUploading === 'job'}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 border-2 border-dashed border-gray-300 rounded-xl text-sm text-gray-500 hover:border-blue-400 hover:text-blue-500 transition-colors min-h-[52px]"
+                >
+                  {videoUploading === 'job' ? '⏳ Đang tải...' : '📹 Upload video công việc'}
+                </button>
               )}
+              <input ref={jobVideoRef} type="file" accept="video/*" className="hidden"
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) handleVideoUpload('job', f); e.target.value = ''; }} />
             </div>
 
-            {/* Documents */}
+            {/* General Documents */}
             <div>
               <div className="flex items-center justify-between mb-2">
                 <p className="text-xs text-gray-500">Tài liệu (PDF, ảnh, Word...)</p>
@@ -697,6 +788,37 @@ export default function CompanyDetailPage() {
               )}
             </div>
           </div>
+        </div>
+
+        {/* BCT & BH Documents */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="px-4 py-3 border-b border-gray-50 flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-slate-700">BCT & BH (Báo cáo thuế & Bảo hiểm)</h2>
+            <button
+              onClick={() => bctInputRef.current?.click()}
+              disabled={bctUploading}
+              className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-lg min-h-[36px] flex items-center gap-1"
+            >
+              {bctUploading ? 'Đang up...' : '+ Upload'}
+            </button>
+          </div>
+          <input ref={bctInputRef} type="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp" multiple className="hidden"
+            onChange={(e) => { uploadBctBh(Array.from(e.target.files ?? [])); e.target.value = ''; }} />
+          {bctDocs.length === 0 ? (
+            <p className="text-xs text-gray-300 text-center py-6">Chưa có tài liệu BCT & BH nào</p>
+          ) : (
+            <div className="divide-y divide-gray-50">
+              {bctDocs.map((doc) => (
+                <div key={doc.url} className="flex items-center gap-2 px-4 py-3">
+                  <span className="text-lg">{docIcon(doc.type)}</span>
+                  <a href={doc.url} target="_blank" rel="noopener noreferrer"
+                    className="flex-1 text-xs text-blue-600 hover:underline truncate font-medium">{doc.name}</a>
+                  <span className="text-xs text-gray-400 flex-shrink-0">{new Date(doc.uploaded_at).toLocaleDateString('vi-VN')}</span>
+                  <button onClick={() => deleteBctBh(doc.url)} className="text-gray-300 hover:text-red-500 text-xs min-w-[32px] min-h-[32px] flex items-center justify-center">✕</button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 

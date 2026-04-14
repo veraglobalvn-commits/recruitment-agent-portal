@@ -204,6 +204,7 @@ export default function Home() {
         const orders: Order[] = (ordersData || []).map((o: any) => ({
           order_id: o.id,
           company: o.company_name,
+          company_id: o.company_id,
           total_labor: o.total_labor,
           missing: o.labor_missing,
           status: o.status || 'N/A',
@@ -215,6 +216,9 @@ export default function Home() {
           meal: o.meal,
           dormitory: o.dormitory,
           recruitment_info: o.recruitment_info,
+          probation: o.probation,
+          probation_salary_pct: o.probation_salary_pct,
+          agent_order_status: o.agent_order_status,
           created_at: o.created_at,
         })).sort((a, b) => {
           const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;

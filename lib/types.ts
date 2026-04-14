@@ -11,6 +11,7 @@ export interface DashboardStats {
 export interface Order {
   order_id: string;
   company: string | null;
+  company_id: string | null;
   total_labor: number | string;
   missing: number | string;
   status: string;
@@ -22,6 +23,9 @@ export interface Order {
   meal: string | null;
   dormitory: string | null;
   recruitment_info: string | null;
+  probation: string | null;
+  probation_salary_pct: number | null;
+  agent_order_status: string | null;
   created_at?: string | null;
 }
 
@@ -90,6 +94,7 @@ export interface Company {
   factory_video_url: string | null;
   job_video_url: string | null;
   doc_links: DocLink[];
+  bct_bh_links: DocLink[];
   en_company_name: string | null;
   en_legal_rep: string | null;
   en_address: string | null;
@@ -123,21 +128,33 @@ export interface AdminOrder {
   total_fee_vn: number | null;
   payment_status_vn: string | null;
   service_fee_per_person: number | null;
+  service_fee_bd_per_person: number | null;
+  total_fee_bd: number | null;
   agent_ids: string[] | null;
-  url_demand_letter: string | null;
   salary_usd: number | null;
   url_order: string | null;
-  legal_status: string | null;
   meal: string | null;
   meal_en: string | null;
   dormitory: string | null;
   dormitory_en: string | null;
   dormitory_note: string | null;
   probation: string | null;
-  probation_months: number | null;
   probation_salary_pct: number | null;
-  recruitment_info: string | null;
-  recruitment_info_en: string | null;
+  agent_order_status: string | null;
+  created_at: string;
+}
+
+export interface OrderHandover {
+  id: string;
+  order_id: string;
+  batch_no: number;
+  candidate_ids: string[];
+  labor_count: number;
+  fee_vnd: number | null;
+  departure_status: 'Chưa xuất cảnh' | 'Đã xuất cảnh' | 'Đã bàn giao';
+  payment_status: 'Chưa TT' | 'Đã TT';
+  payment_date: string | null;
+  note: string | null;
   created_at: string;
 }
 
@@ -155,6 +172,11 @@ export interface Agent {
   role: string | null;
   avatar_url: string | null;
   labor_percentage: number | null;
+  company_name: string | null;
+  company_address: string | null;
+  legal_rep: string | null;
+  legal_rep_title: string | null;
+  license_no: string | null;
+  doc_links: DocLink[];
   created_at?: string | null;
 }
-

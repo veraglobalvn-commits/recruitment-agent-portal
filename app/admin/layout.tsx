@@ -18,6 +18,7 @@ const NAV = [
   { href: '/admin/users', label: 'Tài khoản', icon: '🔑' },
   { href: '/admin/candidates', label: 'Ứng viên', icon: '🧑‍💼' },
   { href: '/admin/reports', label: 'Báo cáo', icon: '📈' },
+  { href: '/admin/policy', label: 'Chính sách', icon: '⚙️' },
 ];
 
 function SidebarContent({
