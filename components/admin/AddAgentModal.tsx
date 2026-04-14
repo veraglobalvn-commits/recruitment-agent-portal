@@ -16,6 +16,7 @@ export default function AddAgentModal({ onClose, onSaved, showRoleSelector }: Ad
     password: '',
     full_name: '',
     short_name: '',
+    agent_id: '',
     role: 'agent',
   });
   const [saving, setSaving] = useState(false);
@@ -29,6 +30,7 @@ export default function AddAgentModal({ onClose, onSaved, showRoleSelector }: Ad
     if (!form.email.trim()) { setError('Email là bắt buộc'); return; }
     if (!form.password || form.password.length < 6) { setError('Mật khẩu phải có ít nhất 6 ký tự'); return; }
     if (!form.full_name.trim()) { setError('Họ tên là bắt buộc'); return; }
+    if (!form.agent_id.trim()) { setError('Agent ID là bắt buộc'); return; }
 
     setSaving(true);
     setError(null);
@@ -60,6 +62,7 @@ export default function AddAgentModal({ onClose, onSaved, showRoleSelector }: Ad
           password: form.password,
           full_name: form.full_name.trim(),
           short_name: form.short_name.trim() || undefined,
+          agent_id: form.agent_id.trim().toUpperCase(),
           role: form.role,
         }),
       });
@@ -142,22 +145,24 @@ export default function AddAgentModal({ onClose, onSaved, showRoleSelector }: Ad
           </div>
 
           <div>
+            <label className="block text-xs text-gray-500 mb-1">Agent ID <span className="text-red-500">*</span></label>
+            <input
+              type="text"
+              value={form.agent_id}
+              onChange={(e) => set('agent_id', e.target.value.toUpperCase())}
+              className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[44px] font-mono"
+            />
+            <p className="text-xs text-gray-400 mt-1">ID dùng để đăng nhập. Ví dụ: GTA, AMBA, NAM-HCM</p>
+          </div>
+
+          <div>
             <label className="block text-xs text-gray-500 mb-1">Tên viết tắt</label>
             <input
               type="text"
               value={form.short_name}
               onChange={(e) => set('short_name', e.target.value)}
-              placeholder="VD: Nam, Hoa..."
               className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[44px]"
             />
-            {form.short_name.trim() && (
-              <p className="text-xs text-gray-400 mt-1">
-                ID đăng nhập:{' '}
-                <span className="font-mono font-medium text-gray-600">
-                  {form.short_name.trim().toUpperCase().replace(/\s+/g, '_')}_{new Date().getFullYear()}
-                </span>
-              </p>
-            )}
           </div>
 
           {showRoleSelector && (

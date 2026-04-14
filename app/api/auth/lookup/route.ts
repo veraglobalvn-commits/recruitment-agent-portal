@@ -28,8 +28,8 @@ export async function POST(req: NextRequest) {
 
     const supabase = getAdminClient();
 
-    // Tìm agent theo id (case-insensitive), VD: NAM_2026
-    const { data: agent, error: agentErr } = await supabase
+    // Tìm agent theo id (case-insensitive), VD: GTA, AMBA
+    let { data: agent, error: agentErr } = await supabase
       .from('agents')
       .select('supabase_uid')
       .ilike('id', username)
@@ -39,8 +39,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Lỗi truy vấn' }, { status: 500 });
     }
 
+    // Fallback: tìm theo short_name
     if (!agent?.supabase_uid) {
-      return NextResponse.json({ error: 'Không tìm thấy tài khoản với ID này (VD: NAM_2026)' }, { status: 404 });
+      const { data: agentByShortName, error: shortNameErr } = await supabase
+        .from('agents')
+        .select('supabase_uid')
+        .ilike('short_name', username)
+        .maybeSingle();
+      if (!shortNameErr && agentByShortName?.supabase_uid) {
+        agent = agentByShortName;
+      }
+    }
+
+    if (!agent?.supabase_uid) {
+      return NextResponse.json({ error: 'Không tìm thấy tài khoản với ID này (VD: GTA, AMBA)' }, { status: 404 });
     }
 
     // Lấy email từ Supabase Auth bằng UID

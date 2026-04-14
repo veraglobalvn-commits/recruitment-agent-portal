@@ -65,10 +65,11 @@ export async function POST(req: NextRequest) {
       password?: string;
       full_name?: string;
       short_name?: string;
+      agent_id?: string;
       role?: string;
     };
 
-    const { email, password, full_name, short_name, role } = body;
+    const { email, password, full_name, short_name, agent_id, role } = body;
 
     if (!email || !password || !full_name) {
       return NextResponse.json(
@@ -77,10 +78,31 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    if (!agent_id?.trim()) {
+      return NextResponse.json(
+        { error: 'Agent ID là bắt buộc' },
+        { status: 400 },
+      );
+    }
+
     if (password.length < 6) {
       return NextResponse.json(
         { error: 'Mật khẩu phải có ít nhất 6 ký tự' },
         { status: 400 },
+      );
+    }
+
+    // Kiểm tra trùng agent_id
+    const normalizedAgentId = agent_id.trim().toUpperCase();
+    const { data: existingById } = await adminClient
+      .from('agents')
+      .select('id')
+      .ilike('id', normalizedAgentId)
+      .maybeSingle();
+    if (existingById) {
+      return NextResponse.json(
+        { error: `Agent ID "${normalizedAgentId}" đã tồn tại` },
+        { status: 409 },
       );
     }
 
@@ -119,15 +141,12 @@ export async function POST(req: NextRequest) {
 
     const uid = authData.user.id;
 
-    const shortNameVal = short_name?.trim() || full_name.trim().split(' ').pop() || 'AGENT';
-    const agentId = `${shortNameVal.toUpperCase().replace(/\s+/g, '_')}_${new Date().getFullYear()}`;
-
     const assignedRole = (role === 'admin' || role === 'agent') ? role : 'agent';
 
     const { data: agentData, error: dbErr } = await adminClient
       .from('agents')
       .insert({
-        id: agentId,
+        id: normalizedAgentId,
         supabase_uid: uid,
         full_name: full_name.trim(),
         short_name: short_name?.trim() || null,
