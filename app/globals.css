@@ -2,6 +2,15 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Highlight required fields that are empty */
+.missing-input {
+  @apply border-red-400 bg-red-50;
+}
+.missing-text {
+  @apply text-red-600 font-medium;
+}
+
+
 body {
   background-color: #f3f4f6;
   font-family: Arial, sans-serif;

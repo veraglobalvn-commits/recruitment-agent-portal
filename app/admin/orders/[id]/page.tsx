@@ -28,6 +28,11 @@ function fmtVnd(val: number | null | undefined) {
   return val.toLocaleString('vi-VN') + ' ₫';
 }
 
+function fmtUSD(val: number | null | undefined) {
+  if (!val) return '';
+  return val.toLocaleString('en-US');
+}
+
 function StatusPill({ label }: { label: string | null }) {
   if (!label) return <span className="text-gray-400 text-xs">—</span>;
   const c: Record<string, string> = {
@@ -232,7 +237,7 @@ export default function OrderDetailPage() {
       job_type: form.job_type.trim() || null,
       job_type_en: form.job_type_en.trim() || null,
       total_labor: form.total_labor ? parseInt(form.total_labor) : null,
-      labor_missing: form.labor_missing ? parseInt(form.labor_missing) : null,
+      labor_missing: (() => { const total = parseInt(form.total_labor) || 0; const passed = (candidates?.filter(c => c.interview_status === 'Passed').length) || 0; return Math.max(0, total - passed); })(),
       salary_usd: form.salary_usd ? parseFloat(form.salary_usd) : null,
       status: form.status || 'Đang tuyển',
       agent_ids: form.agent_ids.length > 0 ? form.agent_ids : null,
@@ -521,8 +526,8 @@ export default function OrderDetailPage() {
             {/* Numbers */}
             <div className="grid grid-cols-3 gap-3">
               <div><label className="block text-xs text-gray-500 mb-1">Số LĐ</label><input type="number" value={form.total_labor} onChange={(e) => setField('total_labor', e.target.value)} className={inputCls} /></div>
-              <div><label className="block text-xs text-gray-500 mb-1">Còn thiếu</label><input type="number" value={form.labor_missing} onChange={(e) => setField('labor_missing', e.target.value)} className={inputCls} /></div>
-              <div><label className="block text-xs text-gray-500 mb-1">Lương (USD)</label><input type="number" value={form.salary_usd} onChange={(e) => setField('salary_usd', e.target.value)} className={inputCls} /></div>
+              <div><label className="block text-xs text-gray-500 mb-1">Còn thiếu</label><p className={inputCls + ' bg-gray-100'}>{(() => { const total = parseInt(form.total_labor) || 0; const passed = (candidates?.filter(c => c.interview_status === 'Passed').length) || 0; const remaining = Math.max(0, total - passed); return remaining; })()}</p></div>
+              <div><label className="block text-xs text-gray-500 mb-1">Lương (USD)</label><input type="text" value={form.salary_usd ? fmtUSD(parseFloat(form.salary_usd)) : ''} onChange={(e) => setField('salary_usd', e.target.value.replace(/,/g, ''))} className={inputCls} /></div>
             </div>
             {/* Status + Agent order status */}
             <div className="grid grid-cols-2 gap-3">
@@ -671,11 +676,11 @@ export default function OrderDetailPage() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Phí DV / người (VNĐ)</label>
-                <input type="number" value={form.service_fee_per_person} onChange={(e) => setField('service_fee_per_person', e.target.value)} className={inputCls} />
+                <input type="text" value={form.service_fee_per_person ? fmtVnd(parseFloat(form.service_fee_per_person)) : ''} onChange={(e) => setField('service_fee_per_person', e.target.value.replace(/\./g, '').replace(/,/g, ''))} className={inputCls} />
               </div>
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Tổng phí DV VN (VNĐ)</label>
-                <input type="number" value={form.total_fee_vn} onChange={(e) => setField('total_fee_vn', e.target.value)} className={inputCls} />
+                <input type="text" value={form.total_fee_vn ? fmtVnd(parseFloat(form.total_fee_vn)) : ''} onChange={(e) => setField('total_fee_vn', e.target.value.replace(/\./g, '').replace(/,/g, ''))} className={inputCls} />
                 {form.total_fee_vn && <p className="text-xs text-gray-400 mt-0.5 text-right">{fmtVnd(parseFloat(form.total_fee_vn))}</p>}
               </div>
             </div>
@@ -703,11 +708,11 @@ export default function OrderDetailPage() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Phí DV / Người (USD)</label>
-                <input type="number" value={form.service_fee_bd_per_person} onChange={(e) => setField('service_fee_bd_per_person', e.target.value)} className={inputCls} />
+                <input type="text" value={form.service_fee_bd_per_person ? fmtVnd(parseFloat(form.service_fee_bd_per_person)) : ''} onChange={(e) => setField('service_fee_bd_per_person', e.target.value.replace(/\./g, '').replace(/,/g, ''))} className={inputCls} />
               </div>
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Tổng phí DV Bangladesh (USD)</label>
-                <input type="number" value={form.total_fee_bd} onChange={(e) => setField('total_fee_bd', e.target.value)} className={inputCls} />
+                <input type="text" value={form.total_fee_bd ? fmtUSD(parseFloat(form.total_fee_bd)) : ''} onChange={(e) => setField('total_fee_bd', e.target.value.replace(/,/g, ''))} className={inputCls} />
               </div>
             </div>
             {form.total_labor && form.service_fee_bd_per_person && (

@@ -281,7 +281,7 @@ export default function AgentDetailPage() {
           <div className="p-4 space-y-3">
             <div><label className="block text-xs text-gray-500 mb-1">Họ tên</label><input type="text" value={form.full_name} onChange={(e) => setField('full_name', e.target.value)} className={inputCls} /></div>
             <div><label className="block text-xs text-gray-500 mb-1">Tên viết tắt</label><input type="text" value={form.short_name} onChange={(e) => setField('short_name', e.target.value)} className={inputCls} /></div>
-            {isAgentBD && <div><label className="block text-xs text-gray-500 mb-1">% Lao động</label><input type="number" min="0" max="100" value={form.labor_percentage} onChange={(e) => setField('labor_percentage', e.target.value)} className={inputCls} /></div>}
+            {isAgentBD && <div><label className="block text-xs text-gray-500 mb-1">% Lao động</label><input type="number" min="0" max="100" value={form.labor_percentage} disabled className={inputCls} /></div>}
             <div>
               <label className="block text-xs text-gray-500 mb-1">Vai trò</label>
               <select value={form.role} onChange={(e) => setField('role', e.target.value)} className={inputCls + ' bg-white'}>

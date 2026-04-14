@@ -191,7 +191,7 @@ export default function OrdersPage() {
               <table className="w-full text-sm min-w-[800px]">
                 <thead className="bg-gray-50 border-b border-gray-100">
                   <tr>
-                    {['Mã đơn', 'Công ty', 'Vị trí', 'LĐ', 'Còn thiếu', 'Lương', 'Trạng thái', 'TT VN', 'Agent', ''].map((h) => (
+                    {['Mã đơn', 'Công ty', 'Vị trí', 'LĐ', 'Còn thiếu', 'Lương', 'Trạng thái', 'TT VN',  ''].map((h) => (
                       <th key={h} className="text-left px-4 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">
                         {h}
                       </th>
@@ -221,9 +221,6 @@ export default function OrdersPage() {
                         <td className="px-4 py-3 text-xs text-gray-600">{o.salary_usd ? `$${o.salary_usd}` : '—'}</td>
                         <td className="px-4 py-3"><StatusPill label={o.status} /></td>
                         <td className="px-4 py-3"><StatusPill label={o.payment_status_vn} /></td>
-                        <td className="px-4 py-3 text-xs text-gray-600">
-                          {agentNames.length > 0 ? agentNames.map((ag) => ag.short_name || ag.full_name).join(', ') : '—'}
-                        </td>
                         <td className="px-4 py-3">
                           <Link href={`/admin/orders/${encodeURIComponent(o.id)}`} className="text-xs text-blue-600 hover:underline font-medium">
                             Xem →
