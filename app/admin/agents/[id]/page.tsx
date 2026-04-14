@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import type { Candidate } from '@/lib/types';
 import Link from 'next/link';
+import Image from 'next/image';
 
 interface AgentData {
   id: string;
@@ -286,7 +287,7 @@ export default function AgentDetailPage() {
                 <div key={c.id_ld} className="px-4 py-3 flex items-center gap-3">
                   <div className="flex-shrink-0">
                     {c.photo_link ? (
-                      <img src={c.photo_link} alt={c.full_name ?? ''} className="w-10 h-10 rounded-full object-cover" />
+                      <Image src={c.photo_link} alt={c.full_name ?? ''} width={40} height={40} className="rounded-full object-cover" />
                     ) : (
                       <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-400 text-xs font-bold">
                         {(c.full_name || '?')[0].toUpperCase()}
