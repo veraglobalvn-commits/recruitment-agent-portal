@@ -202,6 +202,7 @@ scripts/                              # Utility Python scripts (migrations, Lark
 ### Process
 - **Don't execute before plan is approved.** DB migrations always need user confirmation first. Critical bug fixes (data loss) can run immediately but must notify first.
 - **Don't persist with failing approach ≥3 times.** Stop, benchmark alternatives quantitatively, pick highest scoring solution.
+- **DB-before-deploy rule:** Any feature that adds new DB columns MUST provide (1) the `ADD COLUMN IF NOT EXISTS` SQL, (2) a verification `SELECT` to confirm columns exist, and (3) `NOTIFY pgrst, 'reload schema';` — all in one block to run in Supabase SQL Editor **before** merging to main. Never commit code that references columns not yet confirmed in production DB.
 
 ### Data Safety
 - **Data flow principle:** Web ⟺ Supabase is the default. Lark sync (if any): Supabase ⟺ N8N ⟺ Lark. Never let Lark be the primary data source — Supabase must always receive data before Lark.
