@@ -383,13 +383,9 @@ export default function OrderDetail() {
 
   if (loading) return <LoadingSkeleton type="order" />;
 
-  const passedCount = candidates.filter(c => c.interview_status === 'Passed').length;
   const totalLabor = Number(orderData?.total_labor) || 0;
   const agentStatus = orderData ? getAgentOrderStatus(orderData, candidates.length) : null;
 
-  const allocated = currentAgent?.labor_percentage
-    ? Math.round((currentAgent.labor_percentage / 100) * totalLabor)
-    : null;
   const agentPassed = currentAgent
     ? candidates.filter(c => c.agent_id === currentAgent.id && c.interview_status === 'Passed').length
     : 0;
@@ -510,45 +506,20 @@ export default function OrderDetail() {
         {orderData && (
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
             <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">Recruitment Productivity</h3>
-
-            {/* 3-card stats */}
-            <div className="grid grid-cols-3 gap-2 mb-4">
-              {[
-                { label: 'Total Workers', value: totalLabor, color: 'text-slate-800' },
-                { label: 'Passed', value: passedCount, color: 'text-green-600' },
-                { label: 'Remaining', value: Number(orderData.missing) || 0, color: 'text-red-500' },
-              ].map(({ label, value, color }) => (
-                <div key={label} className="bg-gray-50 rounded-xl p-3 text-center">
-                  <p className="text-xs text-gray-400 mb-1">{label}</p>
-                  <p className={`text-xl font-bold ${color}`}>{value}</p>
-                </div>
-              ))}
-            </div>
-
-            {/* Agent quota */}
-            {currentAgent && currentAgentId && allocated !== null ? (
-              <div className="bg-blue-50 rounded-xl px-4 py-3 flex items-center justify-between gap-3">
-                <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider">Your Quota</p>
-                <div className="flex items-center gap-4 text-sm">
-                  <div className="text-center">
-                    <p className="text-xs text-gray-400">Allocated</p>
-                    <p className="font-bold text-slate-800">{allocated}</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-xs text-gray-400">Passed</p>
-                    <p className="font-bold text-green-600">{agentPassed}</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-xs text-gray-400">Remaining</p>
-                    <p className="font-bold text-red-500">{Math.max(0, allocated - agentPassed)}</p>
-                  </div>
-                </div>
+            <div className="flex items-center justify-between text-center">
+              <div>
+                <p className="text-xs text-gray-400 mb-1">Tổng cần tuyển</p>
+                <p className="text-2xl font-bold text-slate-800">{totalLabor}</p>
               </div>
-            ) : (
-              currentAgentId === null || (currentAgentId && !currentAgent) ? null : (
-                <p className="text-gray-400 text-sm text-center py-2">You are not assigned to this order</p>
-              )
-            )}
+              <div>
+                <p className="text-xs text-gray-400 mb-1">Đã passed</p>
+                <p className="text-2xl font-bold text-green-600">{agentPassed}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-400 mb-1">Còn thiếu</p>
+                <p className="text-2xl font-bold text-red-500">{Math.max(0, totalLabor - agentPassed)}</p>
+              </div>
+            </div>
           </div>
         )}
 
