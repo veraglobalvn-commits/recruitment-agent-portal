@@ -188,31 +188,30 @@ export default function OrderDetailPage() {
     if (!order) return;
     setSaving(true);
     setSaveMsg(null);
-    const { error } = await supabase.from('orders').update({
-      job_type: form.job_type.trim() || null,
-      job_type_en: form.job_type_en.trim() || null,
-      total_labor: form.total_labor ? parseInt(form.total_labor) : null,
-      labor_missing: form.labor_missing ? parseInt(form.labor_missing) : null,
-      salary_usd: form.salary_usd ? parseFloat(form.salary_usd) : null,
-      status: form.status || 'Đang tuyển',
-      legal_status: form.legal_status.trim() || null,
-      agent_ids: form.agent_ids.length > 0 ? form.agent_ids : null,
-      total_fee_vn: form.total_fee_vn ? parseFloat(form.total_fee_vn) : null,
-      service_fee_per_person: form.service_fee_per_person ? parseFloat(form.service_fee_per_person) : null,
-      payment_status_vn: form.payment_status_vn || 'Chưa TT',
-      url_demand_letter: form.url_demand_letter.trim() || null,
-      url_order: form.url_order.trim() || null,
-      meal: form.meal || null,
-      meal_en: form.meal_en.trim() || null,
-      dormitory: form.dormitory || null,
-      dormitory_en: form.dormitory_en.trim() || null,
-      dormitory_note: form.dormitory_note.trim() || null,
-      probation: form.probation || 'Không',
-      probation_months: form.probation === 'Có' && form.probation_months ? parseInt(form.probation_months) : null,
-      probation_salary_pct: form.probation === 'Có' && form.probation_salary_pct ? parseInt(form.probation_salary_pct) : null,
-      recruitment_info: form.recruitment_info.trim() || null,
-      recruitment_info_en: form.recruitment_info_en.trim() || null,
-    }).eq('id', id);
+const { error } = await supabase.from('orders').update({ 
+    job_type: form.job_type.trim() || null, 
+    job_type_en: form.job_type_en.trim() || null, 
+    total_labor: form.total_labor ? parseInt(form.total_labor) : null, 
+    labor_missing: form.labor_missing ? parseInt(form.labor_missing) : null, 
+    salary_usd: form.salary_usd ? parseFloat(form.salary_usd) : null, 
+    status: form.status || 'Đang tuyển', 
+    legal_status: form.legal_status.trim() || null, 
+    agent_ids: form.agent_ids.length > 0 ? form.agent_ids : null, 
+    total_fee_vn: form.total_fee_vn ? parseFloat(form.total_fee_vn) : null, 
+    service_fee_per_person: form.service_fee_per_person ? parseFloat(form.service_fee_per_person) : null, 
+    payment_status_vn: form.payment_status_vn || 'Chưa TT', 
+    url_demand_letter: form.url_demand_letter.trim() || null, 
+    url_order: form.url_order.trim() || null, 
+    meal: form.meal || null, 
+    meal_en: form.meal_en.trim() || null, 
+    dormitory_en: form.dormitory_en.trim() || null, 
+    dormitory_note: form.dormitory_note.trim() || null, 
+    probation: form.probation || 'Không', 
+    probation_months: form.probation === 'Có' && form.probation_months ? parseInt(form.probation_months) : null, 
+    probation_salary_pct: form.probation === 'Có' && form.probation_salary_pct ? parseInt(form.probation_salary_pct) : null, 
+    recruitment_info: form.recruitment_info.trim() || null, 
+    recruitment_info_en: form.recruitment_info_en.trim() || null, 
+}).eq('id', id);
     setSaving(false);
     if (error) { setSaveMsg(`❌ ${error.message}`); return; }
     setSaveMsg('✅ Đã lưu');
