@@ -190,13 +190,19 @@ export default function Home() {
         } : null;
 
         // Fetch orders separately
+        // Use .filter() with quoted array element to handle spaces in agent IDs (e.g. "GTA 2026")
         let ordersData;
         try {
           const ordersRes = await supabase
             .from('orders')
             .select('*')
-            .contains('agent_ids', [agentData.id]);
-          ordersData = ordersRes.data;
+            .filter('agent_ids', 'cs', `{"${agentData.id.replace(/"/g, '\\"')}"}`);
+          if (ordersRes.error) {
+            console.error('Orders query error:', ordersRes.error.message);
+            ordersData = [];
+          } else {
+            ordersData = ordersRes.data;
+          }
         } catch (ordersErr) {
           ordersData = [];
         }
