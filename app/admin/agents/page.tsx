@@ -40,7 +40,7 @@ export default function AgentsPage() {
     setLoading(true);
     try {
       const [agentsRes, ordersRes, candidatesRes] = await Promise.all([
-        supabase.from('agents').select('id, full_name, short_name, labor_percentage').eq('role', 'agent'),
+        supabase.from('agents').select('id, full_name, short_name, labor_percentage').eq('role', 'agent').order('created_at', { ascending: false }),
         supabase.from('orders').select('id, agent_ids, total_labor'),
         supabase.from('candidates').select('id_ld, agent_id, interview_status'),
       ]);

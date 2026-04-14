@@ -166,6 +166,18 @@ export default function CompanyFormModal({ onClose, onSaved }: CompanyFormModalP
         .select()
         .single();
       if (dbErr) throw new Error(dbErr.message);
+      // Fire-and-forget translate after company creation
+      if (data?.id) {
+        supabase.auth.getSession().then(({ data: { session } }) => {
+          if (session?.access_token) {
+            fetch('/api/translate', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+              body: JSON.stringify({ company_id: data.id }),
+            }).catch(() => {});
+          }
+        });
+      }
       onSaved(data as Company, andAddOrder);
     } catch (err) {
       setError(`Lưu thất bại: ${err instanceof Error ? err.message : String(err)}`);

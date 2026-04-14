@@ -196,7 +196,7 @@ export default function CompanyDetailPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  const handleSave = useCallback(async () => {
+  const handleSave = useCallback(async (andTranslate = false) => {
     setSaving(true);
     setSaveMsg(null);
     const { error } = await supabase.from('companies').update({
@@ -224,8 +224,8 @@ export default function CompanyDetailPage() {
     setSaveMsg('✅ Đã lưu');
     setDirty(false);
     setTimeout(() => setSaveMsg(null), 3000);
-    // Auto-translate silently after save
-    handleTranslateSilent();
+    // Translate only when explicitly requested (save button, not auto-save)
+    if (andTranslate) handleTranslateSilent();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, form]);
 
@@ -488,7 +488,7 @@ export default function CompanyDetailPage() {
         </div>
         {saveMsg && <span className="text-xs text-green-600 font-medium">{saveMsg}</span>}
         <button
-          onClick={handleSave}
+          onClick={() => handleSave(true)}
           disabled={saving}
           className={`px-4 py-2 rounded-xl text-sm font-semibold min-h-[44px] transition-colors ${
             dirty ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-100 text-gray-400 cursor-default'

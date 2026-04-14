@@ -7,7 +7,7 @@ import type { AdminOrder, AgentOption } from '@/lib/types';
 import Link from 'next/link';
 import AddOrderModal from '@/components/admin/AddOrderModal';
 
-type StatusFilter = 'all' | 'Đang tuyển' | 'Đã tuyển đủ';
+type StatusFilter = 'all' | 'Not Started' | 'On-going' | 'Finished' | 'Cancelled';
 
 function fmtVnd(val: number | null | undefined) {
   if (!val) return '—';
@@ -19,8 +19,6 @@ function fmtVnd(val: number | null | undefined) {
 function StatusPill({ label }: { label: string | null }) {
   if (!label) return <span className="text-gray-400 text-xs">—</span>;
   const c: Record<string, string> = {
-    'Đang tuyển': 'bg-amber-100 text-amber-700',
-    'Đã tuyển đủ': 'bg-green-100 text-green-700',
     'Chưa TT': 'bg-red-100 text-red-600',
     'Đã TT': 'bg-green-100 text-green-700',
     'TT lan 1': 'bg-blue-100 text-blue-700',
@@ -30,14 +28,23 @@ function StatusPill({ label }: { label: string | null }) {
   return <span className={`text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap ${c[label] ?? 'bg-gray-100 text-gray-600'}`}>{label}</span>;
 }
 
+function recruitStatusInfo(o: AdminOrder): { label: string; cls: string } {
+  if (o.status === 'Cancelled') return { label: 'Cancelled', cls: 'bg-red-100 text-red-600' };
+  if (o.status === 'Finished' || o.labor_missing === 0) return { label: 'Đã tuyển xong', cls: 'bg-green-100 text-green-700' };
+  if (o.status === 'Not Started') return { label: 'Chưa tuyển', cls: 'bg-gray-100 text-gray-600' };
+  return { label: 'Đang tuyển', cls: 'bg-amber-100 text-amber-700' };
+}
+
 function isMissingOrder(o: AdminOrder) {
   return !o.job_type || !o.service_fee_per_person || !o.agent_ids?.length;
 }
 
 const STATUS_FILTERS: { key: StatusFilter; label: string }[] = [
   { key: 'all', label: 'Tất cả' },
-  { key: 'Đang tuyển', label: 'Đang tuyển' },
-  { key: 'Đã tuyển đủ', label: 'Đã tuyển đủ' },
+  { key: 'Not Started', label: 'Chưa tuyển' },
+  { key: 'On-going', label: 'Đang tuyển' },
+  { key: 'Finished', label: 'Đã tuyển xong' },
+  { key: 'Cancelled', label: 'Cancelled' },
 ];
 
 export default function OrdersPage() {
@@ -100,7 +107,7 @@ export default function OrdersPage() {
     }
   }, [searchParams]);
 
-  const activeCount = orders.filter((o) => o.status !== 'Đã tuyển đủ').length;
+  const activeCount = orders.filter((o) => o.status === 'On-going' || o.status === 'Not Started').length;
 
   return (
     <div className="p-4 pb-24 space-y-4">
@@ -169,7 +176,7 @@ export default function OrdersPage() {
                 >
                   <div className="flex justify-between items-start mb-1.5 gap-2">
                     <span className="font-semibold text-sm text-blue-600 truncate">{o.id}</span>
-                    <StatusPill label={o.status} />
+                    {(() => { const r = recruitStatusInfo(o); return <span className={`text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap ${r.cls}`}>{r.label}</span>; })()}
                   </div>
                   <p className="text-xs text-gray-700 font-medium truncate">{o.company_name || '—'}</p>
                   <p className="text-xs text-gray-400 mt-0.5">{o.job_type || '—'} {o.salary_usd ? `· $${o.salary_usd}` : ''}</p>
@@ -223,7 +230,7 @@ export default function OrdersPage() {
                         <td className="px-4 py-3 text-xs font-semibold text-slate-700">{o.total_labor ?? '—'}</td>
                         <td className="px-4 py-3 text-xs text-red-400">{o.labor_missing ?? '—'}</td>
                         <td className="px-4 py-3 text-xs text-gray-600">{o.salary_usd ? `$${o.salary_usd}` : '—'}</td>
-                        <td className="px-4 py-3"><StatusPill label={o.status} /></td>
+                        <td className="px-4 py-3">{(() => { const r = recruitStatusInfo(o); return <span className={`text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap ${r.cls}`}>{r.label}</span>; })()}</td>
                         <td className="px-4 py-3"><StatusPill label={o.payment_status_vn} /></td>
                         <td className="px-4 py-3">
                           <Link href={`/admin/orders/${encodeURIComponent(o.id)}`} className="text-xs text-blue-600 hover:underline font-medium">

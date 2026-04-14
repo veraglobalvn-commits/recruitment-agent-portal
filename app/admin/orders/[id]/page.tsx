@@ -7,7 +7,6 @@ import type { Candidate, AdminOrder, AgentOption, OrderHandover, OrderPayment } 
 import CandidateCard from '@/components/CandidateCard';
 import Link from 'next/link';
 
-const STATUS_OPTIONS = ['Đang tuyển', 'Đã tuyển đủ', 'Cancelled'];
 
 const MEAL_OPTIONS = [
   '1 bữa chính, 1 bữa tăng ca',
@@ -25,13 +24,21 @@ import { fmtVND, fmtUSD } from '@/lib/formatters';
 function StatusPill({ label }: { label: string | null }) {
   if (!label) return <span className="text-gray-400 text-xs">—</span>;
   const c: Record<string, string> = {
-    'Đang tuyển': 'bg-amber-100 text-amber-700',
-    'Đã tuyển đủ': 'bg-green-100 text-green-700',
+    'Not Started': 'bg-gray-100 text-gray-600',
+    'On-going': 'bg-amber-100 text-amber-700',
+    'Finished': 'bg-green-100 text-green-700',
     'Cancelled': 'bg-red-100 text-red-600',
     'Chưa TT': 'bg-red-100 text-red-600',
     'Đã TT': 'bg-green-100 text-green-700',
   };
   return <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${c[label] ?? 'bg-gray-100 text-gray-600'}`}>{label}</span>;
+}
+
+function RecruitmentPill({ status, laborMissing }: { status: string; laborMissing: number | null }) {
+  if (status === 'Cancelled') return <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-red-100 text-red-600">Đã huỷ</span>;
+  if (status === 'Finished' || laborMissing === 0) return <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-green-100 text-green-700">Đã tuyển xong</span>;
+  if (status === 'Not Started') return <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-gray-100 text-gray-600">Chưa tuyển</span>;
+  return <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-amber-100 text-amber-700">Đang tuyển</span>;
 }
 
 function ProgressBar({ value, max }: { value: number; max: number }) {
@@ -87,7 +94,7 @@ export default function OrderDetailPage() {
     total_labor: '',
     labor_missing: '',
     salary_usd: '',
-    status: 'Đang tuyển',
+    status: 'Not Started',
     agent_ids: [] as string[],
     total_fee_vn: '',
     service_fee_per_person: '',
@@ -247,7 +254,15 @@ export default function OrderDetailPage() {
       total_labor: form.total_labor ? parseInt(form.total_labor) : null,
       labor_missing: (() => { const total = parseInt(form.total_labor) || 0; const passed = (candidates?.filter(c => c.interview_status === 'Passed').length) || 0; return Math.max(0, total - passed); })(),
       salary_usd: form.salary_usd ? parseFloat(form.salary_usd) : null,
-      status: form.status || 'Đang tuyển',
+      status: (() => {
+        if (form.status === 'Cancelled') return 'Cancelled';
+        const passedCount = (candidates?.filter(c => c.interview_status === 'Passed').length) ?? 0;
+        const totalLabor = parseInt(form.total_labor) || 0;
+        const candCount = candidates?.length ?? 0;
+        if (candCount === 0) return 'Not Started';
+        if (totalLabor > 0 && passedCount >= totalLabor) return 'Finished';
+        return 'On-going';
+      })(),
       agent_ids: form.agent_ids.length > 0 ? form.agent_ids : null,
       total_fee_vn: form.total_fee_vn ? parseFloat(form.total_fee_vn) : null,
       service_fee_per_person: form.service_fee_per_person ? parseFloat(form.service_fee_per_person) : null,
@@ -326,6 +341,11 @@ export default function OrderDetailPage() {
     }
     setShowHandoverPicker(false);
     setPickerSelected([]);
+  };
+
+  const handleSetStatus = async (newStatus: 'Finished' | 'Cancelled') => {
+    await supabase.from('orders').update({ status: newStatus }).eq('id', id);
+    setForm((f) => ({ ...f, status: newStatus }));
   };
 
   const updateHandover = async (handoverId: string, updates: Partial<OrderHandover>) => {
@@ -491,7 +511,7 @@ export default function OrderDetailPage() {
           <p className="text-sm font-bold truncate text-slate-800">{order.id}</p>
           {order.company_name && <p className="text-xs text-gray-400 truncate">{order.company_name}</p>}
         </div>
-        <StatusPill label={form.status} />
+        <RecruitmentPill status={form.status} laborMissing={(() => { const total = parseInt(form.total_labor) || 0; const passed = (candidates?.filter(c => c.interview_status === 'Passed').length) || 0; return Math.max(0, total - passed); })()} />
         {saveMsg && <span className="text-xs text-green-600 font-medium hidden sm:inline">{saveMsg}</span>}
         <button
           onClick={handleSave}
@@ -550,8 +570,25 @@ export default function OrderDetailPage() {
               <div><label className="block text-xs text-gray-500 mb-1">Còn thiếu</label><p className={inputCls(form.total_labor) + ' bg-gray-100'}>{(() => { const total = parseInt(form.total_labor) || 0; const passed = (candidates?.filter(c => c.interview_status === 'Passed').length) || 0; const remaining = Math.max(0, total - passed); return remaining; })()}</p></div>
               <div><label className="block text-xs text-gray-500 mb-1">Lương (USD)</label><input type="text" value={form.salary_usd ? fmtUSD(parseFloat(form.salary_usd)) : ''} onChange={(e) => setField('salary_usd', e.target.value.replace(/,/g, ''))} className={inputCls(form.salary_usd)} /></div>
             </div>
-            {/* Status */}
-            <div><label className="block text-xs text-gray-500 mb-1">Trạng thái</label><select value={form.status} onChange={(e) => setField('status', e.target.value)} className={`${inputCls(form.status)} bg-white`}>{STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}</select></div>
+            {/* Recruitment status + override buttons */}
+            <div className="flex items-center gap-3 flex-wrap">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Trạng thái tuyển dụng</label>
+                <RecruitmentPill status={form.status} laborMissing={(() => { const total = parseInt(form.total_labor) || 0; const passed = (candidates?.filter(c => c.interview_status === 'Passed').length) || 0; return Math.max(0, total - passed); })()} />
+              </div>
+              <div className="flex gap-2 ml-auto mt-3">
+                <button
+                  onClick={() => handleSetStatus('Finished')}
+                  disabled={form.status === 'Finished'}
+                  className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-green-100 text-green-700 hover:bg-green-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors min-h-[36px]"
+                >Đánh dấu Hoàn thành</button>
+                <button
+                  onClick={() => handleSetStatus('Cancelled')}
+                  disabled={form.status === 'Cancelled'}
+                  className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-red-100 text-red-600 hover:bg-red-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors min-h-[36px]"
+                >Huỷ đơn</button>
+              </div>
+            </div>
             {/* Meal */}
             <div className="grid grid-cols-2 gap-3">
               <div>

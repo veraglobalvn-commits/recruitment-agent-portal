@@ -64,7 +64,8 @@ export default function UsersPage() {
     try {
       const { data, error } = await supabase
         .from('agents')
-        .select('id, full_name, short_name, role');
+        .select('id, full_name, short_name, role')
+        .order('created_at', { ascending: false });
       if (error) throw new Error(error.message);
       setUsers((data ?? []) as UserRow[]);
     } catch (err) {

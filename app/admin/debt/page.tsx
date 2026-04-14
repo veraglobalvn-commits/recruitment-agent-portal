@@ -28,7 +28,7 @@ export default function DebtPage() {
   const load = useCallback(async () => {
     setLoading(true);
     const [ordersRes, paymentsRes] = await Promise.all([
-      supabase.from('orders').select('id, company_name, total_fee_vn, total_fee_bd'),
+      supabase.from('orders').select('id, company_name, total_fee_vn, total_fee_bd').order('created_at', { ascending: false }),
       supabase.from('order_payments').select('order_id, payment_party, currency, amount'),
     ]);
 
