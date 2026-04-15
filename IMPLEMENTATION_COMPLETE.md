@@ -3,7 +3,7 @@
 ## Overview
 
 This implementation adds async tracking for three document generation features:
-1. **Translation System** - Vietnamese → English translation using Kimi 2.5 API
+1. **Translation System** - Vietnamese → English translation using OpenAI GPT-4
 2. **YCTD Generation** - Automated recruitment request documents
 3. **Contract Generation** - Basic/Advanced contract creation
 
@@ -172,7 +172,7 @@ See `DEPLOYMENT_CHECKLIST.md` for tracking progress.
 ### N8N Workflows
 
 **Translate Entity:**
-- Webhook → Update status → Fetch request → Fetch entity → Call Kimi API → Parse response → Update entity → Update request → Respond
+- Webhook → Update status → Fetch request → Fetch entity → Call OpenAI AI Agent → Parse response → Update entity → Update request → Respond
 
 **Create Recruitment Request:**
 - Webhook → Update status → Fetch request → Fetch order → Fetch agent → Validate → Copy template → Fill data → Export PDF → Upload to Supabase → Update request → Respond
@@ -195,8 +195,8 @@ NEXT_PUBLIC_YCTD_TEMPLATE_URL=https://docs.google.com/document/d/YOUR_YCTD_TEMPL
 NEXT_PUBLIC_CONTRACT_BASIC_TEMPLATE_URL=https://docs.google.com/document/d/YOUR_BASIC_CONTRACT_TEMPLATE_ID/edit
 NEXT_PUBLIC_CONTRACT_ADVANCED_TEMPLATE_URL=https://docs.google.com/document/d/YOUR_ADVANCED_CONTRACT_TEMPLATE_ID/edit
 
-# Kimi API
-KIMI_API_KEY=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
+# OpenAI API
+OPENAI_API_KEY=your-openai-api-key
 ```
 
 ### N8N Environment Variables

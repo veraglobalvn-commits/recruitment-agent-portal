@@ -132,14 +132,14 @@ You'll need these for environment variables:
    - **API Key**: Your Supabase Service Role Key (from `.env` or Supabase dashboard)
 5. Click "Save"
 
-### 3.2 Kimi API Credential
-1. Click "Add Credential"
-2. Search for "Header Auth"
-3. Fill in:
-   - **Name**: Kimi API Key
-   - **Header Name**: `Authorization`
-   - **Header Value**: `Bearer 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`
-4. Click "Save"
+### 3.2 OpenAI API Credential
+1. In n8n, go to Credentials (left sidebar)
+2. Click "Add Credential"
+3. Search for "OpenAI API"
+4. Fill in:
+   - **Name**: OpenAI API
+   - **API Key**: Your OpenAI API key (from `.env` or OpenAI dashboard)
+5. Click "Save"
 
 ### 3.3 Google Drive OAuth Credential
 This should already exist (credential ID: `pQ6qTSMZRoiqUMQV`).
@@ -169,8 +169,8 @@ For each workflow:
 
 **Credential mapping:**
 - All Supabase nodes → "Supabase Service Role"
-- "Call Kimi API" node → "Kimi API Key"
-- "Copy Google Docs Template" node → "Google Drive OAuth2 API"
+- "AI Translation Agent" node → "OpenAI API"
+- "Copy Google Docs Template" node → "Google Drive OAuth2API"
 - "Fill Data to Docs" node → "Google Docs OAuth2Api"
 - "Export PDF" node → "Google Drive OAuth2Api"
 
@@ -194,6 +194,9 @@ SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 NEXT_PUBLIC_YCTD_TEMPLATE_URL=https://docs.google.com/document/d/YOUR_YCTD_TEMPLATE_ID/edit
 NEXT_PUBLIC_CONTRACT_BASIC_TEMPLATE_URL=https://docs.google.com/document/d/YOUR_BASIC_CONTRACT_TEMPLATE_ID/edit
 NEXT_PUBLIC_CONTRACT_ADVANCED_TEMPLATE_URL=https://docs.google.com/document/d/YOUR_ADVANCED_CONTRACT_TEMPLATE_ID/edit
+
+# OpenAI API
+OPENAI_API_KEY=your-openai-api-key
 ```
 
 **Note:** Replace `YOUR_*_TEMPLATE_ID` with actual Google Docs document IDs.
@@ -226,8 +229,8 @@ NEXT_PUBLIC_YCTD_TEMPLATE_URL=https://docs.google.com/document/d/YOUR_YCTD_TEMPL
 NEXT_PUBLIC_CONTRACT_BASIC_TEMPLATE_URL=https://docs.google.com/document/d/YOUR_BASIC_CONTRACT_TEMPLATE_ID/edit
 NEXT_PUBLIC_CONTRACT_ADVANCED_TEMPLATE_URL=https://docs.google.com/document/d/YOUR_ADVANCED_CONTRACT_TEMPLATE_ID/edit
 
-# Kimi API
-KIMI_API_KEY=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
+# OpenAI API
+OPENAI_API_KEY=your-openai-api-key
 ```
 
 **Important:**
