@@ -21,9 +21,13 @@ export interface Order {
   salary_usd: number | null;
   url_order: string | null;
   meal: string | null;
+  meal_en: string | null;
   dormitory: string | null;
+  dormitory_en: string | null;
   recruitment_info: string | null;
+  recruitment_info_en: string | null;
   probation: string | null;
+  probation_en: string | null;
   probation_months?: number | null;
   probation_salary_pct: number | null;
   agent_order_status: string | null;
@@ -149,7 +153,10 @@ export interface AdminOrder {
   dormitory: string | null;
   dormitory_en: string | null;
   dormitory_note: string | null;
+  recruitment_info: string | null;
+  recruitment_info_en: string | null;
   probation: string | null;
+  probation_en: string | null;
   probation_months?: number | null;
   probation_salary_pct: number | null;
   agent_order_status: string | null;
