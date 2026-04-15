@@ -68,6 +68,8 @@ export default function OrderDetailPage() {
 
   const [order, setOrder] = useState<AdminOrder | null>(null);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
+  const [enCompanyName, setEnCompanyName] = useState<string>('');
+  const [enIndustry, setEnIndustry] = useState<string>('');
   const [agents, setAgents] = useState<AgentOption[]>([]);
   const [agentLaborAllocations, setAgentLaborAllocations] = useState<Record<string, string>>({});
   const [handovers, setHandovers] = useState<OrderHandover[]>([]);
@@ -156,31 +158,39 @@ export default function OrderDetailPage() {
 
     if (ordRes.data) {
       const o = ordRes.data as AdminOrder;
-      setOrder(o);
-      setDocLinks((o.doc_links as OrderDocLink[]) ?? []);
-      setForm({
-        job_type: o.job_type ?? '',
-        job_type_en: o.job_type_en ?? '',
-        total_labor: o.total_labor?.toString() ?? '',
-        labor_missing: o.labor_missing?.toString() ?? '',
-        salary_usd: o.salary_usd?.toString() ?? '',
-        status: o.status ?? 'Not Started',
-        agent_ids: o.agent_ids ?? [],
-        total_fee_vn: o.total_fee_vn?.toString() ?? '',
-        service_fee_per_person: o.service_fee_per_person?.toString() || policyMap.default_fee_vnd || '',
-        service_fee_bd_per_person: o.service_fee_bd_per_person?.toString() ?? '',
-        total_fee_bd: o.total_fee_bd?.toString() ?? '',
-        url_order: o.url_order ?? '',
-        meal: o.meal ?? '1 bữa chính, 1 bữa tăng ca',
-        meal_en: o.meal_en ?? '',
-        dormitory: o.dormitory ?? 'Miễn phí',
-        dormitory_en: o.dormitory_en ?? '',
-        dormitory_note: o.dormitory_note ?? '',
-        probation: o.probation ?? 'Không',
-        probation_en: o.probation_en ?? '',
-        probation_salary_pct: o.probation_salary_pct?.toString() ?? '',
-        agent_order_status: o.agent_order_status ?? '',
-      });
+setOrder(o);
+        // Load English company name and industry if available
+        if (o.company_id) {
+          const { data: compData, error: compError } = await supabase.from('companies').select('en_company_name, en_industry').eq('id', o.company_id).single();
+          if (!compError) {
+            setEnCompanyName(compData?.en_company_name ?? '');
+            setEnIndustry(compData?.en_industry ?? '');
+          }
+        }
+        setDocLinks((o.doc_links as OrderDocLink[]) ?? []);
+        setForm({
+          job_type: o.job_type ?? '',
+          job_type_en: o.job_type_en ?? '',
+          total_labor: o.total_labor?.toString() ?? '',
+          labor_missing: o.labor_missing?.toString() ?? '',
+          salary_usd: o.salary_usd?.toString() ?? '',
+          status: o.status ?? 'Not Started',
+          agent_ids: o.agent_ids ?? [],
+          total_fee_vn: o.total_fee_vn?.toString() ?? '',
+          service_fee_per_person: o.service_fee_per_person?.toString() || policyMap.default_fee_vnd || '',
+          service_fee_bd_per_person: o.service_fee_bd_per_person?.toString() ?? '',
+          total_fee_bd: o.total_fee_bd?.toString() ?? '',
+          url_order: o.url_order ?? '',
+          meal: o.meal ?? '1 bữa chính, 1 bữa tăng ca',
+          meal_en: o.meal_en ?? '',
+          dormitory: o.dormitory ?? 'Miễn phí',
+          dormitory_en: o.dormitory_en ?? '',
+          dormitory_note: o.dormitory_note ?? '',
+          probation: o.probation ?? 'Không',
+          probation_en: o.probation_en ?? '',
+          probation_salary_pct: o.probation_salary_pct?.toString() ?? '',
+          agent_order_status: o.agent_order_status ?? '',
+        });
     }
     setCandidates((candRes.data ?? []) as Candidate[]);
     const agentsData = (agRes.data ?? []) as (AgentOption & { labor_percentage: number | null })[];
@@ -696,7 +706,7 @@ export default function OrderDetailPage() {
           </div>
           <div className="p-4 space-y-3">
             {/* Job type VN */}
-            <div><label className="block text-xs text-gray-500 mb-1">Vị trí / Loại lao động</label><input type="text" value={form.job_type} onChange={(e) => setField('job_type', e.target.value)} className={inputCls(form.job_type)} /></div>
+            <div><label className="block text-xs text-gray-500 mb-1">Vị trí / Loại lao động</label><input type="text" value={form.job_type_en || form.job_type} onChange={(e) => setField('job_type', e.target.value)} className={inputCls(form.job_type_en || form.job_type)} /></div>
             {/* Numbers */}
             <div className="grid grid-cols-3 gap-3">
               <div><label className="block text-xs text-gray-500 mb-1">Số LĐ</label><input type="number" value={form.total_labor} onChange={(e) => setField('total_labor', e.target.value)} className={inputCls(form.total_labor)} /></div>
@@ -711,7 +721,7 @@ export default function OrderDetailPage() {
             {/* Meal */}
             <div>
               <label className="block text-xs text-gray-500 mb-1">Hỗ trợ bữa ăn</label>
-              <select value={form.meal} onChange={(e) => setField('meal', e.target.value)} className={`${inputCls(form.meal)} bg-white`}>
+              <select value={form.meal_en || form.meal} onChange={(e) => setField('meal', e.target.value)} className={`${inputCls(form.meal_en || form.meal)} bg-white`}>
                 {MEAL_OPTIONS.map((m) => <option key={m} value={m}>{m}</option>)}
               </select>
             </div>
@@ -719,7 +729,7 @@ export default function OrderDetailPage() {
             <div>
               <label className="block text-xs text-gray-500 mb-1">Hỗ trợ nhà ở</label>
               <div className="flex gap-2">
-                <select value={form.dormitory} onChange={(e) => setField('dormitory', e.target.value)} className={`${inputCls(form.dormitory)} bg-white flex-1`}>
+                <select value={form.dormitory_en || form.dormitory} onChange={(e) => setField('dormitory', e.target.value)} className={`${inputCls(form.dormitory_en || form.dormitory)} bg-white flex-1`}>
                   {DORMITORY_OPTIONS.map((d) => <option key={d} value={d}>{d}</option>)}
                 </select>
                 {form.dormitory === 'Có phí' && (
@@ -852,7 +862,7 @@ export default function OrderDetailPage() {
                     </div>
                     <div className="grid grid-cols-3 gap-2">
                       <div>
-                        <label className="block text-xs text-gray-500 mb-1">Số người</label>
+                        <label className="block text-xs text-gray-500 mb-1">Total Workers</label>
                         <input type="number" min="0" value={allocation} onChange={(e) => handleAgentAllocationChange(ag.id, e.target.value)}
                           className="w-full text-xs border border-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-400" />
                       </div>
@@ -930,14 +940,16 @@ export default function OrderDetailPage() {
               {translating ? '⏳ Đang dịch...' : '🌐 Dịch'}
             </button>
           </div>
-           <div className="p-4 space-y-3">
-             <div><label className="block text-xs text-gray-500 mb-1">Job Type (EN)</label><input type="text" value={form.job_type_en} onChange={(e) => setField('job_type_en', e.target.value)} className={inputClsBase} /></div>
-             <div className="grid grid-cols-2 gap-3">
-               <div><label className="block text-xs text-gray-500 mb-1">Meal (EN)</label><input type="text" value={form.meal_en} onChange={(e) => setField('meal_en', e.target.value)} className={inputClsBase} /></div>
-               <div><label className="block text-xs text-gray-500 mb-1">Dormitory (EN)</label><input type="text" value={form.dormitory_en} onChange={(e) => setField('dormitory_en', e.target.value)} className={inputClsBase} /></div>
-             </div>
-             <div><label className="block text-xs text-gray-500 mb-1">Probation (EN)</label><input type="text" value={form.probation_en} onChange={(e) => setField('probation_en', e.target.value)} className={inputClsBase} /></div>
-           </div>
+<div className="p-4 space-y-3">
+              <div><label className="block text-xs text-gray-500 mb-1">Job Type (EN)</label><input type="text" value={form.job_type_en} onChange={(e) => setField('job_type_en', e.target.value)} className={inputClsBase} /></div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className="block text-xs text-gray-500 mb-1">Meal (EN)</label><input type="text" value={form.meal_en} onChange={(e) => setField('meal_en', e.target.value)} className={inputClsBase} /></div>
+                <div><label className="block text-xs text-gray-500 mb-1">Dormitory (EN)</label><input type="text" value={form.dormitory_en} onChange={(e) => setField('dormitory_en', e.target.value)} className={inputClsBase} /></div>
+              </div>
+              <div><label className="block text-xs text-gray-500 mb-1">Probation (EN)</label><input type="text" value={form.probation_en} onChange={(e) => setField('probation_en', e.target.value)} className={inputClsBase} /></div>
+              <div><label className="block text-xs text-gray-500 mb-1">Company (EN)</label><input type="text" value={enCompanyName} readOnly className={inputClsBase} /></div>
+              <div><label className="block text-xs text-gray-500 mb-1">Industry (EN)</label><input type="text" value={enIndustry} readOnly className={inputClsBase} /></div>
+            </div>
         </div>
 
         {/* Công nợ */}
