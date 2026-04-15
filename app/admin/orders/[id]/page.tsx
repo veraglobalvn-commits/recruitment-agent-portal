@@ -745,6 +745,38 @@ export default function OrderDetailPage() {
           </div>
         </div>
 
+        {/* Phí dịch vụ Việt Nam */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="px-4 py-3 border-b border-gray-50">
+            <h2 className="text-sm font-semibold text-slate-700">Phí dịch vụ Việt Nam</h2>
+          </div>
+          <div className="p-4 space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Phí DV / người (VNĐ)</label>
+                <input type="text" value={form.service_fee_per_person ? fmtVND(parseFloat(form.service_fee_per_person)) : ''} onChange={(e) => setField('service_fee_per_person', e.target.value.replace(/\./g, '').replace(/,/g, ''))} className={inputCls(form.service_fee_per_person)} />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Tổng phí DV VN (VNĐ)</label>
+                <input type="text" value={form.total_fee_vn ? fmtVND(parseFloat(form.total_fee_vn)) : ''} onChange={(e) => setField('total_fee_vn', e.target.value.replace(/\./g, '').replace(/,/g, ''))} className={inputCls(form.total_fee_vn)} />
+                {form.total_fee_vn && <p className="text-xs text-gray-400 mt-0.5 text-right">{fmtVND(parseFloat(form.total_fee_vn))}</p>}
+              </div>
+            </div>
+            {form.total_labor && form.service_fee_per_person && (
+              <p className="text-xs text-gray-400 text-center">
+                {form.total_labor} LĐ × {fmtVND(parseFloat(form.service_fee_per_person))} = {fmtVND(parseFloat(form.total_labor) * parseFloat(form.service_fee_per_person))}
+              </p>
+            )}
+            {/* Payment progress bar */}
+            <div>
+              <div className="h-2 bg-gray-100 rounded-full overflow-hidden mt-2">
+                <div className="h-full bg-green-500 rounded-full transition-all" style={{ width: `${Math.min(paymentPct, 100)}%` }} />
+              </div>
+              <p className="text-xs text-gray-500 mt-1">Đã thanh toán {paymentPct}% · {fmtVND(totalPaidVnd)} / {fmtVND(totalFeeVndNum)} ₫</p>
+            </div>
+          </div>
+        </div>
+
         {/* Phí dịch vụ Bangladesh */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="px-4 py-3 border-b border-gray-50">
@@ -885,38 +917,6 @@ export default function OrderDetailPage() {
             </div>
           </div>
         )}
-
-        {/* Phí dịch vụ Việt Nam */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-          <div className="px-4 py-3 border-b border-gray-50">
-            <h2 className="text-sm font-semibold text-slate-700">Phí dịch vụ Việt Nam</h2>
-          </div>
-          <div className="p-4 space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Phí DV / người (VNĐ)</label>
-                <input type="text" value={form.service_fee_per_person ? fmtVND(parseFloat(form.service_fee_per_person)) : ''} onChange={(e) => setField('service_fee_per_person', e.target.value.replace(/\./g, '').replace(/,/g, ''))} className={inputCls(form.service_fee_per_person)} />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Tổng phí DV VN (VNĐ)</label>
-                <input type="text" value={form.total_fee_vn ? fmtVND(parseFloat(form.total_fee_vn)) : ''} onChange={(e) => setField('total_fee_vn', e.target.value.replace(/\./g, '').replace(/,/g, ''))} className={inputCls(form.total_fee_vn)} />
-                {form.total_fee_vn && <p className="text-xs text-gray-400 mt-0.5 text-right">{fmtVND(parseFloat(form.total_fee_vn))}</p>}
-              </div>
-            </div>
-            {form.total_labor && form.service_fee_per_person && (
-              <p className="text-xs text-gray-400 text-center">
-                {form.total_labor} LĐ × {fmtVND(parseFloat(form.service_fee_per_person))} = {fmtVND(parseFloat(form.total_labor) * parseFloat(form.service_fee_per_person))}
-              </p>
-            )}
-            {/* Payment progress bar */}
-            <div>
-              <div className="h-2 bg-gray-100 rounded-full overflow-hidden mt-2">
-                <div className="h-full bg-green-500 rounded-full transition-all" style={{ width: `${Math.min(paymentPct, 100)}%` }} />
-              </div>
-              <p className="text-xs text-gray-500 mt-1">Đã thanh toán {paymentPct}% · {fmtVND(totalPaidVnd)} / {fmtVND(totalFeeVndNum)} ₫</p>
-            </div>
-          </div>
-        </div>
 
         {/* Thông tin tiếng Anh */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
