@@ -133,6 +133,7 @@ export default function CompanyDetailPage() {
   const [deleting, setDeleting] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<'company' | null>(null);
   const [bctDocs, setBctDocs] = useState<DocLink[]>([]);
+  const [translating, setTranslating] = useState(false);
 
   const imgInputRef = useRef<HTMLInputElement>(null);
   const docInputRef = useRef<HTMLInputElement>(null);
@@ -237,6 +238,7 @@ export default function CompanyDetailPage() {
   }, [form, dirty, handleSave]);
 
   const handleTranslateSilent = useCallback(async () => {
+    setTranslating(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch('/api/translate', {
@@ -267,6 +269,8 @@ export default function CompanyDetailPage() {
       }));
     } catch {
       // silent fail
+    } finally {
+      setTranslating(false);
     }
   }, [id]);
 
@@ -641,7 +645,13 @@ export default function CompanyDetailPage() {
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="px-4 py-3 border-b border-gray-50 flex items-center justify-between">
             <h2 className="text-sm font-semibold text-slate-700">Thông tin tiếng Anh</h2>
-            <span className="text-xs text-gray-400">Tự động cập nhật khi lưu</span>
+            <button
+              onClick={handleTranslateSilent}
+              disabled={translating}
+              className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 disabled:opacity-50 min-h-[32px] flex items-center gap-1 transition-colors"
+            >
+              {translating ? '⏳ Đang dịch...' : '🌐 Dịch'}
+            </button>
           </div>
           <div className="p-4 space-y-3">
             <div><label className="block text-xs text-gray-500 mb-1">Company Name (EN)</label><input type="text" value={form.en_company_name} onChange={(e) => setField('en_company_name', e.target.value)} className={inputCls} /></div>

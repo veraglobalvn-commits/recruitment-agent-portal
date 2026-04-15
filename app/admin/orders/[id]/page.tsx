@@ -85,6 +85,7 @@ export default function OrderDetailPage() {
   const [payments, setPayments] = useState<OrderPayment[]>([]);
   const [addingPaymentParty, setAddingPaymentParty] = useState<'company' | 'agent' | null>(null);
   const [newPayment, setNewPayment] = useState<Partial<OrderPayment>>({});
+  const [translating, setTranslating] = useState(false);
 
   const videoInputRef = useRef<HTMLInputElement>(null);
 
@@ -138,13 +139,15 @@ export default function OrderDetailPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [ordRes, candRes, agRes, handRes, payRes] = await Promise.all([
+    const [ordRes, candRes, agRes, handRes, payRes, policyRes] = await Promise.all([
       supabase.from('orders').select('*').eq('id', id).single(),
       supabase.from('candidates').select('*').eq('order_id', id),
       supabase.from('agents').select('id, full_name, short_name, labor_percentage').neq('role', 'admin'),
       supabase.from('order_handovers').select('*').eq('order_id', id).order('batch_no'),
       supabase.from('order_payments').select('*').eq('order_id', id).order('created_at'),
+      supabase.from('policy_settings').select('key, value').in('key', ['default_fee_vnd', 'default_fee_usd']),
     ]);
+    const policyMap = Object.fromEntries(((policyRes.data ?? []) as { key: string; value: string }[]).map(r => [r.key, r.value]));
 
     if (ordRes.data) {
       const o = ordRes.data as AdminOrder;
@@ -155,10 +158,10 @@ export default function OrderDetailPage() {
         total_labor: o.total_labor?.toString() ?? '',
         labor_missing: o.labor_missing?.toString() ?? '',
         salary_usd: o.salary_usd?.toString() ?? '',
-        status: o.status ?? 'Đang tuyển',
+        status: o.status ?? 'Not Started',
         agent_ids: o.agent_ids ?? [],
         total_fee_vn: o.total_fee_vn?.toString() ?? '',
-        service_fee_per_person: o.service_fee_per_person?.toString() ?? '',
+        service_fee_per_person: o.service_fee_per_person?.toString() || policyMap.default_fee_vnd || '',
         service_fee_bd_per_person: o.service_fee_bd_per_person?.toString() ?? '',
         total_fee_bd: o.total_fee_bd?.toString() ?? '',
         url_order: o.url_order ?? '',
@@ -193,6 +196,7 @@ export default function OrderDetailPage() {
 
   const handleTranslateSilent = useCallback(async () => {
     if (!order?.company_id) return;
+    setTranslating(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) return;
@@ -227,9 +231,7 @@ export default function OrderDetailPage() {
       if (data.meal_en) updates.meal_en = data.meal_en;
       if (data.dormitory_en) updates.dormitory_en = data.dormitory_en;
       if (Object.keys(updates).length === 0) return;
-      // Save directly to DB (dirty is false after handleSave, auto-save won't fire)
       await supabase.from('orders').update(updates).eq('id', id);
-      // Update form state for immediate display
       setForm((f) => ({
         ...f,
         job_type_en: data.job_type_en ?? f.job_type_en,
@@ -238,6 +240,8 @@ export default function OrderDetailPage() {
       }));
     } catch (err) {
       console.error('[translate] error:', err);
+    } finally {
+      setTranslating(false);
     }
   }, [order, form, id]);
 
@@ -259,9 +263,11 @@ export default function OrderDetailPage() {
         const passedCount = (candidates?.filter(c => c.interview_status === 'Passed').length) ?? 0;
         const totalLabor = parseInt(form.total_labor) || 0;
         const candCount = candidates?.length ?? 0;
-        if (candCount === 0) return 'Not Started';
         if (totalLabor > 0 && passedCount >= totalLabor) return 'Finished';
-        return 'On-going';
+        if (candCount > 0) return 'On-going';
+        // Không downgrade từ On-going → Not Started (tránh race condition khi agent vừa add LĐ)
+        if (form.status === 'On-going') return 'On-going';
+        return 'Not Started';
       })(),
       agent_ids: form.agent_ids.length > 0 ? form.agent_ids : null,
       total_fee_vn: form.total_fee_vn ? parseFloat(form.total_fee_vn) : null,
@@ -401,8 +407,10 @@ export default function OrderDetailPage() {
   };
 
   // Payment pct — use order_payments table
-  const totalPaidVnd = payments.filter(p => p.payment_party === 'company' && p.currency === 'VND').reduce((s, p) => s + p.amount, 0);
+  const totalPaidVnd = payments.filter(p => p.payment_party === 'company' && p.currency === 'VND').reduce((s, p) => s + Number(p.amount), 0);
+  const totalPaidAgent = payments.filter(p => p.payment_party === 'agent').reduce((s, p) => s + Number(p.amount), 0);
   const totalFeeVndNum = parseFloat(form.total_fee_vn) || 0;
+  const totalFeeBdNum = parseFloat(form.total_fee_bd) || 0;
   const paymentPct = totalFeeVndNum > 0 ? Math.round((totalPaidVnd / totalFeeVndNum) * 100) : 0;
   const totalHandedOver = handovers.filter(h => h.departure_status !== 'Chưa xuất cảnh').reduce((s, h) => s + h.labor_count, 0);
 
@@ -550,6 +558,32 @@ export default function OrderDetailPage() {
           {totalHandedOver > 0 && (
             <p className="text-xs text-gray-500">Đã bàn giao: <span className="font-semibold text-slate-700">{totalHandedOver}</span> lao động</p>
           )}
+          {/* Payment summary */}
+          <div className="mt-2 pt-2 border-t border-gray-50 grid grid-cols-2 gap-x-3 text-xs text-gray-500">
+            <div>
+              <span>Cty VN: </span>
+              <span className="font-semibold text-green-600">{fmtVND(totalPaidVnd)}</span>
+              {totalFeeVndNum > 0 && <span className="text-gray-400"> / {fmtVND(totalFeeVndNum)}</span>}
+            </div>
+            <div>
+              <span>Agent: </span>
+              <span className="font-semibold text-blue-600">{fmtVND(totalPaidAgent)}</span>
+              {totalFeeBdNum > 0 && <span className="text-gray-400"> / ${fmtUSD(totalFeeBdNum)}</span>}
+            </div>
+          </div>
+          {/* Hoàn thành / Huỷ đơn buttons — đặt ở đây để luôn thấy */}
+          <div className="mt-3 flex gap-2">
+            <button
+              onClick={() => handleSetStatus('Finished')}
+              disabled={form.status === 'Finished' || form.status === 'Cancelled'}
+              className="flex-1 px-3 py-2 text-xs font-semibold rounded-lg bg-green-100 text-green-700 hover:bg-green-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors min-h-[36px]"
+            >Đánh dấu Hoàn thành</button>
+            <button
+              onClick={() => handleSetStatus('Cancelled')}
+              disabled={form.status === 'Cancelled'}
+              className="flex-1 px-3 py-2 text-xs font-semibold rounded-lg bg-red-100 text-red-600 hover:bg-red-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors min-h-[36px]"
+            >Huỷ đơn</button>
+          </div>
         </div>
 
         {/* Thông tin đơn hàng */}
@@ -559,45 +593,25 @@ export default function OrderDetailPage() {
             {saving && <span className="text-xs text-blue-500 animate-pulse">Đang lưu...</span>}
           </div>
           <div className="p-4 space-y-3">
-            {/* Job type VN + EN */}
-            <div className="grid grid-cols-2 gap-3">
-              <div><label className="block text-xs text-gray-500 mb-1">Vị trí / Loại lao động</label><input type="text" value={form.job_type} onChange={(e) => setField('job_type', e.target.value)} className={inputCls(form.job_type)} /></div>
-              <div><label className="block text-xs text-gray-500 mb-1">Job Type (EN)</label><input type="text" value={form.job_type_en} onChange={(e) => setField('job_type_en', e.target.value)} className={inputCls(form.job_type_en)} /></div>
-            </div>
+            {/* Job type VN */}
+            <div><label className="block text-xs text-gray-500 mb-1">Vị trí / Loại lao động</label><input type="text" value={form.job_type} onChange={(e) => setField('job_type', e.target.value)} className={inputCls(form.job_type)} /></div>
             {/* Numbers */}
             <div className="grid grid-cols-3 gap-3">
               <div><label className="block text-xs text-gray-500 mb-1">Số LĐ</label><input type="number" value={form.total_labor} onChange={(e) => setField('total_labor', e.target.value)} className={inputCls(form.total_labor)} /></div>
               <div><label className="block text-xs text-gray-500 mb-1">Còn thiếu</label><p className={inputCls(form.total_labor) + ' bg-gray-100'}>{(() => { const total = parseInt(form.total_labor) || 0; const passed = (candidates?.filter(c => c.interview_status === 'Passed').length) || 0; const remaining = Math.max(0, total - passed); return remaining; })()}</p></div>
               <div><label className="block text-xs text-gray-500 mb-1">Lương (USD)</label><input type="text" value={form.salary_usd ? fmtUSD(parseFloat(form.salary_usd)) : ''} onChange={(e) => setField('salary_usd', e.target.value.replace(/,/g, ''))} className={inputCls(form.salary_usd)} /></div>
             </div>
-            {/* Recruitment status + override buttons */}
-            <div className="flex items-center gap-3 flex-wrap">
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Trạng thái tuyển dụng</label>
-                <RecruitmentPill status={form.status} laborMissing={(() => { const total = parseInt(form.total_labor) || 0; const passed = (candidates?.filter(c => c.interview_status === 'Passed').length) || 0; return Math.max(0, total - passed); })()} />
-              </div>
-              <div className="flex gap-2 ml-auto mt-3">
-                <button
-                  onClick={() => handleSetStatus('Finished')}
-                  disabled={form.status === 'Finished'}
-                  className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-green-100 text-green-700 hover:bg-green-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors min-h-[36px]"
-                >Đánh dấu Hoàn thành</button>
-                <button
-                  onClick={() => handleSetStatus('Cancelled')}
-                  disabled={form.status === 'Cancelled'}
-                  className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-red-100 text-red-600 hover:bg-red-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors min-h-[36px]"
-                >Huỷ đơn</button>
-              </div>
+            {/* Recruitment status (read-only) */}
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Trạng thái tuyển dụng</label>
+              <RecruitmentPill status={form.status} laborMissing={(() => { const total = parseInt(form.total_labor) || 0; const passed = (candidates?.filter(c => c.interview_status === 'Passed').length) || 0; return Math.max(0, total - passed); })()} />
             </div>
             {/* Meal */}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Hỗ trợ bữa ăn</label>
-                <select value={form.meal} onChange={(e) => setField('meal', e.target.value)} className={`${inputCls(form.meal)} bg-white`}>
-                  {MEAL_OPTIONS.map((m) => <option key={m} value={m}>{m}</option>)}
-                </select>
-              </div>
-              <div><label className="block text-xs text-gray-500 mb-1">Meal (EN)</label><input type="text" value={form.meal_en} onChange={(e) => setField('meal_en', e.target.value)} className={inputCls(form.meal_en)} /></div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Hỗ trợ bữa ăn</label>
+              <select value={form.meal} onChange={(e) => setField('meal', e.target.value)} className={`${inputCls(form.meal)} bg-white`}>
+                {MEAL_OPTIONS.map((m) => <option key={m} value={m}>{m}</option>)}
+              </select>
             </div>
             {/* Dormitory */}
             <div>
@@ -665,11 +679,6 @@ export default function OrderDetailPage() {
                 <a href={form.url_order} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline">Xem ↗</a>
               </div>
             )}
-            {/* url_order input */}
-            <div className="mb-3">
-              <label className="block text-xs text-gray-500 mb-1">URL Yêu cầu tuyển dụng</label>
-              <input type="url" value={form.url_order} onChange={(e) => setField('url_order', e.target.value)} className={inputCls(form.url_order)} />
-            </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {agents.filter((ag) => form.agent_ids.includes(ag.id)).map((ag) => {
                 const allocation = agentLaborAllocations[ag.id] || '';
@@ -769,6 +778,27 @@ export default function OrderDetailPage() {
                 {form.total_labor} LĐ × ${form.service_fee_bd_per_person} = ${(parseFloat(form.total_labor) * parseFloat(form.service_fee_bd_per_person)).toLocaleString()}
               </p>
             )}
+          </div>
+        </div>
+
+        {/* Thông tin tiếng Anh */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="px-4 py-3 border-b border-gray-50 flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-slate-700">Thông tin tiếng Anh</h2>
+            <button
+              onClick={handleTranslateSilent}
+              disabled={translating}
+              className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 disabled:opacity-50 min-h-[32px] flex items-center gap-1 transition-colors"
+            >
+              {translating ? '⏳ Đang dịch...' : '🌐 Dịch'}
+            </button>
+          </div>
+          <div className="p-4 space-y-3">
+            <div><label className="block text-xs text-gray-500 mb-1">Job Type (EN)</label><input type="text" value={form.job_type_en} onChange={(e) => setField('job_type_en', e.target.value)} className={inputClsBase} /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className="block text-xs text-gray-500 mb-1">Meal (EN)</label><input type="text" value={form.meal_en} onChange={(e) => setField('meal_en', e.target.value)} className={inputClsBase} /></div>
+              <div><label className="block text-xs text-gray-500 mb-1">Dormitory (EN)</label><input type="text" value={form.dormitory_en} onChange={(e) => setField('dormitory_en', e.target.value)} className={inputClsBase} /></div>
+            </div>
           </div>
         </div>
 

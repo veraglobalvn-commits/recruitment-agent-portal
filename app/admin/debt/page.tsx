@@ -23,7 +23,7 @@ function PctPill({ pct }: { pct: number }) {
 export default function DebtPage() {
   const [rows, setRows] = useState<DebtRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [hideComplete, setHideComplete] = useState(true);
+  const [hideComplete, setHideComplete] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -40,14 +40,14 @@ export default function DebtPage() {
       return {
         order_id: o.id,
         company_name: o.company_name,
-        total_fee_vn: o.total_fee_vn,
+        total_fee_vn: o.total_fee_vn ? Number(o.total_fee_vn) : null,
         total_paid_company: orderPayments
           .filter(p => p.payment_party === 'company' && p.currency === 'VND')
-          .reduce((s, p) => s + p.amount, 0),
-        total_fee_bd: o.total_fee_bd,
+          .reduce((s, p) => s + Number(p.amount), 0),
+        total_fee_bd: o.total_fee_bd ? Number(o.total_fee_bd) : null,
         total_paid_agent: orderPayments
-          .filter(p => p.payment_party === 'agent' && p.currency === 'VND')
-          .reduce((s, p) => s + p.amount, 0),
+          .filter(p => p.payment_party === 'agent')
+          .reduce((s, p) => s + Number(p.amount), 0),
       };
     });
 
@@ -85,6 +85,11 @@ export default function DebtPage() {
       {loading ? (
         <div className="space-y-3 animate-pulse">
           {[...Array(5)].map((_, i) => <div key={i} className="h-16 bg-gray-200 rounded-2xl" />)}
+        </div>
+      ) : rows.length === 0 ? (
+        <div className="text-center py-12">
+          <p className="text-gray-300 text-4xl mb-3">📋</p>
+          <p className="text-gray-500 text-sm">Chưa có đơn hàng nào</p>
         </div>
       ) : displayed.length === 0 ? (
         <div className="text-center py-12">
