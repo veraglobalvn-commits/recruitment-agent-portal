@@ -400,7 +400,9 @@ export default function OrderDetail() {
   const totalLabor = Number(orderData?.total_labor) || 0;
   const agentStatus = orderData ? getAgentOrderStatus(orderData, candidates.length) : null;
 
-const allocated = totalLabor; // Total workers for the order (not agent-assigned)
+const allocated = currentAgent?.labor_percentage
+      ? Math.round((currentAgent.labor_percentage / 100) * totalLabor)
+      : totalLabor;
   const agentPassed = currentAgent
     ? candidates.filter(c => c.agent_id === currentAgent.id && c.interview_status === 'Passed').length
     : 0;
@@ -525,7 +527,7 @@ const allocated = totalLabor; // Total workers for the order (not agent-assigned
             <div className="flex items-center justify-between text-center">
               <div>
                 <p className="text-xs text-gray-400 mb-1">Total Workers</p>
-                <p className="text-2xl font-bold text-slate-800">{totalLabor}</p>
+                <p className="text-2xl font-bold text-slate-800">{allocated}</p>
               </div>
               <div>
                 <p className="text-xs text-gray-400 mb-1">Passed</p>
@@ -533,7 +535,7 @@ const allocated = totalLabor; // Total workers for the order (not agent-assigned
               </div>
               <div>
                 <p className="text-xs text-gray-400 mb-1">Remaining</p>
-                <p className="text-2xl font-bold text-red-500">{Math.max(0, totalLabor - agentPassed)}</p>
+                <p className="text-2xl font-bold text-red-500">{Math.max(0, allocated - agentPassed)}</p>
               </div>
             </div>
           </div>
