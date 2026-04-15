@@ -207,3 +207,77 @@ export interface Agent {
   doc_links: DocLink[];
   created_at?: string | null;
 }
+
+export interface TranslationRequest {
+  id: string;
+  entity_type: 'company' | 'order';
+  entity_id: string;
+  fields_to_translate: string[];
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  translated_data: Record<string, string>;
+  error_message?: string;
+  created_at: string;
+  completed_at?: string;
+}
+
+export interface RecruitmentRequest {
+  id: string;
+  order_id: string;
+  agent_id: string;
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  pdf_url: string | null;
+  docs_edit_url: string | null;
+  error_message?: string;
+  created_at: string;
+  completed_at?: string;
+}
+
+export interface ContractRequest {
+  id: string;
+  order_id: string;
+  candidate_id: string;
+  contract_type: 'basic' | 'advanced';
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  pdf_url: string | null;
+  docs_edit_url: string | null;
+  error_message?: string;
+  created_at: string;
+  completed_at?: string;
+}
+
+export interface TranslationRequest {
+  id: string;
+  entity_type: 'company' | 'order';
+  entity_id: string;
+  fields_to_translate: string[];
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  translated_data: Record<string, string>;
+  error_message?: string;
+  created_at: string;
+  completed_at?: string;
+}
+
+export interface RecruitmentRequest {
+  id: string;
+  order_id: string;
+  agent_id: string;
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  pdf_url: string | null;
+  docs_edit_url: string | null;
+  error_message?: string;
+  created_at: string;
+  completed_at?: string;
+}
+
+export interface ContractRequest {
+  id: string;
+  order_id: string;
+  candidate_id: string;
+  contract_type: 'basic' | 'advanced';
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  pdf_url: string | null;
+  docs_edit_url: string | null;
+  error_message?: string;
+  created_at: string;
+  completed_at?: string;
+}

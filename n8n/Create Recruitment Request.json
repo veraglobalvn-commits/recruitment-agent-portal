@@ -1,0 +1,486 @@
+{
+  "connections": {
+    "Copy Google Docs Template": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Fill Data to Docs",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Export PDF": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Upload PDF to Supabase",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Fetch Agent Data": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Validate Required Fields",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Fetch Order Data": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Fetch Agent Data",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Fetch Recruitment Request": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Fetch Order Data",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Fill Data to Docs": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Export PDF",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Update Recruitment Request Completed": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Respond Success",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Update Status to Processing": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Fetch Recruitment Request",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Upload PDF to Supabase": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Update Recruitment Request Completed",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Validate Required Fields": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Copy Google Docs Template",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Update Status to Processing",
+            "type": "main"
+          }
+        ]
+      ]
+    }
+  },
+  "name": "Create Recruitment Request",
+  "nodes": [
+    {
+      "id": "webhook-yctd",
+      "name": "Webhook",
+      "parameters": {
+        "httpMethod": "POST",
+        "options": {},
+        "path": "create-recruitment-request"
+      },
+      "position": [
+        -176,
+        -80
+      ],
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "webhookId": "create-recruitment-request-webhook"
+    },
+    {
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-credentials",
+          "name": "Supabase Service Role"
+        }
+      },
+      "id": "update-status-processing",
+      "name": "Update Status to Processing",
+      "parameters": {
+        "columnMatch": {
+          "columnToMatchOn": "id",
+          "columnValueToMatch": "={{ $json.request_id }}",
+          "dataToInsert": {
+            "status": "processing"
+          }
+        },
+        "operation": "update",
+        "options": {},
+        "table": "recruitment_requests"
+      },
+      "position": [
+        48,
+        -80
+      ],
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1
+    },
+    {
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-credentials",
+          "name": "Supabase Service Role"
+        }
+      },
+      "id": "fetch-recruitment-request",
+      "name": "Fetch Recruitment Request",
+      "parameters": {
+        "columns": {
+          "mappingMode": "autoMapInputData"
+        },
+        "operation": "read",
+        "options": {},
+        "table": "recruitment_requests"
+      },
+      "position": [
+        272,
+        -80
+      ],
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1
+    },
+    {
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-credentials",
+          "name": "Supabase Service Role"
+        }
+      },
+      "id": "fetch-order-data",
+      "name": "Fetch Order Data",
+      "parameters": {
+        "columns": {
+          "mappingMode": "autoMapInputData"
+        },
+        "operation": "read",
+        "options": {},
+        "table": "orders"
+      },
+      "position": [
+        496,
+        -80
+      ],
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1
+    },
+    {
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-credentials",
+          "name": "Supabase Service Role"
+        }
+      },
+      "id": "fetch-agent-data",
+      "name": "Fetch Agent Data",
+      "parameters": {
+        "columns": {
+          "mappingMode": "autoMapInputData"
+        },
+        "operation": "read",
+        "options": {},
+        "table": "agents"
+      },
+      "position": [
+        720,
+        -80
+      ],
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1
+    },
+    {
+      "id": "validate-required-fields",
+      "name": "Validate Required Fields",
+      "parameters": {
+        "jsCode": "// Validate required fields for YCTD\nconst order = $('Fetch Order Data').first().json;\nconst company = $('Fetch Company Data').first().json;\nconst agent = $('Fetch Agent Data').first().json;\n\nconst missing = [];\n\nif (!order.job_type_en) missing.push('job_type_en');\nif (!order.total_labor || Number(order.total_labor) <= 0) missing.push('total_labor');\nif (!order.salary_usd || Number(order.salary_usd) <= 0) missing.push('salary_usd');\nif (!company.en_company_name) missing.push('en_company_name');\nif (!company.en_legal_rep) missing.push('en_legal_rep');\nif (!company.en_address) missing.push('en_address');\nif (!order.meal_en) missing.push('meal_en');\nif (!order.dormitory_en) missing.push('dormitory_en');\n\nif (missing.length > 0) {\n  throw new Error(`Missing required fields: ${missing.join(', ')}`);\n}\n\nreturn { json: { valid: true } };"
+      },
+      "position": [
+        944,
+        -80
+      ],
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2
+    },
+    {
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "pQ6qTSMZRoiqUMQV",
+          "name": "Google Drive account"
+        }
+      },
+      "id": "copy-google-docs-template",
+      "name": "Copy Google Docs Template",
+      "parameters": {
+        "fileId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $env.NEXT_PUBLIC_YCTD_TEMPLATE_URL }}"
+        },
+        "name": "={{ $now.toFormat('yyMMdd-hh:mm:ss') }} [{{ $('Fetch Company Data').first().json.short_name || $('Fetch Company Data').first().json.company_name }}] YCTD ({{ $('Fetch Agent Data').first().json.full_name }})",
+        "options": {},
+        "sameFolder": false
+      },
+      "position": [
+        1168,
+        -80
+      ],
+      "retryOnFail": true,
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "credentials": {
+        "googleDocsOAuth2Api": {
+          "id": "E7ejRYB8dtcGQH00",
+          "name": "Vera GG Docs OAuth client ID"
+        }
+      },
+      "id": "fill-data-to-docs",
+      "name": "Fill Data to Docs",
+      "parameters": {
+        "actionsUi": {
+          "actionFields": [
+            {
+              "action": "replaceAll",
+              "replaceText": "={{ $now.toFormat('dd/MM/yyyy') }}",
+              "text": "{{NgayThangHD}}"
+            },
+            {
+              "action": "replaceAll",
+              "replaceText": "={{ $('Fetch Company Data').first().json.en_company_name }}",
+              "text": "{{EN_TenCongTy}}"
+            },
+            {
+              "action": "replaceAll",
+              "replaceText": "={{ $('Fetch Company Data').first().json.en_address }}",
+              "text": "{{EN_DiaChiCongTy}}"
+            },
+            {
+              "action": "replaceAll",
+              "replaceText": "={{ $('Fetch Company Data').first().json.tax_code }}",
+              "text": "{{MST}}"
+            },
+            {
+              "action": "replaceAll",
+              "replaceText": "={{ $('Fetch Company Data').first().json.en_legal_rep }}",
+              "text": "{{EN_NguoiDaiDien}}"
+            },
+            {
+              "action": "replaceAll",
+              "replaceText": "={{ $('Fetch Company Data').first().json.en_title }}",
+              "text": "{{EN_ChucVu}}"
+            },
+            {
+              "action": "replaceAll",
+              "replaceText": "={{ $('Fetch Order Data').first().json.job_type_en }}",
+              "text": "{{EN_ViTriTuyen}}"
+            },
+            {
+              "action": "replaceAll",
+              "replaceText": "={{ $('Fetch Order Data').first().json.total_labor }}",
+              "text": "{{TongSoLaoDong}}"
+            },
+            {
+              "action": "replaceAll",
+              "replaceText": "={{ $('Fetch Order Data').first().json.working_hours || '8 hours/day' }}",
+              "text": "{{WorkingHours}}"
+            },
+            {
+              "action": "replaceAll",
+              "replaceText": "={{ Number($('Fetch Order Data').first().json.salary_usd * 25000).toLocaleString('vi-VN') }}",
+              "text": "{{TotalMonthlySalaryVND}}"
+            },
+            {
+              "action": "replaceAll",
+              "replaceText": "={{ Number($('Fetch Order Data').first().json.salary_usd).toLocaleString('en-US') }}",
+              "text": "{{TotalMonthlySalaryUSD}}"
+            },
+            {
+              "action": "replaceAll",
+              "replaceText": "={{ $('Fetch Order Data').first().json.meal_en }}",
+              "text": "{{EN_HoTroBuaAn}}"
+            },
+            {
+              "action": "replaceAll",
+              "replaceText": "={{ $('Fetch Order Data').first().json.probation_en || 'No probation' }}",
+              "text": "{{EN_ThuViec}}"
+            }
+          ]
+        },
+        "documentURL": "={{ $json.id }}",
+        "operation": "update",
+        "options": {}
+      },
+      "position": [
+        1392,
+        -80
+      ],
+      "retryOnFail": true,
+      "type": "n8n-nodes-base.googleDocs",
+      "typeVersion": 2,
+      "waitBetweenTries": 2000
+    },
+    {
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "pQ6qTSMZRoiqUMQV",
+          "name": "Google Drive account"
+        }
+      },
+      "id": "export-pdf",
+      "name": "Export PDF",
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        },
+        "url": "=https://www.googleapis.com/drive/v3/files/{{ $json.documentId }}/export?mimeType=application/pdf"
+      },
+      "position": [
+        1616,
+        -80
+      ],
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2
+    },
+    {
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-credentials",
+          "name": "Supabase Service Role"
+        }
+      },
+      "id": "upload-pdf-to-supabase",
+      "name": "Upload PDF to Supabase",
+      "parameters": {
+        "binaryData": true,
+        "bucketName": "agent-media",
+        "fileName": "yctd.pdf",
+        "operation": "upload",
+        "options": {},
+        "path": "={{ `recruitment-requests/${$('Fetch Recruitment Request').first().json.id}` }}"
+      },
+      "position": [
+        1840,
+        -80
+      ],
+      "retryOnFail": true,
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "waitBetweenTries": 2000
+    },
+    {
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-credentials",
+          "name": "Supabase Service Role"
+        }
+      },
+      "id": "update-recruitment-request-completed",
+      "name": "Update Recruitment Request Completed",
+      "parameters": {
+        "columnMatch": {
+          "columnToMatchOn": "id",
+          "columnValueToMatch": "={{ $('Fetch Recruitment Request').first().json.id }}",
+          "dataToInsert": {
+            "completed_at": "={{ $now.toISO() }}",
+            "docs_edit_url": "={{ $('Copy Google Docs Template').first().json.id }}",
+            "pdf_url": "={{ $json.publicUrl }}",
+            "status": "completed"
+          }
+        },
+        "operation": "update",
+        "options": {},
+        "table": "recruitment_requests"
+      },
+      "position": [
+        2064,
+        -80
+      ],
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1
+    },
+    {
+      "id": "respond-success",
+      "name": "Respond Success",
+      "parameters": {
+        "options": {},
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": true,\n  \"pdf_url\": {{ $('Update Recruitment Request Completed').first().json.pdf_url }},\n  \"docs_edit_url\": {{ $('Update Recruitment Request Completed').first().json.docs_edit_url }}\n}"
+      },
+      "position": [
+        2288,
+        -80
+      ],
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1
+    }
+  ],
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2026-04-15T00:00:00.000Z",
+  "versionId": "1"
+}

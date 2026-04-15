@@ -1,0 +1,510 @@
+{
+  "connections": {
+    "Copy Google Docs Template": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Fill Data to Docs",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Export PDF": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Upload PDF to Supabase",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Fetch Candidate Data": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Validate Required Fields",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Fetch Contract Request": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Fetch Order Data",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Fetch Order Data": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Fetch Candidate Data",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Fill Data to Docs": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Export PDF",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Select Template URL": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Copy Google Docs Template",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Update Contract Request Completed": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Respond Success",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Update Status to Processing": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Fetch Contract Request",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Upload PDF to Supabase": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Update Contract Request Completed",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Validate Required Fields": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Select Template URL",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Update Status to Processing",
+            "type": "main"
+          }
+        ]
+      ]
+    }
+  },
+  "name": "Create Contract",
+  "nodes": [
+    {
+      "id": "webhook-contract",
+      "name": "Webhook",
+      "parameters": {
+        "httpMethod": "POST",
+        "options": {},
+        "path": "create-contract"
+      },
+      "position": [
+        -176,
+        -80
+      ],
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "webhookId": "create-contract-webhook"
+    },
+    {
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-credentials",
+          "name": "Supabase Service Role"
+        }
+      },
+      "id": "update-status-processing",
+      "name": "Update Status to Processing",
+      "parameters": {
+        "columnMatch": {
+          "columnToMatchOn": "id",
+          "columnValueToMatch": "={{ $json.request_id }}",
+          "dataToInsert": {
+            "status": "processing"
+          }
+        },
+        "operation": "update",
+        "options": {},
+        "table": "contract_requests"
+      },
+      "position": [
+        48,
+        -80
+      ],
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1
+    },
+    {
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-credentials",
+          "name": "Supabase Service Role"
+        }
+      },
+      "id": "fetch-contract-request",
+      "name": "Fetch Contract Request",
+      "parameters": {
+        "columns": {
+          "mappingMode": "autoMapInputData"
+        },
+        "operation": "read",
+        "options": {},
+        "table": "contract_requests"
+      },
+      "position": [
+        272,
+        -80
+      ],
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1
+    },
+    {
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-credentials",
+          "name": "Supabase Service Role"
+        }
+      },
+      "id": "fetch-order-data",
+      "name": "Fetch Order Data",
+      "parameters": {
+        "columns": {
+          "mappingMode": "autoMapInputData"
+        },
+        "operation": "read",
+        "options": {},
+        "table": "orders"
+      },
+      "position": [
+        496,
+        -80
+      ],
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1
+    },
+    {
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-credentials",
+          "name": "Supabase Service Role"
+        }
+      },
+      "id": "fetch-candidate-data",
+      "name": "Fetch Candidate Data",
+      "parameters": {
+        "columns": {
+          "mappingMode": "autoMapInputData"
+        },
+        "operation": "read",
+        "options": {},
+        "table": "candidates"
+      },
+      "position": [
+        720,
+        -80
+      ],
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1
+    },
+    {
+      "id": "validate-required-fields",
+      "name": "Validate Required Fields",
+      "parameters": {
+        "jsCode": "// Validate required fields for Contract\nconst order = $('Fetch Order Data').first().json;\nconst company = $('Fetch Company Data').first().json;\nconst candidate = $('Fetch Candidate Data').first().json;\n\nconst missing = [];\n\nif (!company.company_name) missing.push('company_name');\nif (!company.tax_code) missing.push('tax_code');\nif (!company.legal_rep) missing.push('legal_rep');\nif (!company.legal_rep_title) missing.push('legal_rep_title');\nif (!company.address) missing.push('address');\nif (!company.phone) missing.push('phone');\nif (!company.business_reg_authority) missing.push('business_reg_authority');\nif (!company.business_reg_date) missing.push('business_reg_date');\nif (!order.total_labor || Number(order.total_labor) <= 0) missing.push('total_labor');\nif (!order.service_fee_per_person || Number(order.service_fee_per_person) <= 0) missing.push('service_fee_per_person');\nif (!order.total_fee_vn || Number(order.total_fee_vn) <= 0) missing.push('total_fee_vn');\n\nif (missing.length > 0) {\n  throw new Error(`Missing required fields: ${missing.join(', ')}`);\n}\n\nreturn { json: { valid: true } };"
+      },
+      "position": [
+        944,
+        -80
+      ],
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2
+    },
+    {
+      "id": "select-template-url",
+      "name": "Select Template URL",
+      "parameters": {
+        "jsCode": "// Select template URL based on contract type\nconst contractType = $('Fetch Contract Request').first().json.contract_type;\nconst templateUrl = contractType === 'advanced' \n  ? $env.NEXT_PUBLIC_CONTRACT_ADVANCED_TEMPLATE_URL \n  : $env.NEXT_PUBLIC_CONTRACT_BASIC_TEMPLATE_URL;\n\nreturn { json: { template_url: templateUrl } };"
+      },
+      "position": [
+        1168,
+        -80
+      ],
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2
+    },
+    {
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "pQ6qTSMZRoiqUMQV",
+          "name": "Google Drive account"
+        }
+      },
+      "id": "copy-google-docs-template",
+      "name": "Copy Google Docs Template",
+      "parameters": {
+        "fileId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $json.template_url }}"
+        },
+        "name": "={{ $now.toFormat('yyMMdd-hh:mm:ss') }} [{{ $('Fetch Company Data').first().json.short_name || $('Fetch Company Data').first().json.company_name }} <> LUMI] Hợp đồng dịch vụ ({{ $('Fetch Order Data').first().json.total_labor }} người - tháng {{ $now.toFormat('MM') }})",
+        "options": {},
+        "sameFolder": false
+      },
+      "position": [
+        1392,
+        -80
+      ],
+      "retryOnFail": true,
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "credentials": {
+        "googleDocsOAuth2Api": {
+          "id": "E7ejRYB8dtcGQH00",
+          "name": "Vera GG Docs OAuth client ID"
+        }
+      },
+      "id": "fill-data-to-docs",
+      "name": "Fill Data to Docs",
+      "parameters": {
+        "actionsUi": {
+          "actionFields": [
+            {
+              "action": "replaceAll",
+              "replaceText": "={{ $now.toFormat('dd/MM/yyyy') }}",
+              "text": "{{NgayThangHD}}"
+            },
+            {
+              "action": "replaceAll",
+              "replaceText": "={{ $('Fetch Company Data').first().json.company_name }}",
+              "text": "{{TenCongTy}}"
+            },
+            {
+              "action": "replaceAll",
+              "replaceText": "={{ $('Fetch Company Data').first().json.tax_code }}",
+              "text": "{{MST}}"
+            },
+            {
+              "action": "replaceAll",
+              "replaceText": "={{ $('Fetch Company Data').first().json.business_reg_date }}",
+              "text": "{{ThoiGianDKKD}}"
+            },
+            {
+              "action": "replaceAll",
+              "replaceText": "={{ $('Fetch Company Data').first().json.business_reg_authority }}",
+              "text": "{{CoQuanDKKD}}"
+            },
+            {
+              "action": "replaceAll",
+              "replaceText": "={{ $('Fetch Company Data').first().json.address }}",
+              "text": "{{DiaChiCongTy}}"
+            },
+            {
+              "action": "replaceAll",
+              "replaceText": "={{ $('Fetch Company Data').first().json.phone }}",
+              "text": "{{SDTCongTy}}"
+            },
+            {
+              "action": "replaceAll",
+              "replaceText": "={{ $('Fetch Company Data').first().json.email || '' }}",
+              "text": "{{EmailCongTy}}"
+            },
+            {
+              "action": "replaceAll",
+              "replaceText": "={{ $('Fetch Company Data').first().json.legal_rep }}",
+              "text": "{{NguoiDaiDien}}"
+            },
+            {
+              "action": "replaceAll",
+              "replaceText": "={{ $('Fetch Company Data').first().json.legal_rep_title }}",
+              "text": "{{ChucVu}}"
+            },
+            {
+              "action": "replaceAll",
+              "replaceText": "={{ $('Fetch Order Data').first().json.total_labor }}",
+              "text": "{{TongSoLaoDong}}"
+            },
+            {
+              "action": "replaceAll",
+              "replaceText": "={{ Number($('Fetch Order Data').first().json.service_fee_per_person).toLocaleString('vi-VN') }}",
+              "text": "{{PhiDVVN_Nguoi}}"
+            },
+            {
+              "action": "replaceAll",
+              "replaceText": "={{ Number($('Fetch Order Data').first().json.total_fee_vn).toLocaleString('vi-VN') }}",
+              "text": "{{TongPhiDVVN}}"
+            }
+          ]
+        },
+        "documentURL": "={{ $json.id }}",
+        "operation": "update",
+        "options": {}
+      },
+      "position": [
+        1616,
+        -80
+      ],
+      "retryOnFail": true,
+      "type": "n8n-nodes-base.googleDocs",
+      "typeVersion": 2,
+      "waitBetweenTries": 2000
+    },
+    {
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "pQ6qTSMZRoiqUMQV",
+          "name": "Google Drive account"
+        }
+      },
+      "id": "export-pdf",
+      "name": "Export PDF",
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        },
+        "url": "=https://www.googleapis.com/drive/v3/files/{{ $json.documentId }}/export?mimeType=application/pdf"
+      },
+      "position": [
+        1840,
+        -80
+      ],
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2
+    },
+    {
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-credentials",
+          "name": "Supabase Service Role"
+        }
+      },
+      "id": "upload-pdf-to-supabase",
+      "name": "Upload PDF to Supabase",
+      "parameters": {
+        "binaryData": true,
+        "bucketName": "agent-media",
+        "fileName": "contract.pdf",
+        "operation": "upload",
+        "options": {},
+        "path": "={{ `contracts/${$('Fetch Contract Request').first().json.id}` }}"
+      },
+      "position": [
+        2064,
+        -80
+      ],
+      "retryOnFail": true,
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "waitBetweenTries": 2000
+    },
+    {
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-credentials",
+          "name": "Supabase Service Role"
+        }
+      },
+      "id": "update-contract-request-completed",
+      "name": "Update Contract Request Completed",
+      "parameters": {
+        "columnMatch": {
+          "columnToMatchOn": "id",
+          "columnValueToMatch": "={{ $('Fetch Contract Request').first().json.id }}",
+          "dataToInsert": {
+            "completed_at": "={{ $now.toISO() }}",
+            "docs_edit_url": "={{ $('Copy Google Docs Template').first().json.id }}",
+            "pdf_url": "={{ $json.publicUrl }}",
+            "status": "completed"
+          }
+        },
+        "operation": "update",
+        "options": {},
+        "table": "contract_requests"
+      },
+      "position": [
+        2288,
+        -80
+      ],
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1
+    },
+    {
+      "id": "respond-success",
+      "name": "Respond Success",
+      "parameters": {
+        "options": {},
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": true,\n  \"pdf_url\": {{ $('Update Contract Request Completed').first().json.pdf_url }},\n  \"docs_edit_url\": {{ $('Update Contract Request Completed').first().json.docs_edit_url }}\n}"
+      },
+      "position": [
+        2512,
+        -80
+      ],
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1
+    }
+  ],
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2026-04-15T00:00:00.000Z",
+  "versionId": "1"
+}

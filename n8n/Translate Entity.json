@@ -1,0 +1,306 @@
+{
+  "connections": {
+    "Call Kimi API": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Parse Translation Response",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Fetch Entity Data": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Call Kimi API",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Fetch Translation Request": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Fetch Entity Data",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Parse Translation Response": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Update Entity with Translation",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Update Entity with Translation": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Update Translation Request Completed",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Update Status to Processing": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Fetch Translation Request",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Update Translation Request Completed": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Respond Success",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Update Status to Processing",
+            "type": "main"
+          }
+        ]
+      ]
+    }
+  },
+  "name": "Translate Entity",
+  "nodes": [
+    {
+      "id": "webhook-translate",
+      "name": "Webhook",
+      "parameters": {
+        "httpMethod": "POST",
+        "options": {},
+        "path": "translate-entity"
+      },
+      "position": [
+        -176,
+        -80
+      ],
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "webhookId": "translate-entity-webhook"
+    },
+    {
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-credentials",
+          "name": "Supabase Service Role"
+        }
+      },
+      "id": "update-status-processing",
+      "name": "Update Status to Processing",
+      "parameters": {
+        "columnMatch": {
+          "columnToMatchOn": "id",
+          "columnValueToMatch": "={{ $json.request_id }}",
+          "dataToInsert": {
+            "status": "processing"
+          }
+        },
+        "operation": "update",
+        "options": {},
+        "table": "translation_requests"
+      },
+      "position": [
+        48,
+        -80
+      ],
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1
+    },
+    {
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-credentials",
+          "name": "Supabase Service Role"
+        }
+      },
+      "id": "fetch-translation-request",
+      "name": "Fetch Translation Request",
+      "parameters": {
+        "columns": {
+          "mappingMode": "autoMapInputData"
+        },
+        "operation": "read",
+        "options": {},
+        "table": "translation_requests"
+      },
+      "position": [
+        272,
+        -80
+      ],
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1
+    },
+    {
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-credentials",
+          "name": "Supabase Service Role"
+        }
+      },
+      "id": "fetch-entity-data",
+      "name": "Fetch Entity Data",
+      "parameters": {
+        "columns": {
+          "mappingMode": "autoMapInputData"
+        },
+        "operation": "read",
+        "options": {},
+        "table": "={{ $json.entity_type }}s"
+      },
+      "position": [
+        496,
+        -80
+      ],
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1
+    },
+    {
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "kimi-api-key",
+          "name": "Kimi API Key"
+        }
+      },
+      "id": "call-kimi-api",
+      "name": "Call Kimi API",
+      "parameters": {
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "jsonBody": "={\n  \"model\": \"moonshot-v1-128k\",\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"You are a professional translator. Translate Vietnamese to English while maintaining context and professional tone. Return the result as a JSON object with field names as keys.\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"Translate the following fields from Vietnamese to English:\\n\\n{{ $json.fields_to_translate.map(f =\u003e `Field: ${f}\\nValue: ${$json[f] || \u0027\u0027}`).join(\u0027\\n\\n\u0027) }}\\n\\nReturn the result as JSON with the same field names but with \u0027en_\u0027 prefix for translated values.\"\n    }\n  ],\n  \"temperature\": 0.3,\n  \"max_tokens\": 2000\n}",
+        "method": "POST",
+        "options": {},
+        "sendBody": true,
+        "specifyBody": "json",
+        "url": "https://api.moonshot.cn/v1/chat/completions"
+      },
+      "position": [
+        720,
+        -80
+      ],
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2
+    },
+    {
+      "id": "parse-translation-response",
+      "name": "Parse Translation Response",
+      "parameters": {
+        "jsCode": "// Parse Kimi API response\nconst content = $input.first().json.choices[0].message.content;\nlet translatedData;\n\ntry {\n  translatedData = JSON.parse(content);\n} catch (e) {\n  // Fallback: try to extract JSON from content\n  const match = content.match(/\\{[\\s\\S]*\\}/);\n  if (match) {\n    translatedData = JSON.parse(match[0]);\n  } else {\n    throw new Error(\u0027Could not parse JSON from Kimi response\u0027);\n  }\n}\n\n// Map field names to en_* format\nconst result = {};\nfor (const [key, value] of Object.entries(translatedData)) {\n  if (!key.startsWith(\u0027en_\u0027)) {\n    result[`en_${key}`] = value;\n  } else {\n    result[key] = value;\n  }\n}\n\nreturn { json: { translated_data: result } };"
+      },
+      "position": [
+        944,
+        -80
+      ],
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2
+    },
+    {
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-credentials",
+          "name": "Supabase Service Role"
+        }
+      },
+      "id": "update-entity-with-translation",
+      "name": "Update Entity with Translation",
+      "parameters": {
+        "columnMatch": {
+          "columnToMatchOn": "id",
+          "columnValueToMatch": "={{ $(\u0027Fetch Translation Request\u0027).item.json.entity_id }}",
+          "dataToInsert": "={{ $json.translated_data }}"
+        },
+        "operation": "update",
+        "options": {},
+        "table": "={{ $(\u0027Fetch Translation Request\u0027).item.json.entity_type }}s"
+      },
+      "position": [
+        1168,
+        -80
+      ],
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1
+    },
+    {
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-credentials",
+          "name": "Supabase Service Role"
+        }
+      },
+      "id": "update-translation-request-completed",
+      "name": "Update Translation Request Completed",
+      "parameters": {
+        "columnMatch": {
+          "columnToMatchOn": "id",
+          "columnValueToMatch": "={{ $(\u0027Fetch Translation Request\u0027).item.json.id }}",
+          "dataToInsert": {
+            "completed_at": "={{ $now.toISO() }}",
+            "status": "completed",
+            "translated_data": "={{ $json.translated_data }}"
+          }
+        },
+        "operation": "update",
+        "options": {},
+        "table": "translation_requests"
+      },
+      "position": [
+        1392,
+        -80
+      ],
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1
+    },
+    {
+      "id": "respond-success",
+      "name": "Respond Success",
+      "parameters": {
+        "options": {},
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": true,\n  \"translated_data\": {{ $json.translated_data }}\n}"
+      },
+      "position": [
+        1616,
+        -80
+      ],
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1
+    }
+  ],
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2026-04-15T00:00:00.000Z",
+  "versionId": "1"
+}

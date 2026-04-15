@@ -250,25 +250,44 @@ export default function CompanyDetailPage() {
         body: JSON.stringify({ company_id: id }),
       });
       if (!res.ok) return;
-      const translated = await res.json() as {
-        en_company_name: string | null;
-        en_industry: string | null;
-        en_business_type: string | null;
-        en_address: string | null;
-        en_legal_rep: string | null;
-        en_title: string | null;
-      };
-      setForm((f) => ({
-        ...f,
-        en_company_name: translated.en_company_name ?? f.en_company_name,
-        en_industry: translated.en_industry ?? f.en_industry,
-        en_business_type: translated.en_business_type ?? f.en_business_type,
-        en_address: translated.en_address ?? f.en_address,
-        en_legal_rep: translated.en_legal_rep ?? f.en_legal_rep,
-        en_title: translated.en_title ?? f.en_title,
-      }));
+      const { request_id } = await res.json() as { request_id: string };
+
+      let completed = false;
+      let attempts = 0;
+      const maxAttempts = 30;
+
+      while (!completed && attempts < maxAttempts) {
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        attempts++;
+
+        const statusRes = await fetch(`/api/translate?request_id=${request_id}`, {
+          headers: {
+            ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+          },
+        });
+        if (!statusRes.ok) continue;
+
+        const statusData = await statusRes.json() as {
+          status: string;
+          translated_data: Record<string, string>;
+        };
+
+        if (statusData.status === 'completed') {
+          completed = true;
+          setForm((f) => ({
+            ...f,
+            en_company_name: statusData.translated_data.en_company_name ?? f.en_company_name,
+            en_industry: statusData.translated_data.en_industry ?? f.en_industry,
+            en_business_type: statusData.translated_data.en_business_type ?? f.en_business_type,
+            en_address: statusData.translated_data.en_address ?? f.en_address,
+            en_legal_rep: statusData.translated_data.en_legal_rep ?? f.en_legal_rep,
+            en_title: statusData.translated_data.en_title ?? f.en_title,
+          }));
+        } else if (statusData.status === 'failed') {
+          completed = true;
+        }
+      }
     } catch {
-      // silent fail
     } finally {
       setTranslating(false);
     }

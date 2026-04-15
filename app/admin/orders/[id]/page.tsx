@@ -369,16 +369,43 @@ export default function OrderDetailPage() {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
         body: JSON.stringify({ order_id: id, agent_id: agentId }),
       });
-      const json = await res.json() as { pdf_url?: string; edit_url?: string; error?: string; missing?: string[] };
+      const json = await res.json() as { request_id?: string; error?: string; missing?: string[] };
       if (!res.ok) {
         alert(json.missing ? `Thiếu thông tin: ${json.missing.join(', ')}` : (json.error ?? 'Lỗi không xác định'));
         return;
       }
-      const agentName = agents.find((a) => a.id === agentId)?.short_name || agentId;
-      setDocLinks((prev) => [
-        ...prev.filter((d) => !(d.type === 'yctd' && d.agent_id === agentId)),
-        { name: `YCTD - ${agentName}`, type: 'yctd', agent_id: agentId, pdf_url: json.pdf_url ?? '', edit_url: json.edit_url, created_at: new Date().toISOString() },
-      ]);
+
+      let completed = false;
+      let attempts = 0;
+      const maxAttempts = 30;
+
+      while (!completed && attempts < maxAttempts) {
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        attempts++;
+
+        const statusRes = await fetch(`/api/orders/yctd?request_id=${json.request_id}`, {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        if (!statusRes.ok) continue;
+
+        const statusData = await statusRes.json() as {
+          status: string;
+          pdf_url?: string;
+          docs_edit_url?: string;
+        };
+
+        if (statusData.status === 'completed') {
+          completed = true;
+          const agentName = agents.find((a) => a.id === agentId)?.short_name || agentId;
+          setDocLinks((prev) => [
+            ...prev.filter((d) => !(d.type === 'yctd' && d.agent_id === agentId)),
+            { name: `YCTD - ${agentName}`, type: 'yctd', agent_id: agentId, pdf_url: statusData.pdf_url ?? '', edit_url: statusData.docs_edit_url, created_at: new Date().toISOString() },
+          ]);
+        } else if (statusData.status === 'failed') {
+          completed = true;
+          alert('Lỗi tạo YCTD');
+        }
+      }
     } catch (err) {
       alert(`Lỗi: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
@@ -396,16 +423,43 @@ export default function OrderDetailPage() {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
         body: JSON.stringify({ order_id: id, contract_type: contractType }),
       });
-      const json = await res.json() as { pdf_url?: string; edit_url?: string; error?: string; missing?: string[] };
+      const json = await res.json() as { request_id?: string; error?: string; missing?: string[] };
       if (!res.ok) {
         alert(json.missing ? `Thiếu thông tin: ${json.missing.join(', ')}` : (json.error ?? 'Lỗi không xác định'));
         return;
       }
-      const contractName = contractType === 1 ? 'HĐ Cơ bản' : 'HĐ Nâng cao';
-      setDocLinks((prev) => [
-        ...prev.filter((d) => !(d.type === 'contract' && d.contract_type === contractType)),
-        { name: contractName, type: 'contract', contract_type: contractType, pdf_url: json.pdf_url ?? '', edit_url: json.edit_url, created_at: new Date().toISOString() },
-      ]);
+
+      let completed = false;
+      let attempts = 0;
+      const maxAttempts = 30;
+
+      while (!completed && attempts < maxAttempts) {
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        attempts++;
+
+        const statusRes = await fetch(`/api/orders/contract?request_id=${json.request_id}`, {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        if (!statusRes.ok) continue;
+
+        const statusData = await statusRes.json() as {
+          status: string;
+          pdf_url?: string;
+          docs_edit_url?: string;
+        };
+
+        if (statusData.status === 'completed') {
+          completed = true;
+          const contractName = contractType === 1 ? 'HĐ Cơ bản' : 'HĐ Nâng cao';
+          setDocLinks((prev) => [
+            ...prev.filter((d) => !(d.type === 'contract' && d.contract_type === contractType)),
+            { name: contractName, type: 'contract', contract_type: contractType, pdf_url: statusData.pdf_url ?? '', edit_url: statusData.docs_edit_url, created_at: new Date().toISOString() },
+          ]);
+        } else if (statusData.status === 'failed') {
+          completed = true;
+          alert('Lỗi tạo hợp đồng');
+        }
+      }
     } catch (err) {
       alert(`Lỗi: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
