@@ -16,7 +16,7 @@
         [
           {
             "index": 0,
-            "node": "AI Translation Agent",
+            "node": "Prepare Translation Prompt",
             "type": "main"
           }
         ]
@@ -39,6 +39,17 @@
           {
             "index": 0,
             "node": "Update Entity with Translation",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Prepare Translation Prompt": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "AI Translation Agent",
             "type": "main"
           }
         ]
@@ -184,10 +195,23 @@
       "typeVersion": 1
     },
     {
+      "id": "prepare-translation-prompt",
+      "name": "Prepare Translation Prompt",
+      "parameters": {
+        "jsCode": "// Prepare translation prompt from entity data\nconst fieldsToTranslate = $('Fetch Translation Request').first().json.fields_to_translate;\nconst entityData = $input.first().json;\n\n// Build prompt with field-value pairs\nconst fieldPairs = fieldsToTranslate.map(field =\u003e {\n  const value = entityData[field] || '';\n  return `Field: ${field}\\nValue: ${value}`;\n}).join('\\n\\n');\n\nconst prompt = `Translate the following fields from Vietnamese to English:\\n\\n${fieldPairs}\\n\\nReturn the result as JSON with the same field names but with 'en_' prefix for translated values.`;\n\nreturn { json: { prompt, fields_to_translate } };"
+      },
+      "position": [
+        640,
+        -80
+      ],
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2
+    },
+    {
       "credentials": {
         "openaiApi": {
-          "id": "openai-credentials",
-          "name": "OpenAI API"
+          "id": "nvidia-openai-credentials",
+          "name": "NVIDIA OpenAI API"
         }
       },
       "id": "ai-translation-agent",
@@ -199,7 +223,7 @@
             "provider": "openai"
           },
           "systemPrompt": "You are a professional translator. Translate Vietnamese to English while maintaining context and professional tone. Return the result as a JSON object with field names as keys.",
-          "text": "={{ 'Translate the following fields from Vietnamese to English:\\n\\n' + $json.fields_to_translate.map(f =\u003e `Field: ${f}\\nValue: ${$json[f] || \u0027\u0027}`).join(\u0027\\n\\n\u0027) + '\\n\\nReturn the result as JSON with the same field names but with \u0027en_\u0027 prefix for translated values.' }}",
+          "text": "={{ $json.prompt }}",
           "options": {
             "temperature": 0.3,
             "maxTokens": 2000
@@ -207,7 +231,7 @@
         }
       },
       "position": [
-        720,
+        784,
         -80
       ],
       "type": "n8n-nodes-base.aiAgent",
@@ -220,7 +244,7 @@
         "jsCode": "// Parse AI Agent response\nconst content = $input.first().json.output || $input.first().json.text || $input.first().json.content;\nlet translatedData;\n\ntry {\n  translatedData = JSON.parse(content);\n} catch (e) {\n  // Fallback: try to extract JSON from content\n  const match = content.match(/\\{[\\s\\S]*\\}/);\n  if (match) {\n    translatedData = JSON.parse(match[0]);\n  } else {\n    throw new Error(\u0027Could not parse JSON from AI response\u0027);\n  }\n}\n\n// Map field names to en_* format\nconst result = {};\nfor (const [key, value] of Object.entries(translatedData)) {\n  if (!key.startsWith(\u0027en_\u0027)) {\n    result[`en_${key}`] = value;\n  } else {\n    result[key] = value;\n  }\n}\n\nreturn { json: { translated_data: result } };"
       },
       "position": [
-        944,
+        928,
         -80
       ],
       "type": "n8n-nodes-base.code",
@@ -246,7 +270,7 @@
         "table": "={{ $(\u0027Fetch Translation Request\u0027).item.json.entity_type }}s"
       },
       "position": [
-        1168,
+        1072,
         -80
       ],
       "type": "n8n-nodes-base.supabase",
@@ -276,7 +300,7 @@
         "table": "translation_requests"
       },
       "position": [
-        1392,
+        1216,
         -80
       ],
       "type": "n8n-nodes-base.supabase",
@@ -291,7 +315,7 @@
         "responseBody": "={\n  \"success\": true,\n  \"translated_data\": {{ $json.translated_data }}\n}"
       },
       "position": [
-        1616,
+        1360,
         -80
       ],
       "type": "n8n-nodes-base.respondToWebhook",

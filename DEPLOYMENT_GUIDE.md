@@ -132,13 +132,14 @@ You'll need these for environment variables:
    - **API Key**: Your Supabase Service Role Key (from `.env` or Supabase dashboard)
 5. Click "Save"
 
-### 3.2 OpenAI API Credential
+### 3.2 NVIDIA OpenAI API Credential
 1. In n8n, go to Credentials (left sidebar)
 2. Click "Add Credential"
 3. Search for "OpenAI API"
 4. Fill in:
-   - **Name**: OpenAI API
-   - **API Key**: Your OpenAI API key (from `.env` or OpenAI dashboard)
+   - **Name**: NVIDIA OpenAI API
+   - **API Key**: Your NVIDIA OpenAI API key
+   - **Base URL**: `https://integrate.api.nvidia.com/v1` (if using NVIDIA's OpenAI endpoint)
 5. Click "Save"
 
 ### 3.3 Google Drive OAuth Credential
@@ -169,7 +170,7 @@ For each workflow:
 
 **Credential mapping:**
 - All Supabase nodes → "Supabase Service Role"
-- "AI Translation Agent" node → "OpenAI API"
+- "AI Translation Agent" node → "NVIDIA OpenAI API"
 - "Copy Google Docs Template" node → "Google Drive OAuth2API"
 - "Fill Data to Docs" node → "Google Docs OAuth2Api"
 - "Export PDF" node → "Google Drive OAuth2Api"
@@ -195,8 +196,8 @@ NEXT_PUBLIC_YCTD_TEMPLATE_URL=https://docs.google.com/document/d/YOUR_YCTD_TEMPL
 NEXT_PUBLIC_CONTRACT_BASIC_TEMPLATE_URL=https://docs.google.com/document/d/YOUR_BASIC_CONTRACT_TEMPLATE_ID/edit
 NEXT_PUBLIC_CONTRACT_ADVANCED_TEMPLATE_URL=https://docs.google.com/document/d/YOUR_ADVANCED_CONTRACT_TEMPLATE_ID/edit
 
-# OpenAI API
-OPENAI_API_KEY=your-openai-api-key
+# NVIDIA OpenAI API
+NVIDIA_OPENAI_API_KEY=your-nvidia-openai-api-key
 ```
 
 **Note:** Replace `YOUR_*_TEMPLATE_ID` with actual Google Docs document IDs.
@@ -229,14 +230,14 @@ NEXT_PUBLIC_YCTD_TEMPLATE_URL=https://docs.google.com/document/d/YOUR_YCTD_TEMPL
 NEXT_PUBLIC_CONTRACT_BASIC_TEMPLATE_URL=https://docs.google.com/document/d/YOUR_BASIC_CONTRACT_TEMPLATE_ID/edit
 NEXT_PUBLIC_CONTRACT_ADVANCED_TEMPLATE_URL=https://docs.google.com/document/d/YOUR_ADVANCED_CONTRACT_TEMPLATE_ID/edit
 
-# OpenAI API
-OPENAI_API_KEY=your-openai-api-key
+# NVIDIA OpenAI API
+NVIDIA_OPENAI_API_KEY=your-nvidia-openai-api-key
 ```
 
 **Important:**
 - Replace `your-n8n-instance.com` with your actual n8n URL
 - Replace `YOUR_*_TEMPLATE_ID` with actual Google Docs IDs
-- Keep `KIMI_API_KEY` as-is (provided key)
+- Add your NVIDIA OpenAI API key
 
 ### 5.3 Redeploy
 After adding variables:
