@@ -112,6 +112,7 @@ export default function OrderDetailPage() {
     dormitory_en: '',
     dormitory_note: '',
     probation: 'Không',
+    probation_en: '',
     probation_salary_pct: '',
     agent_order_status: '',
   });
@@ -176,6 +177,7 @@ export default function OrderDetailPage() {
         dormitory_en: o.dormitory_en ?? '',
         dormitory_note: o.dormitory_note ?? '',
         probation: o.probation ?? 'Không',
+        probation_en: o.probation_en ?? '',
         probation_salary_pct: o.probation_salary_pct?.toString() ?? '',
         agent_order_status: o.agent_order_status ?? '',
       });
@@ -928,13 +930,14 @@ export default function OrderDetailPage() {
               {translating ? '⏳ Đang dịch...' : '🌐 Dịch'}
             </button>
           </div>
-          <div className="p-4 space-y-3">
-            <div><label className="block text-xs text-gray-500 mb-1">Job Type (EN)</label><input type="text" value={form.job_type_en} onChange={(e) => setField('job_type_en', e.target.value)} className={inputClsBase} /></div>
-            <div className="grid grid-cols-2 gap-3">
-              <div><label className="block text-xs text-gray-500 mb-1">Meal (EN)</label><input type="text" value={form.meal_en} onChange={(e) => setField('meal_en', e.target.value)} className={inputClsBase} /></div>
-              <div><label className="block text-xs text-gray-500 mb-1">Dormitory (EN)</label><input type="text" value={form.dormitory_en} onChange={(e) => setField('dormitory_en', e.target.value)} className={inputClsBase} /></div>
-            </div>
-          </div>
+           <div className="p-4 space-y-3">
+             <div><label className="block text-xs text-gray-500 mb-1">Job Type (EN)</label><input type="text" value={form.job_type_en} onChange={(e) => setField('job_type_en', e.target.value)} className={inputClsBase} /></div>
+             <div className="grid grid-cols-2 gap-3">
+               <div><label className="block text-xs text-gray-500 mb-1">Meal (EN)</label><input type="text" value={form.meal_en} onChange={(e) => setField('meal_en', e.target.value)} className={inputClsBase} /></div>
+               <div><label className="block text-xs text-gray-500 mb-1">Dormitory (EN)</label><input type="text" value={form.dormitory_en} onChange={(e) => setField('dormitory_en', e.target.value)} className={inputClsBase} /></div>
+             </div>
+             <div><label className="block text-xs text-gray-500 mb-1">Probation (EN)</label><input type="text" value={form.probation_en} onChange={(e) => setField('probation_en', e.target.value)} className={inputClsBase} /></div>
+           </div>
         </div>
 
         {/* Công nợ */}
