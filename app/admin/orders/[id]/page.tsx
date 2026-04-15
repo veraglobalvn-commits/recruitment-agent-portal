@@ -745,6 +745,30 @@ export default function OrderDetailPage() {
           </div>
         </div>
 
+        {/* Phí dịch vụ Bangladesh */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="px-4 py-3 border-b border-gray-50">
+            <h2 className="text-sm font-semibold text-slate-700">Phí dịch vụ Bangladesh</h2>
+          </div>
+          <div className="p-4 space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Phí DV / Người (USD)</label>
+                <input type="text" value={form.service_fee_bd_per_person ? fmtUSD(parseFloat(form.service_fee_bd_per_person)) : ''} onChange={(e) => setField('service_fee_bd_per_person', e.target.value.replace(/\./g, '').replace(/,/g, ''))} className={inputCls(form.service_fee_bd_per_person)} />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Tổng phí DV Bangladesh (USD)</label>
+                <input type="text" value={form.total_fee_bd ? fmtUSD(parseFloat(form.total_fee_bd)) : ''} onChange={(e) => setField('total_fee_bd', e.target.value.replace(/,/g, ''))} className={inputCls(form.total_fee_bd)} />
+              </div>
+            </div>
+            {form.total_labor && form.service_fee_bd_per_person && (
+              <p className="text-xs text-gray-400 text-center">
+                {form.total_labor} LĐ × ${form.service_fee_bd_per_person} = ${(parseFloat(form.total_labor) * parseFloat(form.service_fee_bd_per_person)).toLocaleString()}
+              </p>
+            )}
+          </div>
+        </div>
+
         {/* Agent phụ trách */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="px-4 py-3 border-b border-gray-50 flex items-center justify-between">
@@ -891,30 +915,6 @@ export default function OrderDetailPage() {
               </div>
               <p className="text-xs text-gray-500 mt-1">Đã thanh toán {paymentPct}% · {fmtVND(totalPaidVnd)} / {fmtVND(totalFeeVndNum)} ₫</p>
             </div>
-          </div>
-        </div>
-
-        {/* Phí dịch vụ Bangladesh */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-          <div className="px-4 py-3 border-b border-gray-50">
-            <h2 className="text-sm font-semibold text-slate-700">Phí dịch vụ Bangladesh</h2>
-          </div>
-          <div className="p-4 space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Phí DV / Người (USD)</label>
-                <input type="text" value={form.service_fee_bd_per_person ? fmtUSD(parseFloat(form.service_fee_bd_per_person)) : ''} onChange={(e) => setField('service_fee_bd_per_person', e.target.value.replace(/\./g, '').replace(/,/g, ''))} className={inputCls(form.service_fee_bd_per_person)} />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Tổng phí DV Bangladesh (USD)</label>
-                <input type="text" value={form.total_fee_bd ? fmtUSD(parseFloat(form.total_fee_bd)) : ''} onChange={(e) => setField('total_fee_bd', e.target.value.replace(/,/g, ''))} className={inputCls(form.total_fee_bd)} />
-              </div>
-            </div>
-            {form.total_labor && form.service_fee_bd_per_person && (
-              <p className="text-xs text-gray-400 text-center">
-                {form.total_labor} LĐ × ${form.service_fee_bd_per_person} = ${(parseFloat(form.total_labor) * parseFloat(form.service_fee_bd_per_person)).toLocaleString()}
-              </p>
-            )}
           </div>
         </div>
 
