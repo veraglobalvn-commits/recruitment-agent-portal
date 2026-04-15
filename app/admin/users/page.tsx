@@ -62,12 +62,10 @@ export default function UsersPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('agents')
-        .select('id, full_name, short_name, role')
-        .order('created_at', { ascending: false });
-      if (error) throw new Error(error.message);
-      setUsers((data ?? []) as UserRow[]);
+      const response = await fetch('/api/admin/agents');
+      const json = await response.json();
+      const agents = json.agents || [];
+      setUsers(agents as UserRow[]);
     } catch (err) {
       console.error('Error loading users:', err);
     } finally {

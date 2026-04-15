@@ -39,13 +39,19 @@ export default function AgentsPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [agentsRes, ordersRes, candidatesRes] = await Promise.all([
-        supabase.from('agents').select('id, full_name, short_name, labor_percentage').order('created_at', { ascending: false }),
-        supabase.from('orders').select('id, agent_ids, total_labor'),
-        supabase.from('candidates').select('id_ld, agent_id, interview_status'),
-      ]);
+const response = await fetch('/api/admin/agents');
+        const json = await response.json();
+        const agentsRes = { data: json.agents, error: null };
+        const { data: ordersData, error: ordersError } = await supabase.from('orders').select('id, agent_ids, total_labor');
+        if (ordersError) throw new Error('orders: ' + (ordersError as any).message);
+        const { data: candidatesData, error: candidatesError } = await supabase.from('candidates').select('id_ld, agent_id, interview_status');
+        if (candidatesError) throw new Error('candidates: ' + (candidatesError as any).message);
+        const ordersRes = { data: ordersData };
+        const candidatesRes = { data: candidatesData };
+        
+// agentsRes.error check removed
 
-      if (agentsRes.error) throw new Error(`agents: ${agentsRes.error.message}`);
+      // agentsRes.error check removed
 
       const agentsRaw = agentsRes.data || [];
       const orders = ordersRes.data || [];
