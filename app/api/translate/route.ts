@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Fields that need AI translation
-  const needsTranslation = {
+  const payload = {
     company_name: company.company_name || '',
     industry: company.industry || '',
     business_type: company.business_type || '',
@@ -78,68 +78,32 @@ export async function POST(req: NextRequest) {
     probation_info,
   };
 
-  const hasContent = Object.values(needsTranslation).some((v) => v.trim() !== '');
+  const hasContent = Object.values(payload).some((v) => v.trim() !== '');
   let translations: Record<string, string> = {};
 
   if (hasContent) {
-    const apiKey = process.env.OPENROUTER_API_KEY;
-    if (!apiKey) {
-      return NextResponse.json({ error: 'OPENROUTER_API_KEY not configured' }, { status: 500 });
+    const n8nUrl = process.env.N8N_TRANSLATE_URL;
+    if (!n8nUrl) {
+      return NextResponse.json({ error: 'N8N_TRANSLATE_URL not configured' }, { status: 500 });
     }
 
-    const prompt = `Translate these Vietnamese business fields to English. Return ONLY a valid JSON object, no markdown, no extra text.
-Input:
-- company_name: "${needsTranslation.company_name}"
-- industry: "${needsTranslation.industry}"
-- business_type: "${needsTranslation.business_type}"
-- address: "${needsTranslation.address}"
-- legal_rep: "${needsTranslation.legal_rep}"
-- legal_rep_title: "${needsTranslation.legal_rep_title}"
-- job_type: "${needsTranslation.job_type}"
-- recruitment_info: "${needsTranslation.recruitment_info}"
-- probation_info: "${needsTranslation.probation_info}"
-
-Return JSON with exactly these keys:
-{"en_company_name":"","en_industry":"","en_business_type":"","en_address":"","en_legal_rep":"","en_title":"","job_type_en":"","recruitment_info_en":"","probation_info_en":""}`;
-
     try {
-      const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      const res = await fetch(n8nUrl, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-          'HTTP-Referer': process.env.NEXT_PUBLIC_SUPABASE_URL ?? '',
-          'X-Title': 'Vera Global Recruitment Portal',
-        },
-        body: JSON.stringify({
-          model: 'nvidia/llama-3.1-nemotron-ultra-253b-v1:free',
-          messages: [{ role: 'user', content: prompt }],
-          temperature: 0.1,
-          max_tokens: 800,
-        }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
         const errText = await res.text();
-        console.error('OpenRouter error:', errText);
-        return NextResponse.json({ error: `OpenRouter API error: ${res.status}` }, { status: 502 });
+        console.error('[translate] n8n error:', errText);
+        return NextResponse.json({ error: `n8n translate error: ${res.status}` }, { status: 502 });
       }
 
-      const data = await res.json() as { choices?: { message?: { content?: string } }[] };
-      const content = data.choices?.[0]?.message?.content ?? '';
-
-      // Extract JSON from response (handle markdown code blocks)
-      const jsonMatch = content.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        try {
-          translations = JSON.parse(jsonMatch[0]) as Record<string, string>;
-        } catch {
-          console.error('Failed to parse translation JSON:', content);
-          return NextResponse.json({ error: 'Failed to parse AI response' }, { status: 502 });
-        }
-      }
+      const data = await res.json() as Record<string, string>;
+      translations = data;
     } catch (err) {
-      console.error('Translation fetch error:', err);
+      console.error('[translate] fetch error:', err);
       return NextResponse.json({ error: 'Translation service unavailable' }, { status: 502 });
     }
   }

@@ -75,6 +75,16 @@ export interface DocLink {
   uploaded_at: string;
 }
 
+export interface OrderDocLink {
+  name: string;               // "YCTD - GTA 2026" | "HĐ Cơ bản" | "HĐ Nâng cao"
+  type: 'yctd' | 'contract';
+  agent_id?: string;          // only for yctd
+  contract_type?: 1 | 2;     // only for contract
+  pdf_url: string;
+  edit_url?: string;          // Google Docs edit link
+  created_at: string;
+}
+
 export interface Company {
   id: string;
   company_name: string;
@@ -143,6 +153,7 @@ export interface AdminOrder {
   probation_months?: number | null;
   probation_salary_pct: number | null;
   agent_order_status: string | null;
+  doc_links: OrderDocLink[];
   created_at: string;
 }
 

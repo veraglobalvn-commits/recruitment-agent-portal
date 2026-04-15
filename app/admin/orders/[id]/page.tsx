@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import type { Candidate, AdminOrder, AgentOption, OrderHandover, OrderPayment } from '@/lib/types';
+import type { Candidate, AdminOrder, AgentOption, OrderHandover, OrderPayment, OrderDocLink } from '@/lib/types';
 import CandidateCard from '@/components/CandidateCard';
 import Link from 'next/link';
 
@@ -86,6 +86,10 @@ export default function OrderDetailPage() {
   const [addingPaymentParty, setAddingPaymentParty] = useState<'company' | 'agent' | null>(null);
   const [newPayment, setNewPayment] = useState<Partial<OrderPayment>>({});
   const [translating, setTranslating] = useState(false);
+  const [docLinks, setDocLinks] = useState<OrderDocLink[]>([]);
+  const [yctdLoading, setYctdLoading] = useState<Record<string, boolean>>({});
+  const [contractType, setContractType] = useState<1 | 2>(1);
+  const [contractLoading, setContractLoading] = useState(false);
 
   const videoInputRef = useRef<HTMLInputElement>(null);
 
@@ -152,6 +156,7 @@ export default function OrderDetailPage() {
     if (ordRes.data) {
       const o = ordRes.data as AdminOrder;
       setOrder(o);
+      setDocLinks((o.doc_links as OrderDocLink[]) ?? []);
       setForm({
         job_type: o.job_type ?? '',
         job_type_en: o.job_type_en ?? '',
@@ -352,6 +357,60 @@ export default function OrderDetailPage() {
   const handleSetStatus = async (newStatus: 'Finished' | 'Cancelled') => {
     await supabase.from('orders').update({ status: newStatus }).eq('id', id);
     setForm((f) => ({ ...f, status: newStatus }));
+  };
+
+  const handleCreateYctd = async (agentId: string) => {
+    setYctdLoading((p) => ({ ...p, [agentId]: true }));
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) return;
+      const res = await fetch('/api/orders/yctd', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ order_id: id, agent_id: agentId }),
+      });
+      const json = await res.json() as { pdf_url?: string; edit_url?: string; error?: string; missing?: string[] };
+      if (!res.ok) {
+        alert(json.missing ? `Thiếu thông tin: ${json.missing.join(', ')}` : (json.error ?? 'Lỗi không xác định'));
+        return;
+      }
+      const agentName = agents.find((a) => a.id === agentId)?.short_name || agentId;
+      setDocLinks((prev) => [
+        ...prev.filter((d) => !(d.type === 'yctd' && d.agent_id === agentId)),
+        { name: `YCTD - ${agentName}`, type: 'yctd', agent_id: agentId, pdf_url: json.pdf_url ?? '', edit_url: json.edit_url, created_at: new Date().toISOString() },
+      ]);
+    } catch (err) {
+      alert(`Lỗi: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setYctdLoading((p) => ({ ...p, [agentId]: false }));
+    }
+  };
+
+  const handleCreateContract = async () => {
+    setContractLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) return;
+      const res = await fetch('/api/orders/contract', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ order_id: id, contract_type: contractType }),
+      });
+      const json = await res.json() as { pdf_url?: string; edit_url?: string; error?: string; missing?: string[] };
+      if (!res.ok) {
+        alert(json.missing ? `Thiếu thông tin: ${json.missing.join(', ')}` : (json.error ?? 'Lỗi không xác định'));
+        return;
+      }
+      const contractName = contractType === 1 ? 'HĐ Cơ bản' : 'HĐ Nâng cao';
+      setDocLinks((prev) => [
+        ...prev.filter((d) => !(d.type === 'contract' && d.contract_type === contractType)),
+        { name: contractName, type: 'contract', contract_type: contractType, pdf_url: json.pdf_url ?? '', edit_url: json.edit_url, created_at: new Date().toISOString() },
+      ]);
+    } catch (err) {
+      alert(`Lỗi: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setContractLoading(false);
+    }
   };
 
   const updateHandover = async (handoverId: string, updates: Partial<OrderHandover>) => {
@@ -571,19 +630,6 @@ export default function OrderDetailPage() {
               {totalFeeBdNum > 0 && <span className="text-gray-400"> / ${fmtUSD(totalFeeBdNum)}</span>}
             </div>
           </div>
-          {/* Hoàn thành / Huỷ đơn buttons — đặt ở đây để luôn thấy */}
-          <div className="mt-3 flex gap-2">
-            <button
-              onClick={() => handleSetStatus('Finished')}
-              disabled={form.status === 'Finished' || form.status === 'Cancelled'}
-              className="flex-1 px-3 py-2 text-xs font-semibold rounded-lg bg-green-100 text-green-700 hover:bg-green-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors min-h-[36px]"
-            >Đánh dấu Hoàn thành</button>
-            <button
-              onClick={() => handleSetStatus('Cancelled')}
-              disabled={form.status === 'Cancelled'}
-              className="flex-1 px-3 py-2 text-xs font-semibold rounded-lg bg-red-100 text-red-600 hover:bg-red-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors min-h-[36px]"
-            >Huỷ đơn</button>
-          </div>
         </div>
 
         {/* Thông tin đơn hàng */}
@@ -724,6 +770,41 @@ export default function OrderDetailPage() {
             )}
           </div>
         </div>
+
+        {/* Yêu cầu tuyển dụng (YCTD) */}
+        {form.agent_ids.length > 0 && (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="px-4 py-3 border-b border-gray-50">
+              <h2 className="text-sm font-semibold text-slate-700">Yêu cầu tuyển dụng</h2>
+            </div>
+            <div className="p-4 space-y-2">
+              {agents.filter((ag) => form.agent_ids.includes(ag.id)).map((ag) => {
+                const yctdLink = docLinks.find((d) => d.type === 'yctd' && d.agent_id === ag.id);
+                const isLoading = !!yctdLoading[ag.id];
+                return (
+                  <div key={ag.id} className="flex items-center gap-3 p-2.5 bg-gray-50 rounded-lg">
+                    <span className="text-sm text-slate-700 flex-1 min-w-0 truncate">{ag.short_name || ag.full_name}</span>
+                    {yctdLink ? (
+                      <div className="flex items-center gap-2 text-xs flex-shrink-0">
+                        <a href={yctdLink.pdf_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">📄 PDF</a>
+                        {yctdLink.edit_url && <a href={yctdLink.edit_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">✏️ Docs</a>}
+                        <button onClick={() => handleCreateYctd(ag.id)} disabled={isLoading} className="text-gray-400 hover:text-blue-600 disabled:opacity-50 min-h-[28px] min-w-[28px] flex items-center justify-center">↻</button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => handleCreateYctd(ag.id)}
+                        disabled={isLoading}
+                        className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 disabled:opacity-50 min-h-[32px] flex items-center gap-1 transition-colors flex-shrink-0"
+                      >
+                        {isLoading ? '⏳ Đang tạo...' : '📋 Tạo YCTD'}
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Phí dịch vụ Việt Nam */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
@@ -1161,12 +1242,49 @@ export default function OrderDetailPage() {
 
         {/* Ứng viên */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-          <div className="px-4 py-3 border-b border-gray-50 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-slate-700">Ứng viên ({candidates.length})</h2>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-green-600 font-medium">{passedCount} trúng tuyển</span>
-              <span className="text-xs text-gray-400">/ {candidates.length}</span>
+          <div className="px-4 py-3 border-b border-gray-50">
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-sm font-semibold text-slate-700">Ứng viên ({candidates.length})</h2>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-green-600 font-medium">{passedCount} trúng tuyển</span>
+                <span className="text-xs text-gray-400">/ {candidates.length}</span>
+              </div>
             </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <label className="flex items-center gap-1 text-xs cursor-pointer">
+                <input type="radio" name="contractType" value="1" checked={contractType === 1} onChange={() => setContractType(1)} className="text-blue-600" />
+                <span className="text-gray-600">HĐ Cơ bản</span>
+              </label>
+              <label className="flex items-center gap-1 text-xs cursor-pointer">
+                <input type="radio" name="contractType" value="2" checked={contractType === 2} onChange={() => setContractType(2)} className="text-blue-600" />
+                <span className="text-gray-600">HĐ Nâng cao</span>
+              </label>
+              <button
+                onClick={handleCreateContract}
+                disabled={contractLoading}
+                className="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700 disabled:opacity-50 min-h-[32px] flex items-center gap-1 transition-colors"
+              >
+                {contractLoading ? '⏳ Đang tạo...' : '📄 Tạo hợp đồng'}
+              </button>
+              <div className="flex-1" />
+              <button
+                onClick={() => handleSetStatus('Finished')}
+                disabled={form.status === 'Finished' || form.status === 'Cancelled'}
+                className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-green-100 text-green-700 hover:bg-green-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors min-h-[32px]"
+              >✓ Hoàn thành</button>
+              <button
+                onClick={() => handleSetStatus('Cancelled')}
+                disabled={form.status === 'Cancelled'}
+                className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-red-100 text-red-600 hover:bg-red-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors min-h-[32px]"
+              >✕ Huỷ đơn</button>
+            </div>
+            {docLinks.filter((d) => d.type === 'contract').map((d) => (
+              <div key={`${d.type}-${d.contract_type}`} className="mt-2 flex items-center gap-2 text-xs bg-indigo-50 rounded-lg px-3 py-1.5">
+                <span className="text-gray-600 font-medium">{d.name}:</span>
+                <a href={d.pdf_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">📄 PDF</a>
+                {d.edit_url && <a href={d.edit_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">✏️ Chỉnh sửa</a>}
+              </div>
+            ))}
           </div>
           {selectedCandidates.length > 0 && (
             <div className="px-4 py-2 bg-blue-50 border-b border-blue-100 flex items-center justify-between">
