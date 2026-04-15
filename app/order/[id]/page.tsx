@@ -41,6 +41,7 @@ export default function OrderDetail() {
 
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [orderData, setOrderData] = useState<Order | null>(null);
+  const [enCompanyName, setEnCompanyName] = useState<string>('');
   const [companyVideos, setCompanyVideos] = useState<CompanyVideos | null>(null);
   const [currentAgent, setCurrentAgent] = useState<{ id: string; labor_percentage: number | null } | null>(null);
   const [currentAgentId, setCurrentAgentId] = useState<string | null>(null);
@@ -105,6 +106,15 @@ export default function OrderDetail() {
           probation_salary_pct: orderRes.data.probation_salary_pct,
           agent_order_status: orderRes.data.agent_order_status,
         });
+        if (companyId) {
+          const { data: compData, error: compError } = await supabase.from('companies')
+            .select('en_company_name')
+            .eq('id', companyId)
+            .single();
+          if (!compError && compData) {
+            setEnCompanyName(compData.en_company_name ?? '');
+          }
+        }
         agentIds = (orderRes.data as any).agent_ids || [];
       }
 
@@ -483,12 +493,12 @@ export default function OrderDetail() {
             {/* Info grid */}
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-px bg-gray-100">
               {[
-                { label: 'Company', value: orderData.company },
+                { label: 'Company', value: enCompanyName || orderData.company },
                 { label: 'Total Workers', value: orderData.total_labor },
                 { label: 'Job Type', value: orderData.job_type_en || orderData.job_type },
                 { label: 'Salary (USD)', value: orderData.salary_usd ? `$${orderData.salary_usd.toLocaleString()}` : null },
-                { label: 'Meal', value: orderData.meal },
-                { label: 'Dormitory', value: orderData.dormitory },
+                { label: 'Meal', value: orderData.meal_en || orderData.meal },
+                { label: 'Dormitory', value: orderData.dormitory_en || orderData.dormitory },
               ].map(({ label, value }) => (
                 <div key={label} className="bg-white px-4 py-3">
                   <p className="text-gray-400 text-xs uppercase tracking-wider">{label}</p>
@@ -515,7 +525,7 @@ export default function OrderDetail() {
             <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">Recruitment Productivity</h3>
             <div className="flex items-center justify-between text-center">
               <div>
-                <p className="text-xs text-gray-400 mb-1">Allocated</p>
+                <p className="text-xs text-gray-400 mb-1">Total Workers</p>
                 <p className="text-2xl font-bold text-slate-800">{allocated}</p>
               </div>
               <div>
