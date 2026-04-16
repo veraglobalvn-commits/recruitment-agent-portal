@@ -56,6 +56,12 @@ export default function OrderDetail() {
     visaStatus: string | null; interviewStatus: string | null;
   } | null>(null);
   const [pendingUpload, setPendingUpload] = useState<{ base64: string; agentId: string | null } | null>(null);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [addForm, setAddForm] = useState({
+    full_name: '', pp_no: '', dob: '', pp_doi: '', pp_doe: '',
+    pob: '', address: '', phone: '', height_ft: '', weight_kg: '',
+  });
+  const [addSaving, setAddSaving] = useState(false);
 
   const fetchCandidates = useCallback(async () => {
     try {
@@ -199,6 +205,56 @@ export default function OrderDetail() {
       alert(`Delete failed: ${err instanceof Error ? err.message : String(err)}`);
     }
   }, [orderId]);
+
+  const handleAddCandidate = useCallback(async () => {
+    if (!addForm.full_name.trim() || !addForm.pp_no.trim()) {
+      setUploadMsg('Full name and passport number are required');
+      setTimeout(() => setUploadMsg(null), 3000);
+      return;
+    }
+    setAddSaving(true);
+    try {
+      const cleanName = addForm.full_name.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z]/g, '').toUpperCase();
+      const idLd = `${addForm.pp_no.trim()}_${cleanName}`;
+      const agentId = localStorage.getItem('agent_id');
+
+      const { data: existing } = await supabase.from('candidates').select('id_ld, full_name, order_id').eq('id_ld', idLd).maybeSingle();
+      if (existing) {
+        setUploadMsg(`Candidate "${existing.full_name}" already exists in order ${existing.order_id}`);
+        setTimeout(() => setUploadMsg(null), 4000);
+        setAddSaving(false);
+        return;
+      }
+
+      const { error } = await supabase.from('candidates').insert({
+        id_ld: idLd,
+        order_id: orderId,
+        agent_id: agentId,
+        full_name: addForm.full_name.trim(),
+        pp_no: addForm.pp_no.trim(),
+        dob: addForm.dob || null,
+        pp_doi: addForm.pp_doi || null,
+        pp_doe: addForm.pp_doe || null,
+        pob: addForm.pob || null,
+        address: addForm.address || null,
+        phone: addForm.phone || null,
+        height_ft: addForm.height_ft ? parseFloat(addForm.height_ft) : null,
+        weight_kg: addForm.weight_kg ? parseFloat(addForm.weight_kg) : null,
+      });
+      if (error) throw error;
+
+      setAddForm({ full_name: '', pp_no: '', dob: '', pp_doi: '', pp_doe: '', pob: '', address: '', phone: '', height_ft: '', weight_kg: '' });
+      setShowAddForm(false);
+      setUploadMsg('✅ Candidate added successfully');
+      setTimeout(() => setUploadMsg(null), 3000);
+      fetchCandidates();
+    } catch (err) {
+      setUploadMsg(`Error: ${err instanceof Error ? err.message : String(err)}`);
+      setTimeout(() => setUploadMsg(null), 4000);
+    } finally {
+      setAddSaving(false);
+    }
+  }, [orderId, addForm, fetchCandidates]);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -441,6 +497,12 @@ export default function OrderDetail() {
           >
             {isUploading ? '⏳' : '+ Passport'}
           </button>
+          <button
+            onClick={() => setShowAddForm(!showAddForm)}
+            className="flex-shrink-0 text-xs bg-blue-600 text-white px-3 py-2 rounded-lg hover:bg-blue-700 min-h-[44px] flex items-center"
+          >
+            {showAddForm ? '✕ Cancel' : '+ Add Candidate'}
+          </button>
         </div>
       </header>
 
@@ -535,6 +597,62 @@ export default function OrderDetail() {
         {uploadMsg && (
           <div className="p-3 bg-white border border-gray-200 rounded-xl shadow-sm text-center text-sm font-medium">
             {uploadMsg}
+          </div>
+        )}
+
+        {/* Add Candidate Form */}
+        {showAddForm && (
+          <div className="bg-white rounded-2xl border border-blue-200 shadow-sm p-4 space-y-3">
+            <h3 className="text-sm font-semibold text-slate-700">Add Candidate</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Full Name *</label>
+                <input type="text" value={addForm.full_name} onChange={(e) => setAddForm(f => ({ ...f, full_name: e.target.value }))} placeholder="NGUYEN VAN A" className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Passport No *</label>
+                <input type="text" value={addForm.pp_no} onChange={(e) => setAddForm(f => ({ ...f, pp_no: e.target.value }))} placeholder="C1234567" className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Date of Birth</label>
+                <input type="date" value={addForm.dob} onChange={(e) => setAddForm(f => ({ ...f, dob: e.target.value }))} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Passport Issue Date</label>
+                <input type="date" value={addForm.pp_doi} onChange={(e) => setAddForm(f => ({ ...f, pp_doi: e.target.value }))} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Passport Expiry Date</label>
+                <input type="date" value={addForm.pp_doe} onChange={(e) => setAddForm(f => ({ ...f, pp_doe: e.target.value }))} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Place of Birth</label>
+                <input type="text" value={addForm.pob} onChange={(e) => setAddForm(f => ({ ...f, pob: e.target.value }))} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Address</label>
+                <input type="text" value={addForm.address} onChange={(e) => setAddForm(f => ({ ...f, address: e.target.value }))} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Phone</label>
+                <input type="tel" value={addForm.phone} onChange={(e) => setAddForm(f => ({ ...f, phone: e.target.value }))} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Height (ft)</label>
+                <input type="number" step="0.1" value={addForm.height_ft} onChange={(e) => setAddForm(f => ({ ...f, height_ft: e.target.value }))} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Weight (kg)</label>
+                <input type="number" step="0.1" value={addForm.weight_kg} onChange={(e) => setAddForm(f => ({ ...f, weight_kg: e.target.value }))} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
+              </div>
+            </div>
+            <button
+              onClick={handleAddCandidate}
+              disabled={addSaving || !addForm.full_name.trim() || !addForm.pp_no.trim()}
+              className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold py-3 rounded-xl text-sm min-h-[44px]"
+            >
+              {addSaving ? '⏳ Saving...' : 'Save Candidate'}
+            </button>
           </div>
         )}
 
