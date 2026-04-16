@@ -29,6 +29,6 @@ CREATE POLICY "admin_all_order_agents" ON order_agents FOR ALL
   USING (auth.uid() IN (SELECT supabase_uid FROM agents WHERE role = 'admin'));
 
 CREATE POLICY "agent_read_own_order_agents" ON order_agents FOR SELECT
-  USING (order_id IN (SELECT id FROM orders WHERE agent_ids @> ARRAY[auth.uid()]));
+  USING (order_id IN (SELECT id FROM orders WHERE agent_ids @> ARRAY[auth.uid()::text]));
 
 NOTIFY pgrst, 'reload schema';
