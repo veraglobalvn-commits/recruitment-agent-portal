@@ -2,10 +2,11 @@
 -- 2026-04-17
 
 CREATE TABLE IF NOT EXISTS order_agents (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   order_id TEXT NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
   agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
   assigned_labor_number INTEGER NOT NULL DEFAULT 0,
-  PRIMARY KEY (order_id, agent_id)
+  UNIQUE (order_id, agent_id)
 );
 
 -- Backfill from existing agent_ids + labor_percentage
