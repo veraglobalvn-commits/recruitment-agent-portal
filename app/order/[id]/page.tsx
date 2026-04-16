@@ -249,7 +249,9 @@ export default function OrderDetail() {
       setTimeout(() => setUploadMsg(null), 3000);
       fetchCandidates();
     } catch (err) {
-      setUploadMsg(`Error: ${err instanceof Error ? err.message : String(err)}`);
+      const msg = err instanceof Error ? err.message : (typeof err === 'object' && err !== null && 'message' in err ? (err as { message: string }).message : String(err));
+      console.error('Add candidate error:', err);
+      setUploadMsg(`Error: ${msg}`);
       setTimeout(() => setUploadMsg(null), 4000);
     } finally {
       setAddSaving(false);
