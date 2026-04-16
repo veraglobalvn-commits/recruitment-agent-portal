@@ -159,7 +159,7 @@ export default function OrderDetail() {
           .eq('order_id', orderId);
         if (oaRes.data) {
           const myAllocation = oaRes.data.find((oa: any) => oa.agent_id === agentId);
-          setAllocatedLabor(myAllocation?.assigned_labor_number ?? totalLabor);
+          setAllocatedLabor(myAllocation?.assigned_labor_number ?? (orderRes.data.total_labor || 0));
         }
       }
     } catch (err) {
@@ -484,7 +484,7 @@ export default function OrderDetail() {
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-px bg-gray-100">
               {[
                 { label: 'Company', value: orderData.en_company_name || orderData.company },
-                { label: 'Total Workers', value: orderData.total_labor },
+                { label: 'Target', value: allocated },
                 { label: 'Job Type', value: orderData.job_type_en || orderData.job_type },
                 { label: 'Salary (USD)', value: orderData.salary_usd ? `$${orderData.salary_usd.toLocaleString()}` : null },
                 { label: 'Meal', value: orderData.meal_en || orderData.meal },
