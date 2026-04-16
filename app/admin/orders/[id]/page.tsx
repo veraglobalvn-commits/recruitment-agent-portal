@@ -146,13 +146,14 @@ export default function OrderDetailPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [ordRes, candRes, agRes, handRes, payRes, policyRes] = await Promise.all([
+    const [ordRes, candRes, agRes, handRes, payRes, policyRes, oaRes] = await Promise.all([
       supabase.from('orders').select('*').eq('id', id).single(),
       supabase.from('candidates').select('*').eq('order_id', id),
       supabase.from('agents').select('id, full_name, short_name, labor_percentage').neq('role', 'admin'),
       supabase.from('order_handovers').select('*').eq('order_id', id).order('batch_no'),
       supabase.from('order_payments').select('*').eq('order_id', id).order('created_at'),
       supabase.from('policy_settings').select('key, value').in('key', ['default_fee_vnd', 'default_fee_usd']),
+      supabase.from('order_agents').select('*').eq('order_id', id),
     ]);
     const policyMap = Object.fromEntries(((policyRes.data ?? []) as { key: string; value: string }[]).map(r => [r.key, r.value]));
 
@@ -196,11 +197,18 @@ setOrder(o);
     const agentsData = (agRes.data ?? []) as (AgentOption & { labor_percentage: number | null })[];
     setAgents(agentsData);
     const allocations: Record<string, string> = {};
+    const oaMap = Object.fromEntries(
+      ((oaRes.data ?? []) as { agent_id: string; assigned_labor_number: number }[]).map((oa) => [oa.agent_id, oa.assigned_labor_number])
+    );
     agentsData.forEach((ag) => {
-      const percentage = ag.labor_percentage ?? 0;
-      const tl = ordRes.data?.total_labor ?? 0;
-      const allocation = percentage > 0 ? Math.round((percentage / 100) * tl) : 0;
-      allocations[ag.id] = allocation.toString();
+      if (oaMap[ag.id] !== undefined) {
+        allocations[ag.id] = oaMap[ag.id].toString();
+      } else {
+        const percentage = ag.labor_percentage ?? 0;
+        const tl = ordRes.data?.total_labor ?? 0;
+        const allocation = percentage > 0 ? Math.round((percentage / 100) * tl) : 0;
+        allocations[ag.id] = allocation.toString();
+      }
     });
     setAgentLaborAllocations(allocations);
     setHandovers((handRes.data ?? []) as OrderHandover[]);
@@ -332,17 +340,19 @@ setOrder(o);
   }, []);
 
   const handleAgentAllocationChange = useCallback(async (agentId: string, value: string) => {
-    const numValue = value ? parseInt(value, 10) : null;
+    const numValue = value ? parseInt(value, 10) : 0;
     setAgentLaborAllocations((prev: Record<string, string>) => ({ ...prev, [agentId]: value }));
     try {
-      const tl = parseInt(form.total_labor) || 0;
-      const percentage = tl > 0 && numValue !== null ? Math.round((numValue / tl) * 100) : null;
-      const { error } = await supabase.from('agents').update({ labor_percentage: percentage }).eq('id', agentId);
+      const { error } = await supabase.from('order_agents').upsert({
+        order_id: id,
+        agent_id: agentId,
+        assigned_labor_number: numValue,
+      }, { onConflict: 'order_id,agent_id' });
       if (error) throw error;
     } catch (err) {
       alert(`Lỗi lưu: ${err instanceof Error ? err.message : String(err)}`);
     }
-  }, [form.total_labor]);
+  }, [id]);
 
   // Handover CRUD
   const createHandover = async () => {
@@ -825,7 +835,19 @@ setOrder(o);
                     <div className="p-2 text-xs text-gray-400 text-center">Không có agent nào</div>
                   ) : (
                     agents.filter((ag) => !form.agent_ids.includes(ag.id)).map((ag) => (
-                      <button key={ag.id} onClick={() => { setForm((f) => ({ ...f, agent_ids: [...f.agent_ids, ag.id] })); setDirty(true); setShowAgentDropdown(false); }}
+                      <button key={ag.id} onClick={async () => {
+                        const fullAg = agents.find((a) => a.id === ag.id) as (AgentOption & { labor_percentage: number | null }) | undefined;
+                        const defaultAllocation = fullAg?.labor_percentage && totalLabor > 0
+                          ? Math.round((fullAg.labor_percentage / 100) * totalLabor)
+                          : 0;
+                        setForm((f) => ({ ...f, agent_ids: [...f.agent_ids, ag.id] }));
+                        setAgentLaborAllocations((prev) => ({ ...prev, [ag.id]: defaultAllocation.toString() }));
+                        setDirty(true);
+                        setShowAgentDropdown(false);
+                        await supabase.from('order_agents').upsert({
+                          order_id: id, agent_id: ag.id, assigned_labor_number: defaultAllocation,
+                        }, { onConflict: 'order_id,agent_id' });
+                      }}
                         className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 first:rounded-t-lg last:rounded-b-lg">
                         {ag.short_name || ag.full_name}
                       </button>
@@ -857,7 +879,16 @@ setOrder(o);
                 return (
                   <div key={ag.id} className="p-2 rounded border border-blue-200 bg-blue-50">
                     <div className="flex items-center gap-2 mb-2">
-                      <input type="checkbox" checked={true} onChange={() => { setForm((f) => ({ ...f, agent_ids: f.agent_ids.filter((x) => x !== ag.id) })); setDirty(true); }} className="rounded text-blue-600" />
+                      <input type="checkbox" checked={true} onChange={async () => {
+                        setForm((f) => ({ ...f, agent_ids: f.agent_ids.filter((x) => x !== ag.id) }));
+                        setAgentLaborAllocations((prev) => {
+                          const next = { ...prev };
+                          delete next[ag.id];
+                          return next;
+                        });
+                        setDirty(true);
+                        await supabase.from('order_agents').delete().eq('order_id', id).eq('agent_id', ag.id);
+                      }} className="rounded text-blue-600" />
                       <span className="text-sm text-gray-700 font-medium flex-1">{ag.short_name || ag.full_name}</span>
                     </div>
                     <div className="grid grid-cols-3 gap-2">

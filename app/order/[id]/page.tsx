@@ -42,8 +42,8 @@ export default function OrderDetail() {
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [orderData, setOrderData] = useState<Order | null>(null);
   const [companyVideos, setCompanyVideos] = useState<CompanyVideos | null>(null);
-  const [currentAgent, setCurrentAgent] = useState<{ id: string; labor_percentage: number | null } | null>(null);
   const [currentAgentId, setCurrentAgentId] = useState<string | null>(null);
+  const [allocatedLabor, setAllocatedLabor] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadMsg, setUploadMsg] = useState<string | null>(null);
@@ -152,13 +152,14 @@ export default function OrderDetail() {
       setCandidates(newCandidates);
       sessionStorage.setItem(cacheKey, JSON.stringify(newCandidates));
 
-      if (agentIds.length > 0 && agentId) {
-        const agentsRes = await supabase
-          .from('agents')
-          .select('id, full_name, short_name, labor_percentage');
-        if (agentsRes.data) {
-          const found = agentsRes.data.find((a: any) => a.id === agentId);
-          if (found) setCurrentAgent({ id: found.id, labor_percentage: found.labor_percentage });
+      if (agentId && orderRes.data) {
+        const oaRes = await supabase
+          .from('order_agents')
+          .select('agent_id, assigned_labor_number')
+          .eq('order_id', orderId);
+        if (oaRes.data) {
+          const myAllocation = oaRes.data.find((oa: any) => oa.agent_id === agentId);
+          setAllocatedLabor(myAllocation?.assigned_labor_number ?? totalLabor);
         }
       }
     } catch (err) {
@@ -391,11 +392,9 @@ export default function OrderDetail() {
   const totalLabor = Number(orderData?.total_labor) || 0;
   const agentStatus = orderData ? getAgentOrderStatus(orderData, candidates.length) : null;
 
-const allocated = currentAgent?.labor_percentage
-      ? Math.round((currentAgent.labor_percentage / 100) * totalLabor)
-      : totalLabor;
-  const agentPassed = currentAgent
-    ? candidates.filter(c => c.agent_id === currentAgent.id && c.interview_status === 'Passed').length
+  const allocated = allocatedLabor;
+  const agentPassed = currentAgentId
+    ? candidates.filter(c => c.agent_id === currentAgentId && c.interview_status === 'Passed').length
     : 0;
 
   return (

@@ -140,22 +140,26 @@ export default function AdminDashboard() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [ordersRes, candidatesRes, agentsRes] = await Promise.all([
+    const [ordersRes, candidatesRes, agentsRes, oaRes] = await Promise.all([
       supabase.from('orders').select('id,company_name,job_type,total_labor,labor_missing,status,total_fee_vn,payment_status_vn,legal_status,agent_ids'),
       supabase.from('candidates').select('id_ld,agent_id,order_id,interview_status'),
       supabase.from('agents').select('id,full_name,short_name,role').neq('role', 'admin'),
+      supabase.from('order_agents').select('agent_id,assigned_labor_number'),
     ]);
 
     const orders: OrderStat[] = (ordersRes.data || []) as OrderStat[];
     const candidates = candidatesRes.data || [];
     const agentsRaw = agentsRes.data || [];
 
+    const oaTargetMap: Record<string, number> = {};
+    (oaRes.data || []).forEach((oa: any) => {
+      oaTargetMap[oa.agent_id] = (oaTargetMap[oa.agent_id] || 0) + (oa.assigned_labor_number || 0);
+    });
+
     const agents: AgentStat[] = agentsRaw.map((ag: any) => {
       const agCands = candidates.filter((c: any) => c.agent_id === ag.id);
       const passed = agCands.filter((c: any) => c.interview_status === 'Passed').length;
-      const target = orders
-        .filter((o) => (o.agent_ids || []).includes(ag.id))
-        .reduce((s, o) => s + (o.total_labor || 0), 0);
+      const target = oaTargetMap[ag.id] || 0;
       return { id: ag.id, full_name: ag.full_name, short_name: ag.short_name, total_candidates: agCands.length, passed, target };
     });
 

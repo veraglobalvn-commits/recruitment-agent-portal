@@ -135,6 +135,14 @@ export default function AddOrderModal({ onClose, onSaved, prefillCompanyId }: Ad
         .select()
         .single();
       if (dbErr) throw new Error(dbErr.message);
+      if (form.agent_ids.length > 0 && data?.id) {
+        const oaRows = form.agent_ids.map((aid) => ({
+          order_id: data.id,
+          agent_id: aid,
+          assigned_labor_number: 0,
+        }));
+        await supabase.from('order_agents').insert(oaRows);
+      }
       onSaved(data as AdminOrder, andView);
     } catch (err) {
       setError(`Lưu thất bại: ${err instanceof Error ? err.message : String(err)}`);

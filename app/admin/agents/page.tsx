@@ -57,11 +57,17 @@ const response = await fetch('/api/admin/agents');
       const orders = ordersRes.data || [];
       const candidates = candidatesRes.data || [];
 
+      const oaRes = await supabase.from('order_agents').select('agent_id,assigned_labor_number');
+      const oaTargetMap: Record<string, number> = {};
+      (oaRes.data || []).forEach((oa: any) => {
+        oaTargetMap[oa.agent_id] = (oaTargetMap[oa.agent_id] || 0) + (oa.assigned_labor_number || 0);
+      });
+
       const rows: AgentRow[] = agentsRaw.map((ag: any) => {
         const agCands = candidates.filter((c: any) => c.agent_id === ag.id);
         const passed = agCands.filter((c: any) => c.interview_status === 'Passed').length;
         const agOrders = orders.filter((o: any) => (o.agent_ids || []).includes(ag.id));
-        const target = agOrders.reduce((s: number, o: any) => s + (o.total_labor || 0), 0);
+        const target = oaTargetMap[ag.id] || 0;
         return {
           id: ag.id,
           full_name: ag.full_name,

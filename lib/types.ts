@@ -32,7 +32,14 @@ export interface Order {
   probation_months?: number | null;
   probation_salary_pct: number | null;
   agent_order_status: string | null;
+  allocated_labor?: number | null;
   created_at?: string | null;
+}
+
+export interface OrderAgent {
+  order_id: string;
+  agent_id: string;
+  assigned_labor_number: number;
 }
 
 export interface Candidate {

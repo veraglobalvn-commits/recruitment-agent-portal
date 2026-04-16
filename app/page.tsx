@@ -237,12 +237,29 @@ export default function Home() {
           return dateB - dateA;
         });
 
+        let oaMap: Record<string, number> = {};
+        try {
+          const oaRes = await supabase.from('order_agents')
+            .select('order_id, assigned_labor_number')
+            .eq('agent_id', agentData.id);
+          oaMap = Object.fromEntries(
+            (oaRes.data || []).map((oa: any) => [oa.order_id, oa.assigned_labor_number])
+          );
+        } catch (oaErr) {
+          // fallback: no allocated_labor
+        }
+
+        const ordersWithAllocation: Order[] = orders.map((o) => ({
+          ...o,
+          allocated_labor: oaMap[o.order_id] ?? o.total_labor,
+        }));
+
         const result = {
           agent_name: agentData.short_name || agentData.full_name,
           agent_id: agentData.id,
           avatar_url: null,
           stats,
-          orders,
+          orders: ordersWithAllocation,
         };
 
         setAgentName(result.agent_name);

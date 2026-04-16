@@ -196,4 +196,16 @@ for item in o_items:
 o_rows = list({r["id"]: r for r in o_rows if r["id"]}.values())
 print(f"  {len(o_rows)} orders → {supabase_upsert('orders', o_rows)}")
 
+oa_rows = []
+for o in o_rows:
+    agent_id = o.get("agent_id")
+    if agent_id and o.get("id"):
+        oa_rows.append({
+            "order_id": o["id"],
+            "agent_id": agent_id,
+            "assigned_labor_number": int(float(o.get("total_labor", 0) or 0)),
+        })
+if oa_rows:
+    print(f"  {len(oa_rows)} order_agents → {supabase_upsert('order_agents', oa_rows)}")
+
 print("\n✅ Done!")
