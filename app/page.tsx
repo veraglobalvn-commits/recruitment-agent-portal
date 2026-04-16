@@ -211,6 +211,7 @@ export default function Home() {
           order_id: o.id,
           company: o.company_name,
           company_id: o.company_id,
+          en_company_name: o.en_company_name,
           total_labor: o.total_labor,
           missing: o.labor_missing,
           status: o.status || 'N/A',

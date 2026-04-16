@@ -12,6 +12,7 @@ export interface Order {
   order_id: string;
   company: string | null;
   company_id: string | null;
+  en_company_name: string | null;
   total_labor: number | string;
   missing: number | string;
   status: string;
@@ -135,6 +136,7 @@ export interface AdminOrder {
   id: string;
   company_id: string | null;
   company_name: string | null;
+  en_company_name: string | null;
   job_type: string | null;
   job_type_en: string | null;
   total_labor: number | null;

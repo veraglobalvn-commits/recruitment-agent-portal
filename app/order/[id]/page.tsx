@@ -41,7 +41,6 @@ export default function OrderDetail() {
 
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [orderData, setOrderData] = useState<Order | null>(null);
-  const [enCompanyName, setEnCompanyName] = useState<string>('');
   const [companyVideos, setCompanyVideos] = useState<CompanyVideos | null>(null);
   const [currentAgent, setCurrentAgent] = useState<{ id: string; labor_percentage: number | null } | null>(null);
   const [currentAgentId, setCurrentAgentId] = useState<string | null>(null);
@@ -87,6 +86,7 @@ export default function OrderDetail() {
           order_id: orderRes.data.id,
           company: orderRes.data.company_name,
           company_id: companyId,
+          en_company_name: orderRes.data.en_company_name,
           total_labor: orderRes.data.total_labor,
           missing: orderRes.data.labor_missing,
           status: orderRes.data.status || 'N/A',
@@ -106,15 +106,6 @@ export default function OrderDetail() {
           probation_salary_pct: orderRes.data.probation_salary_pct,
           agent_order_status: orderRes.data.agent_order_status,
         });
-        if (companyId) {
-          const { data: compData, error: compError } = await supabase.from('companies')
-            .select('en_company_name')
-            .eq('id', companyId)
-            .single();
-          if (!compError && compData) {
-            setEnCompanyName(compData.en_company_name ?? '');
-          }
-        }
         agentIds = (orderRes.data as any).agent_ids || [];
       }
 
@@ -493,7 +484,7 @@ const allocated = currentAgent?.labor_percentage
             {/* Info grid */}
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-px bg-gray-100">
               {[
-                { label: 'Company', value: enCompanyName || orderData.company },
+                { label: 'Company', value: orderData.en_company_name || orderData.company },
                 { label: 'Total Workers', value: orderData.total_labor },
                 { label: 'Job Type', value: orderData.job_type_en || orderData.job_type },
                 { label: 'Salary (USD)', value: orderData.salary_usd ? `$${orderData.salary_usd.toLocaleString()}` : null },

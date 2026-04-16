@@ -68,8 +68,8 @@ statements = [
     ("ALTER TABLE orders ADD COLUMN IF NOT EXISTS salary_vnd NUMERIC", "orders.salary_vnd"),
     ("ALTER TABLE orders ADD COLUMN IF NOT EXISTS probation_months NUMERIC", "orders.probation_months"),
     ("ALTER TABLE orders ADD COLUMN IF NOT EXISTS probation_salary TEXT", "orders.probation_salary"),
-    ("ALTER TABLE orders ADD COLUMN IF NOT EXISTS meal_support TEXT", "orders.meal_support"),
-    ("ALTER TABLE orders ADD COLUMN IF NOT EXISTS meal_support_en TEXT", "orders.meal_support_en"),
+    ("ALTER TABLE orders ADD COLUMN IF NOT EXISTS meal TEXT", "orders.meal"),
+    ("ALTER TABLE orders ADD COLUMN IF NOT EXISTS meal_en TEXT", "orders.meal_en"),
     ("ALTER TABLE orders ADD COLUMN IF NOT EXISTS contract_date TIMESTAMPTZ", "orders.contract_date"),
     ("ALTER TABLE orders ADD COLUMN IF NOT EXISTS legal_status TEXT", "orders.legal_status"),
     ("ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_status_vn TEXT", "orders.payment_status_vn"),
@@ -78,6 +78,7 @@ statements = [
     ("ALTER TABLE orders ADD COLUMN IF NOT EXISTS total_fee_vn NUMERIC", "orders.total_fee_vn"),
     ("ALTER TABLE orders ADD COLUMN IF NOT EXISTS url_contract TEXT", "orders.url_contract"),
     ("ALTER TABLE orders ADD COLUMN IF NOT EXISTS job_type_en TEXT", "orders.job_type_en"),
+    ("ALTER TABLE orders ADD COLUMN IF NOT EXISTS en_company_name TEXT", "orders.en_company_name"),
     ("ALTER TABLE companies ENABLE ROW LEVEL SECURITY", "RLS companies"),
     ("DROP POLICY IF EXISTS admin_read_companies ON companies", "drop policy companies"),
     ("""CREATE POLICY admin_read_companies ON companies FOR ALL USING (auth.uid() IN (SELECT supabase_uid FROM agents WHERE role = 'admin'))""", "policy companies"),
@@ -181,8 +182,8 @@ for item in o_items:
         "working_hours": getNum(f.get("WorkingHours")),
         "probation_months": getNum(f.get("ThoiGianThuViec")),
         "probation_salary": f.get("LuongThuViec"),
-        "meal_support": getText(f.get("HoTroBuaAn")),
-        "meal_support_en": getText(f.get("EN_HoTroBuaAn")),
+        "meal": getText(f.get("HoTroBuaAn")),
+        "meal_en": getText(f.get("EN_HoTroBuaAn")),
         "legal_status": getText(f.get("Trang Thai Phap Ly")),
         "payment_status_vn": getText(f.get("Trang Thai TT VN")),
         "payment_status_bd": getText(f.get("Trang Thai TT BD")),
@@ -190,6 +191,7 @@ for item in o_items:
         "total_fee_vn": getNum(f.get("TongPhiDVVN")),
         "url_contract": getLink(f.get("URL_HĐ")),
         "url_order": getLink(f.get("URL_DonHang")),
+        "en_company_name": f.get("EN_TenCongTy"),
     })
 o_rows = list({r["id"]: r for r in o_rows if r["id"]}.values())
 print(f"  {len(o_rows)} orders → {supabase_upsert('orders', o_rows)}")
