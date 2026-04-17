@@ -689,62 +689,6 @@ export default function OrderDetail() {
           </div>
         )}
 
-        {/* Add Candidate Form */}
-        {showAddForm && (
-          <div className="bg-white rounded-2xl border border-blue-200 shadow-sm p-4 space-y-3">
-            <h3 className="text-sm font-semibold text-slate-700">Add Candidate</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Full Name *</label>
-                <input type="text" value={addForm.full_name} onChange={(e) => setAddForm(f => ({ ...f, full_name: e.target.value }))} placeholder="NGUYEN VAN A" className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Passport No *</label>
-                <input type="text" value={addForm.pp_no} onChange={(e) => setAddForm(f => ({ ...f, pp_no: e.target.value }))} placeholder="C1234567" className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Date of Birth</label>
-                <input type="date" value={addForm.dob} onChange={(e) => setAddForm(f => ({ ...f, dob: e.target.value }))} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Passport Issue Date</label>
-                <input type="date" value={addForm.pp_doi} onChange={(e) => setAddForm(f => ({ ...f, pp_doi: e.target.value }))} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Passport Expiry Date</label>
-                <input type="date" value={addForm.pp_doe} onChange={(e) => setAddForm(f => ({ ...f, pp_doe: e.target.value }))} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Place of Birth</label>
-                <input type="text" value={addForm.pob} onChange={(e) => setAddForm(f => ({ ...f, pob: e.target.value }))} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Address</label>
-                <input type="text" value={addForm.address} onChange={(e) => setAddForm(f => ({ ...f, address: e.target.value }))} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Phone</label>
-                <input type="tel" value={addForm.phone} onChange={(e) => setAddForm(f => ({ ...f, phone: e.target.value }))} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Height (ft)</label>
-                <input type="number" step="0.1" value={addForm.height_ft} onChange={(e) => setAddForm(f => ({ ...f, height_ft: e.target.value }))} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Weight (kg)</label>
-                <input type="number" step="0.1" value={addForm.weight_kg} onChange={(e) => setAddForm(f => ({ ...f, weight_kg: e.target.value }))} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
-              </div>
-            </div>
-            <button
-              onClick={handleAddCandidate}
-              disabled={addSaving || !addForm.full_name.trim() || !addForm.pp_no.trim()}
-              className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold py-3 rounded-xl text-sm min-h-[44px]"
-            >
-              {addSaving ? '⏳ Saving...' : 'Save Candidate'}
-            </button>
-          </div>
-        )}
-
         {/* Candidates */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
           <div className="flex justify-between items-center mb-3">
@@ -852,6 +796,74 @@ export default function OrderDetail() {
           {fabMenuOpen ? '✕' : '+'}
         </button>
       </div>
+
+      {/* Add Candidate Modal */}
+      {showAddForm && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowAddForm(false)}>
+          <div className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl shadow-xl p-5 pb-8 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-4 sm:hidden" />
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="font-bold text-slate-800 text-lg">Add Candidate</h3>
+              <button onClick={() => setShowAddForm(false)} className="text-gray-400 text-xl min-h-[44px] min-w-[44px] flex items-center justify-center">✕</button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Full Name *</label>
+                <input type="text" value={addForm.full_name} onChange={(e) => setAddForm(f => ({ ...f, full_name: e.target.value }))} placeholder="NGUYEN VAN A" className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[44px]" />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Passport No *</label>
+                <input type="text" value={addForm.pp_no} onChange={(e) => setAddForm(f => ({ ...f, pp_no: e.target.value }))} placeholder="C1234567" className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[44px]" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Date of Birth</label>
+                  <input type="date" value={addForm.dob} onChange={(e) => setAddForm(f => ({ ...f, dob: e.target.value }))} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[44px]" />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Place of Birth</label>
+                  <input type="text" value={addForm.pob} onChange={(e) => setAddForm(f => ({ ...f, pob: e.target.value }))} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[44px]" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Passport Issue Date</label>
+                  <input type="date" value={addForm.pp_doi} onChange={(e) => setAddForm(f => ({ ...f, pp_doi: e.target.value }))} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[44px]" />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Passport Expiry Date</label>
+                  <input type="date" value={addForm.pp_doe} onChange={(e) => setAddForm(f => ({ ...f, pp_doe: e.target.value }))} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[44px]" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Address</label>
+                <input type="text" value={addForm.address} onChange={(e) => setAddForm(f => ({ ...f, address: e.target.value }))} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[44px]" />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Phone</label>
+                <input type="tel" value={addForm.phone} onChange={(e) => setAddForm(f => ({ ...f, phone: e.target.value }))} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[44px]" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Height (ft)</label>
+                  <input type="number" step="0.1" value={addForm.height_ft} onChange={(e) => setAddForm(f => ({ ...f, height_ft: e.target.value }))} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[44px]" />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Weight (kg)</label>
+                  <input type="number" step="0.1" value={addForm.weight_kg} onChange={(e) => setAddForm(f => ({ ...f, weight_kg: e.target.value }))} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[44px]" />
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={handleAddCandidate}
+              disabled={addSaving || !addForm.full_name.trim() || !addForm.pp_no.trim()}
+              className="mt-4 w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold py-3 rounded-xl text-sm min-h-[44px]"
+            >
+              {addSaving ? '⏳ Saving...' : 'Save Candidate'}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
