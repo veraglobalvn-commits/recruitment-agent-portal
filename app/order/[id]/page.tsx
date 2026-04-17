@@ -66,6 +66,16 @@ export default function OrderDetail() {
     pob: '', address: '', phone: '', height_ft: '', weight_kg: '',
   });
   const [addSaving, setAddSaving] = useState(false);
+  const [fabMenuOpen, setFabMenuOpen] = useState(false);
+  const fabRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (fabRef.current && !fabRef.current.contains(e.target as Node)) setFabMenuOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
   const fetchCandidates = useCallback(async () => {
     try {
@@ -532,20 +542,6 @@ export default function OrderDetail() {
               {agentStatus.label}
             </span>
           )}
-
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={isUploading}
-            className="flex-shrink-0 text-xs bg-green-600 text-white px-3 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50 min-h-[44px] flex items-center"
-          >
-            {isUploading ? '⏳' : '+ Passport'}
-          </button>
-          <button
-            onClick={() => setShowAddForm(!showAddForm)}
-            className="flex-shrink-0 text-xs bg-blue-600 text-white px-3 py-2 rounded-lg hover:bg-blue-700 min-h-[44px] flex items-center"
-          >
-            {showAddForm ? '✕ Cancel' : '+ Add Candidate'}
-          </button>
         </div>
       </header>
 
@@ -826,6 +822,36 @@ export default function OrderDetail() {
           </div>
         </div>
       )}
+
+      {/* Floating Action Button */}
+      <div ref={fabRef} className="fixed bottom-6 right-6 z-30">
+        {fabMenuOpen ? (
+          <div className="flex flex-col gap-2 items-end mb-2">
+            <button
+              onClick={() => { setFabMenuOpen(false); fileInputRef.current?.click(); }}
+              className="flex items-center gap-2 px-4 py-2 bg-white rounded-full shadow-lg border border-gray-200 hover:bg-gray-50 transition-colors min-h-[44px]"
+            >
+              <span className="text-sm font-medium text-gray-700">Passport</span>
+              <span className="text-xl">🪪</span>
+            </button>
+            <button
+              onClick={() => { setFabMenuOpen(false); setShowAddForm(true); }}
+              className="flex items-center gap-2 px-4 py-2 bg-white rounded-full shadow-lg border border-gray-200 hover:bg-gray-50 transition-colors min-h-[44px]"
+            >
+              <span className="text-sm font-medium text-gray-700">Add Candidate</span>
+              <span className="text-xl">👤</span>
+            </button>
+          </div>
+        ) : null}
+        <button
+          onClick={() => setFabMenuOpen(!fabMenuOpen)}
+          className={`w-14 h-14 rounded-full shadow-lg flex items-center justify-center text-2xl transition-all ${
+            fabMenuOpen ? 'bg-red-500 hover:bg-red-600 rotate-45' : 'bg-blue-600 hover:bg-blue-700'
+          }`}
+        >
+          {fabMenuOpen ? '✕' : '+'}
+        </button>
+      </div>
     </div>
   );
 }
