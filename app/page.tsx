@@ -207,7 +207,7 @@ export default function Home() {
           ordersData = [];
         }
 
-        const orders: Order[] = (ordersData || []).map((o: any) => ({
+        const rawOrders: Order[] = (ordersData || []).map((o: any) => ({
           order_id: o.id,
           company: o.company_name,
           company_id: o.company_id,
@@ -231,28 +231,32 @@ export default function Home() {
           probation_salary_pct: o.probation_salary_pct,
           agent_order_status: o.agent_order_status,
           created_at: o.created_at,
-        })).sort((a, b) => {
-          const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
-          const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
-          return dateB - dateA;
-        });
+        }));
 
-        let oaMap: Record<string, number> = {};
+        let oaMap: Record<string, { labor: number, date: string | null }> = {};
         try {
           const oaRes = await supabase.from('order_agents')
-            .select('order_id, assigned_labor_number')
+            .select('order_id, assigned_labor_number, assigned_date')
             .eq('agent_id', agentData.id);
           oaMap = Object.fromEntries(
-            (oaRes.data || []).map((oa: any) => [oa.order_id, oa.assigned_labor_number])
+            (oaRes.data || []).map((oa: any) => [oa.order_id, { labor: oa.assigned_labor_number, date: oa.assigned_date }])
           );
         } catch (oaErr) {
           // fallback: no allocated_labor
         }
 
-        const ordersWithAllocation: Order[] = orders.map((o) => ({
+        const ordersWithAllocation: Order[] = rawOrders.map((o) => ({
           ...o,
-          allocated_labor: oaMap[o.order_id] ?? o.total_labor,
-        }));
+          allocated_labor: oaMap[o.order_id]?.labor ?? o.total_labor,
+        })).sort((a, b) => {
+          const tA = oaMap[a.order_id]?.date || a.created_at;
+          const tB = oaMap[b.order_id]?.date || b.created_at;
+          const dateA = tA ? new Date(tA).getTime() : 0;
+          const dateB = tB ? new Date(tB).getTime() : 0;
+          const aValid = !isNaN(dateA) && dateA > 0 ? dateA : 0;
+          const bValid = !isNaN(dateB) && dateB > 0 ? dateB : 0;
+          return bValid - aValid;
+        });
 
         const result = {
           agent_name: agentData.short_name || agentData.full_name,

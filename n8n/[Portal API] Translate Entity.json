@@ -1,0 +1,439 @@
+{
+  "name": "[Portal API] Translate Entity",
+  "nodes": [
+    {
+      "parameters": {
+        "jsCode": "const entityType = $('Determine Table Name1').first().json.entity_type;\nconst fieldsToTranslate = $('Determine Table Name1').first().json.fields_to_translate;\nconst entityData = $input.first().json;\n\nconst jsonToTranslate = {};\nfieldsToTranslate.forEach(field => {\n  const value = entityData[field] || '';\n  let destKey = field;\n  if (entityType === 'company') {\n    if (field === 'company_name') destKey = 'en_company_name';\n    else if (field === 'industry') destKey = 'en_industry';\n    else if (field === 'business_type') destKey = 'en_business_type';\n    else if (field === 'address') destKey = 'en_address';\n    else if (field === 'legal_rep') destKey = 'en_legal_rep';\n    else if (field === 'legal_rep_title') destKey = 'en_title';\n  } else {\n    destKey = field + '_en';\n  }\n  jsonToTranslate[destKey] = value;\n});\n\nconst prompt = `Translate the Vietnamese values in this JSON object to English. Return ONLY the translated JSON with the EXACT same keys:\n\n${JSON.stringify(jsonToTranslate, null, 2)}`;\n\nreturn { json: { prompt } };"
+      },
+      "id": "818c3f98-4396-4c8b-ae79-c82271ab05a4",
+      "name": "Prepare Translation Prompt",
+      "position": [
+        -1152,
+        -32
+      ],
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "translate-entity",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "22ec80d5-478b-4db0-a1e6-d8a087c5933b",
+      "name": "Webhook1",
+      "position": [
+        -2112,
+        64
+      ],
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "webhookId": "translate-entity-webhook"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "translation_requests",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.body.request_id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "status",
+              "fieldValue": "processing"
+            }
+          ]
+        }
+      },
+      "id": "00e4f34e-4e36-4406-855c-f00e028f8c0a",
+      "name": "Update Status to Processing1",
+      "position": [
+        -1888,
+        64
+      ],
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "credentials": {
+        "supabaseApi": {
+          "id": "8dnBpfQkmISrai1T",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "tableId": "translation_requests",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "keyValue": "={{ $json.id }}"
+            }
+          ]
+        }
+      },
+      "id": "fa1b40cf-dc37-48a1-ac0b-f2c35e4c3aaa",
+      "name": "Fetch Translation Request1",
+      "position": [
+        -1664,
+        64
+      ],
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "credentials": {
+        "supabaseApi": {
+          "id": "8dnBpfQkmISrai1T",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Determine table name based on entity_type\nconst entityType = $input.first().json.entity_type;\nconst tableName = entityType === 'company' ? 'companies' : 'orders';\n\nreturn {\n  json: {\n    table_name: tableName,\n    entity_type: entityType,\n    entity_id: $input.first().json.entity_id,\n    fields_to_translate: $input.first().json.fields_to_translate\n  }\n};"
+      },
+      "id": "de91d784-9ffe-41c6-ba33-56dde4020d99",
+      "name": "Determine Table Name1",
+      "position": [
+        -1488,
+        64
+      ],
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "tableId": "={{ $json.table_name }}",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "=id",
+              "keyValue": "={{ $json.entity_id }}"
+            }
+          ]
+        }
+      },
+      "id": "12522ece-b370-4c12-870a-b5d69a53b4fe",
+      "name": "Fetch Entity Data2",
+      "position": [
+        -1312,
+        -80
+      ],
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "credentials": {
+        "supabaseApi": {
+          "id": "8dnBpfQkmISrai1T",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const content = $input.first().json.message?.content || $input.first().json.choices?.[0]?.message?.content || $input.first().json.output || $input.first().json.text;\nlet translatedData;\ntry {\n  translatedData = JSON.parse(content);\n} catch (e) {\n  const match = content.match(/\\{[\\s\\S]*\\}/);\n  if (match) translatedData = JSON.parse(match[0]);\n  else throw new Error('Could not parse JSON');\n}\nreturn { json: translatedData };"
+      },
+      "id": "e39bf0e0-d225-4934-8a19-150cf6f757e9",
+      "name": "Parse Translation Response1",
+      "position": [
+        -480,
+        -48
+      ],
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "={{ $('Determine Table Name1').item.json.table_name }}",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "=id",
+              "condition": "eq",
+              "keyValue": "={{ $('Determine Table Name1').item.json.entity_id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "job_type_en",
+              "fieldValue": "={{ $json.job_type_en }}"
+            },
+            {
+              "fieldId": "meal_en",
+              "fieldValue": "={{ $json.meal_en }}"
+            },
+            {
+              "fieldId": "dormitory_en",
+              "fieldValue": "={{ $json.dormitory_en }}"
+            },
+            {
+              "fieldId": "probation_en",
+              "fieldValue": "={{ $json.probation_en }}"
+            }
+          ]
+        }
+      },
+      "id": "5445b968-0f04-4261-ad4b-75cce414e8b5",
+      "name": "Update Entity with Translation1",
+      "position": [
+        -320,
+        -48
+      ],
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "credentials": {
+        "supabaseApi": {
+          "id": "8dnBpfQkmISrai1T",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "translation_requests",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $('Fetch Translation Request1').item.json.id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "status",
+              "fieldValue": "completed"
+            },
+            {
+              "fieldId": "completed_at",
+              "fieldValue": "={{ $now.toISO() }}"
+            },
+            {
+              "fieldId": "translated_data",
+              "fieldValue": "={{ $('Parse Translation Response1').first().json }}"
+            }
+          ]
+        }
+      },
+      "id": "9506be9d-f14d-4587-aed5-3c0fdb180785",
+      "name": "Update Translation Request Completed1",
+      "position": [
+        -144,
+        -48
+      ],
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "credentials": {
+        "supabaseApi": {
+          "id": "8dnBpfQkmISrai1T",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": true,\n  \"translated_data\": {{ JSON.stringify($('Parse Translation Response1').first().json) }}\n}",
+        "options": {}
+      },
+      "id": "44a999e4-cd0b-4c3d-a247-6dad4abef070",
+      "name": "Respond Success1",
+      "position": [
+        16,
+        -48
+      ],
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4.1-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-4.1-mini"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        -864,
+        160
+      ],
+      "id": "3135a238-522d-48bf-bb1d-86ba2f2fe728",
+      "name": "OpenAI Chat Model1",
+      "credentials": {
+        "openAiApi": {
+          "id": "K7Ks7tX57CUKaquI",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "=define",
+        "text": "={{ $json.prompt }}",
+        "hasOutputParser": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        -816,
+        -48
+      ],
+      "id": "e1bd0617-a758-46a9-8fd8-44c767809ad4",
+      "name": "AI Agent"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook1": {
+      "main": [
+        [
+          {
+            "node": "Update Status to Processing1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Status to Processing1": {
+      "main": [
+        [
+          {
+            "node": "Fetch Translation Request1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Translation Request1": {
+      "main": [
+        [
+          {
+            "node": "Determine Table Name1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Determine Table Name1": {
+      "main": [
+        [
+          {
+            "node": "Fetch Entity Data2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Entity Data2": {
+      "main": [
+        [
+          {
+            "node": "Prepare Translation Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Translation Response1": {
+      "main": [
+        [
+          {
+            "node": "Update Entity with Translation1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Entity with Translation1": {
+      "main": [
+        [
+          {
+            "node": "Update Translation Request Completed1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Translation Request Completed1": {
+      "main": [
+        [
+          {
+            "node": "Respond Success1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Translation Prompt": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Parse Translation Response1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "2918e17a-4b97-4a0d-a409-8117d46cd6bf",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "a41e7c642cf4595af91c3d0d5b5ab6ba94d7ea27d8f89ebe97e774c719177a50"
+  },
+  "id": "JKtJlTinXKySxVnU",
+  "tags": []
+}

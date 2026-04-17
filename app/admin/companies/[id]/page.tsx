@@ -133,7 +133,7 @@ export default function CompanyDetailPage() {
   const [deleting, setDeleting] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<'company' | null>(null);
   const [bctDocs, setBctDocs] = useState<DocLink[]>([]);
-  const [translating, setTranslating] = useState(false);
+
 
   const imgInputRef = useRef<HTMLInputElement>(null);
   const docInputRef = useRef<HTMLInputElement>(null);
@@ -197,7 +197,7 @@ export default function CompanyDetailPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  const handleSave = useCallback(async (andTranslate = false) => {
+  const handleSave = useCallback(async () => {
     setSaving(true);
     setSaveMsg(null);
     const { error } = await supabase.from('companies').update({
@@ -225,8 +225,7 @@ export default function CompanyDetailPage() {
     setSaveMsg('✅ Đã lưu');
     setDirty(false);
     setTimeout(() => setSaveMsg(null), 3000);
-    // Translate only when explicitly requested (save button, not auto-save)
-    if (andTranslate) handleTranslateSilent();
+
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, form]);
 
@@ -237,79 +236,31 @@ export default function CompanyDetailPage() {
     return () => clearTimeout(timer);
   }, [form, dirty, handleSave]);
 
-  const handleTranslateSilent = useCallback(async () => {
-    setTranslating(true);
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch('/api/translate', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
-        },
-        body: JSON.stringify({ company_id: id }),
-      });
-      if (!res.ok) return;
-      const { request_id } = await res.json() as { request_id: string };
 
-      let completed = false;
-      let attempts = 0;
-      const maxAttempts = 30;
 
-      while (!completed && attempts < maxAttempts) {
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        attempts++;
-
-        const statusRes = await fetch(`/api/translate?request_id=${request_id}`, {
-          headers: {
-            ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
-          },
-        });
-        if (!statusRes.ok) continue;
-
-        const statusData = await statusRes.json() as {
-          status: string;
-          translated_data: Record<string, string>;
-        };
-
-        if (statusData.status === 'completed') {
-          completed = true;
-          setForm((f) => ({
-            ...f,
-            en_company_name: statusData.translated_data.en_company_name ?? f.en_company_name,
-            en_industry: statusData.translated_data.en_industry ?? f.en_industry,
-            en_business_type: statusData.translated_data.en_business_type ?? f.en_business_type,
-            en_address: statusData.translated_data.en_address ?? f.en_address,
-            en_legal_rep: statusData.translated_data.en_legal_rep ?? f.en_legal_rep,
-            en_title: statusData.translated_data.en_title ?? f.en_title,
-          }));
-        } else if (statusData.status === 'failed') {
-          completed = true;
-        }
-      }
-    } catch {
-    } finally {
-      setTranslating(false);
+  // Upload multiple media files (images or video)
+  const uploadSingleMedia = async (file: File) => {
+    let blob: Blob = file;
+    let ext = file.name.split('.').pop()?.toLowerCase() || '';
+    if (file.type.startsWith('image/')) {
+      blob = await compressImage(file);
+      ext = 'jpg';
     }
-  }, [id]);
-
-  // Upload multiple images
-  const uploadSingleImage = async (file: File) => {
-    const blob = await compressImage(file);
-    const path = `companies/${id}/img_${Date.now()}_${Math.random().toString(36).slice(2, 6)}.jpg`;
+    if (!ext) ext = 'bin';
+    const path = `companies/${id}/media_${Date.now()}_${Math.random().toString(36).slice(2, 6)}.${ext}`;
     const { error: upErr } = await supabase.storage.from('agent-media').upload(path, blob, { upsert: false });
     if (upErr) throw new Error(upErr.message);
     const { data: urlData } = supabase.storage.from('agent-media').getPublicUrl(path);
     return urlData.publicUrl;
   };
 
-  const handleImagesUpload = async (files: File[]) => {
+  const handleMediaUpload = async (files: File[]) => {
     if (!files.length) return;
     setImgUploading(true);
     try {
-      const urls = await Promise.all(files.map(uploadSingleImage));
+      const urls = await Promise.all(files.map(uploadSingleMedia));
       const newMedia = [...(company?.company_media ?? []), ...urls];
-      const avatarUrl = company?.avatar_url ?? newMedia[0];
+      const avatarUrl = company?.avatar_url ?? newMedia.find(u => u.match(/\.(jpe?g|png|webp|gif)$/i)) ?? null;
       const { error: dbErr } = await supabase.from('companies').update({
         company_media: newMedia,
         avatar_url: avatarUrl,
@@ -342,32 +293,7 @@ export default function CompanyDetailPage() {
     setCompany((c) => c ? { ...c, avatar_url: url } : c);
   };
 
-  // Upload video file
-  const handleVideoUpload = async (type: 'factory' | 'job', file: File) => {
-    setVideoUploading(type);
-    try {
-      const ext = file.name.split('.').pop() || 'mp4';
-      const path = `companies/${id}/videos/${type}_${Date.now()}.${ext}`;
-      const { error: upErr } = await supabase.storage.from('agent-media').upload(path, file, { upsert: true });
-      if (upErr) throw new Error(upErr.message);
-      const { data: urlData } = supabase.storage.from('agent-media').getPublicUrl(path);
-      const col = type === 'factory' ? 'factory_video_url' : 'job_video_url';
-      const { error: dbErr } = await supabase.from('companies').update({ [col]: urlData.publicUrl }).eq('id', id);
-      if (dbErr) throw new Error(dbErr.message);
-      setCompany((c) => c ? { ...c, [col]: urlData.publicUrl } : c);
-    } catch (err) {
-      alert(`Lỗi upload video: ${err instanceof Error ? err.message : String(err)}`);
-    } finally {
-      setVideoUploading(null);
-    }
-  };
-
-  // Delete video
-  const handleVideoDelete = async (type: 'factory' | 'job') => {
-    const col = type === 'factory' ? 'factory_video_url' : 'job_video_url';
-    await supabase.from('companies').update({ [col]: null }).eq('id', id);
-    setCompany((c) => c ? { ...c, [col]: null } : c);
-  };
+  // Video fields removed as per unified upload requirement
 
   // Upload document (general)
   const uploadDoc = async (file: File) => {
@@ -511,7 +437,7 @@ export default function CompanyDetailPage() {
         </div>
         {saveMsg && <span className="text-xs text-green-600 font-medium">{saveMsg}</span>}
         <button
-          onClick={() => handleSave(true)}
+          onClick={() => handleSave()}
           disabled={saving}
           className={`px-4 py-2 rounded-xl text-sm font-semibold min-h-[44px] transition-colors ${
             dirty ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-100 text-gray-400 cursor-default'
@@ -664,13 +590,7 @@ export default function CompanyDetailPage() {
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="px-4 py-3 border-b border-gray-50 flex items-center justify-between">
             <h2 className="text-sm font-semibold text-slate-700">Thông tin tiếng Anh</h2>
-            <button
-              onClick={handleTranslateSilent}
-              disabled={translating}
-              className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 disabled:opacity-50 min-h-[32px] flex items-center gap-1 transition-colors"
-            >
-              {translating ? '⏳ Đang dịch...' : '🌐 Dịch'}
-            </button>
+
           </div>
           <div className="p-4 space-y-3">
             <div><label className="block text-xs text-gray-500 mb-1">Company Name (EN)</label><input type="text" value={form.en_company_name} onChange={(e) => setField('en_company_name', e.target.value)} className={inputCls} /></div>
@@ -695,97 +615,52 @@ export default function CompanyDetailPage() {
 
             {/* Images */}
             <div>
-              <p className="text-xs text-gray-500 mb-2">Ảnh cơ sở vật chất (ảnh đầu = avatar)</p>
+              <p className="text-xs text-gray-500 mb-2">Ảnh/Video cơ sở vật chất & công việc</p>
               <div className="flex flex-wrap gap-2">
-                {(company.company_media ?? []).map((url) => (
-                  <div key={url} className="relative group">
-                    <img
-                      src={url} alt="facility"
-                      className={`w-20 h-20 object-cover rounded-xl cursor-pointer transition-all ${
-                        company.avatar_url === url ? 'ring-2 ring-blue-500' : 'hover:ring-2 hover:ring-gray-300'
-                      }`}
-                      onClick={() => setAvatar(url)}
-                      title="Bấm để đặt làm avatar"
-                    />
-                    {company.avatar_url === url && (
-                      <span className="absolute top-1 left-1 bg-blue-500 text-white text-xs px-1 rounded font-bold">AVT</span>
-                    )}
-                    <button
-                      onClick={() => deleteImage(url)}
-                      disabled={deletingImg === url}
-                      className="absolute top-1 right-1 bg-red-500 text-white rounded-full w-5 h-5 text-xs hidden group-hover:flex items-center justify-center"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                ))}
+                {(company.company_media ?? []).map((url) => {
+                  const isVideo = url.match(/\.(mp4|webm|mov)$/i);
+                  return (
+                    <div key={url} className="relative group w-20 h-20">
+                      {isVideo ? (
+                        <video src={url} className="w-full h-full object-cover rounded-xl" muted />
+                      ) : (
+                        <img
+                          src={url} alt="facility"
+                          className={`w-full h-full object-cover rounded-xl cursor-pointer transition-all ${
+                            company.avatar_url === url ? 'ring-2 ring-blue-500' : 'hover:ring-2 hover:ring-gray-300'
+                          }`}
+                          onClick={() => setAvatar(url)}
+                          title="Bấm để đặt làm avatar"
+                        />
+                      )}
+                      {isVideo && <span className="absolute top-1 left-1 bg-black/60 text-white text-[10px] px-1 rounded font-bold">VIDEO</span>}
+                      {company.avatar_url === url && !isVideo && (
+                        <span className="absolute top-1 left-1 bg-blue-500 text-white text-[10px] px-1 rounded font-bold">AVT</span>
+                      )}
+                      <button
+                        onClick={() => deleteImage(url)}
+                        disabled={deletingImg === url}
+                        className="absolute top-1 right-1 bg-red-500 text-white rounded-full w-5 h-5 text-xs hidden group-hover:flex items-center justify-center"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  );
+                })}
                 <button
                   onClick={() => imgInputRef.current?.click()}
                   disabled={imgUploading}
-                  className="w-20 h-20 border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center text-gray-400 hover:border-blue-400 hover:text-blue-500 transition-colors cursor-pointer text-xl"
+                  className="w-20 h-20 border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center text-gray-400 hover:border-blue-400 hover:text-blue-500 transition-colors cursor-pointer"
                 >
-                  {imgUploading ? <span className="text-xs">Đang up...</span> : '+'}
+                  <span className="text-xl mb-1">+</span>
+                  {imgUploading ? <span className="text-[10px]">Đang up...</span> : <span className="text-[10px]">Thêm Media</span>}
                 </button>
               </div>
-              <input ref={imgInputRef} type="file" accept="image/*" multiple className="hidden"
-                onChange={(e) => { handleImagesUpload(Array.from(e.target.files ?? [])); e.target.value = ''; }} />
+              <input ref={imgInputRef} type="file" accept="image/*,video/*" multiple className="hidden"
+                onChange={(e) => { handleMediaUpload(Array.from(e.target.files ?? [])); e.target.value = ''; }} />
             </div>
 
-            {/* Video — Nhà máy */}
-            <div>
-              <p className="text-xs text-gray-500 mb-2">Video nhà máy</p>
-              {company.factory_video_url ? (
-                <div className="flex items-center gap-2">
-                  <a href={company.factory_video_url} target="_blank" rel="noopener noreferrer"
-                    className="flex-1 flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-lg text-sm text-blue-600 hover:bg-gray-100 truncate min-h-[44px]">
-                    <span>▶</span>
-                    <span className="truncate">Xem video nhà máy</span>
-                  </a>
-                  <button onClick={() => handleVideoDelete('factory')}
-                    className="px-3 py-2 bg-red-50 text-red-500 rounded-lg text-sm hover:bg-red-100 min-h-[44px]">
-                    Xoá
-                  </button>
-                </div>
-              ) : (
-                <button
-                  onClick={() => factoryVideoRef.current?.click()}
-                  disabled={videoUploading === 'factory'}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-3 border-2 border-dashed border-gray-300 rounded-xl text-sm text-gray-500 hover:border-blue-400 hover:text-blue-500 transition-colors min-h-[52px]"
-                >
-                  {videoUploading === 'factory' ? '⏳ Đang tải...' : '📹 Upload video nhà máy'}
-                </button>
-              )}
-              <input ref={factoryVideoRef} type="file" accept="video/*" className="hidden"
-                onChange={(e) => { const f = e.target.files?.[0]; if (f) handleVideoUpload('factory', f); e.target.value = ''; }} />
-            </div>
 
-            {/* Video — Công việc */}
-            <div>
-              <p className="text-xs text-gray-500 mb-2">Video công việc</p>
-              {company.job_video_url ? (
-                <div className="flex items-center gap-2">
-                  <a href={company.job_video_url} target="_blank" rel="noopener noreferrer"
-                    className="flex-1 flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-lg text-sm text-blue-600 hover:bg-gray-100 truncate min-h-[44px]">
-                    <span>▶</span>
-                    <span className="truncate">Xem video công việc</span>
-                  </a>
-                  <button onClick={() => handleVideoDelete('job')}
-                    className="px-3 py-2 bg-red-50 text-red-500 rounded-lg text-sm hover:bg-red-100 min-h-[44px]">
-                    Xoá
-                  </button>
-                </div>
-              ) : (
-                <button
-                  onClick={() => jobVideoRef.current?.click()}
-                  disabled={videoUploading === 'job'}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-3 border-2 border-dashed border-gray-300 rounded-xl text-sm text-gray-500 hover:border-blue-400 hover:text-blue-500 transition-colors min-h-[52px]"
-                >
-                  {videoUploading === 'job' ? '⏳ Đang tải...' : '📹 Upload video công việc'}
-                </button>
-              )}
-              <input ref={jobVideoRef} type="file" accept="video/*" className="hidden"
-                onChange={(e) => { const f = e.target.files?.[0]; if (f) handleVideoUpload('job', f); e.target.value = ''; }} />
-            </div>
 
             {/* General Documents */}
             <div>

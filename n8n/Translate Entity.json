@@ -222,7 +222,7 @@
       "id": "prepare-translation-prompt",
       "name": "Prepare Translation Prompt",
       "parameters": {
-        "jsCode": "// Prepare translation prompt from entity data\nconst fieldsToTranslate = $('Determine Table Name').first().json.fields_to_translate;\nconst entityData = $input.first().json;\n\n// Build prompt with field-value pairs\nconst fieldPairs = fieldsToTranslate.map(field =\u003e {\n  const value = entityData[field] || '';\n  return `Field: ${field}\\nValue: ${value}`;\n}).join('\\n\\n');\n\nconst prompt = `Translate the following fields from Vietnamese to English:\\n\\n${fieldPairs}\\n\\nReturn the result as JSON with the same field names but with 'en_' prefix for translated values.`;\n\nreturn { json: { prompt } };"
+        "jsCode": "const entityType = $('Determine Table Name').first().json.entity_type;\nconst fieldsToTranslate = $('Determine Table Name').first().json.fields_to_translate;\nconst entityData = $input.first().json;\n\nconst jsonToTranslate = {};\nfieldsToTranslate.forEach(field => {\n  const value = entityData[field] || '';\n  let destKey = field;\n  if (entityType === 'company') {\n    if (field === 'company_name') destKey = 'en_company_name';\n    else if (field === 'industry') destKey = 'en_industry';\n    else if (field === 'business_type') destKey = 'en_business_type';\n    else if (field === 'address') destKey = 'en_address';\n    else if (field === 'legal_rep') destKey = 'en_legal_rep';\n    else if (field === 'legal_rep_title') destKey = 'en_title';\n  } else {\n    destKey = field + '_en';\n  }\n  jsonToTranslate[destKey] = value;\n});\n\nconst prompt = `Translate the Vietnamese values in this JSON object to English. Return ONLY the translated JSON with the EXACT same keys:\n\n${JSON.stringify(jsonToTranslate, null, 2)}`;\n\nreturn { json: { prompt } };"
       },
       "position": [
         784,
@@ -276,7 +276,7 @@
       "id": "parse-translation-response",
       "name": "Parse Translation Response",
       "parameters": {
-        "jsCode": "// Parse OpenAI API response\nconst content = $input.first().json.message?.content || $input.first().json.choices?.[0]?.message?.content || $input.first().json.output || $input.first().json.text;\nlet translatedData;\n\ntry {\n  translatedData = JSON.parse(content);\n} catch (e) {\n  // Fallback: try to extract JSON from content\n  const match = content.match(/\\{[\\s\\S]*\\}/);\n  if (match) {\n    translatedData = JSON.parse(match[0]);\n  } else {\n    throw new Error(\u0027Could not parse JSON from OpenAI response\u0027);\n  }\n}\n\n// Map field names to en_* format\nconst result = {};\nfor (const [key, value] of Object.entries(translatedData)) {\n  if (!key.startsWith(\u0027en_\u0027)) {\n    result[`en_${key}`] = value;\n  } else {\n    result[key] = value;\n  }\n}\n\nreturn { json: { translated_data: result } };"
+        "jsCode": "const content = $input.first().json.message?.content || $input.first().json.choices?.[0]?.message?.content || $input.first().json.output || $input.first().json.text;\nlet translatedData;\ntry {\n  translatedData = JSON.parse(content);\n} catch (e) {\n  const match = content.match(/\\{[\\s\\S]*\\}/);\n  if (match) translatedData = JSON.parse(match[0]);\n  else throw new Error('Could not parse JSON');\n}\nreturn { json: { translated_data: translatedData } };"
       },
       "position": [
         1072,

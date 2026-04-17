@@ -72,7 +72,9 @@ export default function OrdersPage() {
     orders.sort((a, b) => {
       const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
       const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
-      return dateB - dateA;
+      const aValid = !isNaN(dateA) && dateA > 0 ? dateA : 0;
+      const bValid = !isNaN(dateB) && dateB > 0 ? dateB : 0;
+      return bValid - aValid;
     });
     setOrders(orders);
     setAgents((agRes.data ?? []) as AgentOption[]);

@@ -21,6 +21,7 @@ function VideoPlayer({ url, onClose }: { url: string; onClose: () => void }) {
 interface CompanyVideos {
   factory_video_url: string | null;
   job_video_url: string | null;
+  company_media: string[];
 }
 
 function getAgentOrderStatus(order: Order, candidateCount: number): { label: string; cls: string } {
@@ -48,8 +49,11 @@ export default function OrderDetail() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadMsg, setUploadMsg] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const mediaScrollRef = useRef<HTMLDivElement>(null);
   const [videoUploadingCandidate, setVideoUploadingCandidate] = useState<string | null>(null);
   const [playingVideo, setPlayingVideo] = useState<string | null>(null);
+  const [playingImage, setPlayingImage] = useState<string | null>(null);
+  const [selectedCandidates, setSelectedCandidates] = useState<string[]>([]);
   const videoInputRef = useRef<HTMLInputElement>(null);
   const [dupWarning, setDupWarning] = useState<{
     fullName: string; orderId: string; ppNo: string;
@@ -115,16 +119,23 @@ export default function OrderDetail() {
         agentIds = (orderRes.data as any).agent_ids || [];
       }
 
-      // Fetch company videos
+      // Fetch company videos (use api route to bypass RLS for public Agent viewers)
       if (companyId) {
-        supabase
-          .from('companies')
-          .select('factory_video_url, job_video_url')
-          .eq('id', companyId)
-          .single()
-          .then(({ data }) => {
-            if (data) setCompanyVideos({ factory_video_url: data.factory_video_url, job_video_url: data.job_video_url });
-          });
+        fetch(`/api/company/${companyId}`)
+          .then(res => res.json())
+          .then((resData) => {
+            const data = resData.data;
+            if (data) {
+              const mergedMedia = data.company_media || [];
+              if (data.factory_video_url && !mergedMedia.includes(data.factory_video_url)) mergedMedia.unshift(data.factory_video_url);
+              if (data.job_video_url && !mergedMedia.includes(data.job_video_url)) mergedMedia.unshift(data.job_video_url);
+              setCompanyVideos({ ...data, company_media: mergedMedia });
+              if (data.en_company_name) {
+                setOrderData(prev => prev ? { ...prev, en_company_name: data.en_company_name } : prev);
+              }
+            }
+          })
+          .catch(() => {});
       }
 
       const newCandidates: Candidate[] = (candRes.data || []).map((r: any) => ({
@@ -445,6 +456,34 @@ export default function OrderDetail() {
     }
   };
 
+  const handleToggleSelect = useCallback((id: string, selected: boolean) => {
+    setSelectedCandidates(prev => selected ? [...prev, id] : prev.filter(x => x !== id));
+  }, []);
+
+  const handleSelectAll = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.checked) setSelectedCandidates(candidates.map(c => c.id_ld));
+    else setSelectedCandidates([]);
+  }, [candidates]);
+
+  const handleExportCSV = useCallback(() => {
+    const selected = candidates.filter(c => selectedCandidates.includes(c.id_ld));
+    if (selected.length === 0) return;
+    
+    const headers = ['Full Name', 'Passport No', 'Date of Birth', 'Place of Birth', 'Address', 'Phone', 'Height (ft)', 'Weight (kg)', 'Visa Status', 'Interview Status'];
+    const rows = selected.map(c => [
+      c.full_name || '', c.pp_no || '', c.dob || '', c.pob || '', c.address || '', c.phone || '', 
+      c.height_ft || '', c.weight_kg || '', c.visa_status || '', c.interview_status || ''
+    ]);
+    const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + [headers.join(','), ...rows.map(r => r.map(x => `"${String(x).replace(/"/g, '""')}"`).join(','))].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `Candidates_${orderId}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }, [candidates, selectedCandidates, orderId]);
+
   if (loading) return <LoadingSkeleton type="order" />;
 
   const totalLabor = Number(orderData?.total_labor) || 0;
@@ -458,6 +497,12 @@ export default function OrderDetail() {
   return (
     <div className="min-h-screen bg-gray-50">
       {playingVideo && <VideoPlayer url={playingVideo} onClose={() => setPlayingVideo(null)} />}
+      {playingImage && (
+        <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4" onClick={() => setPlayingImage(null)}>
+          <button onClick={() => setPlayingImage(null)} className="absolute top-4 right-4 text-white text-3xl font-bold p-2 bg-black/30 rounded-full w-12 h-12 flex items-center justify-center hover:bg-black/50 transition-colors z-[60]">✕</button>
+          <img src={playingImage} alt="Preview" className="max-w-full max-h-[90vh] object-contain rounded-lg relative z-50" onClick={(e) => e.stopPropagation()} />
+        </div>
+      )}
       {/* Hidden inputs */}
       <input type="file" accept="video/*" ref={videoInputRef} onChange={handleVideoChange} className="hidden" />
       <input type="file" accept="image/*" ref={fileInputRef} onChange={handleFileChange} className="hidden" />
@@ -482,16 +527,7 @@ export default function OrderDetail() {
               {agentStatus.label}
             </span>
           )}
-          {orderData?.url_order && (
-            <a
-              href={orderData.url_order}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex-shrink-0 text-xs bg-blue-100 text-blue-700 px-3 py-2 rounded-lg hover:bg-blue-200 min-h-[44px] flex items-center"
-            >
-              📄 View Recruitment Info
-            </a>
-          )}
+
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={isUploading}
@@ -513,25 +549,9 @@ export default function OrderDetail() {
         {/* Order Details */}
         {orderData && (
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-            {/* Video buttons + Demand Letter */}
-            {(companyVideos?.factory_video_url || companyVideos?.job_video_url || demandLetterUrl || orderData.url_demand_letter) && (
+            {/* Action Buttons */}
+            {(demandLetterUrl || orderData.url_demand_letter || orderData.url_order) && (
               <div className="px-4 py-3 bg-gray-50 border-b border-gray-100 flex flex-wrap gap-2">
-                {companyVideos?.factory_video_url && (
-                  <button
-                    onClick={() => setPlayingVideo(companyVideos.factory_video_url!)}
-                    className="text-xs bg-indigo-100 text-indigo-700 px-3 py-2 rounded-lg hover:bg-indigo-200 min-h-[36px] flex items-center gap-1"
-                  >
-                    ▶ Factory Video
-                  </button>
-                )}
-                {companyVideos?.job_video_url && (
-                  <button
-                    onClick={() => setPlayingVideo(companyVideos.job_video_url!)}
-                    className="text-xs bg-purple-100 text-purple-700 px-3 py-2 rounded-lg hover:bg-purple-200 min-h-[36px] flex items-center gap-1"
-                  >
-                    ▶ Job Video
-                  </button>
-                )}
                 {(demandLetterUrl || orderData.url_demand_letter) && (
                   <a
                     href={demandLetterUrl || orderData.url_demand_letter || '#'}
@@ -541,25 +561,91 @@ export default function OrderDetail() {
                     Demand Letter ↗
                   </a>
                 )}
+                {orderData.url_order && (
+                  <a
+                    href={orderData.url_order}
+                    target="_blank" rel="noopener noreferrer"
+                    className="text-xs bg-indigo-100 text-indigo-700 px-3 py-2 rounded-lg hover:bg-indigo-200 min-h-[36px] flex items-center"
+                  >
+                    Recruitment Info (YCTD) ↗
+                  </a>
+                )}
               </div>
             )}
 
-            {/* Info grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-px bg-gray-100">
-              {[
-                { label: 'Company', value: orderData.en_company_name || orderData.company },
-                { label: 'Target', value: allocated },
-                { label: 'Job Type', value: orderData.job_type_en || orderData.job_type },
-                { label: 'Salary (USD)', value: orderData.salary_usd ? `$${orderData.salary_usd.toLocaleString()}` : null },
-                { label: 'Meal', value: orderData.meal_en || orderData.meal },
-                { label: 'Dormitory', value: orderData.dormitory_en || orderData.dormitory },
-                { label: 'Probation (EN)', value: orderData.probation_en },
-              ].map(({ label, value }) => (
-                <div key={label} className="bg-white px-4 py-3">
-                  <p className="text-gray-400 text-xs uppercase tracking-wider">{label}</p>
-                  <p className="font-semibold text-gray-800 text-sm mt-0.5">{value ?? 'N/A'}</p>
+            {/* Images/Videos Grid */}
+            {companyVideos?.company_media && companyVideos.company_media.length > 0 && (
+              <div className="px-4 py-3 bg-white border-b border-gray-100">
+                <h3 className="text-sm font-semibold text-gray-700 mb-2">Company Media</h3>
+                <div className="relative group/slider">
+                  <div ref={mediaScrollRef} className="flex gap-2 overflow-x-auto pb-2 scroll-smooth">
+                    {companyVideos.company_media.map((url, i) => {
+                      const isVideo = url.match(/\.(mp4|webm|mov)$/i);
+                      return (
+                        <div key={i} className="relative flex-shrink-0 cursor-pointer group" onClick={() => isVideo ? setPlayingVideo(url) : setPlayingImage(url)}>
+                           {isVideo ? (
+                             <div className="h-24 w-32 bg-gray-900 rounded-lg border border-gray-200 flex flex-col items-center justify-center">
+                               <span className="text-white text-2xl group-hover:scale-110 transition-transform mb-1">▶</span>
+                               <span className="text-gray-400 text-[10px] font-medium">VIDEO</span>
+                             </div>
+                           ) : (
+                             <img src={url} alt={`Company ${i}`} className="h-24 w-32 object-cover rounded-lg border border-gray-200 group-hover:opacity-90" />
+                           )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {companyVideos.company_media.length > 2 && (
+                    <>
+                      <button onClick={() => mediaScrollRef.current?.scrollBy({ left: -200, behavior: 'smooth' })} className="absolute left-0 top-[40%] -translate-y-1/2 w-8 h-8 flex items-center justify-center bg-white/90 shadow border border-gray-200 text-gray-700 rounded-full opacity-60 hover:opacity-100">
+                        ◀
+                      </button>
+                      <button onClick={() => mediaScrollRef.current?.scrollBy({ left: 200, behavior: 'smooth' })} className="absolute right-0 top-[40%] -translate-y-1/2 w-8 h-8 flex items-center justify-center bg-white/90 shadow border border-gray-200 text-gray-700 rounded-full opacity-60 hover:opacity-100">
+                        ▶
+                      </button>
+                    </>
+                  )}
                 </div>
-              ))}
+              </div>
+            )}
+
+            {/* Company & Order Info List */}
+            <div className="px-5 py-4 border-b border-gray-100">
+              <h2 className="text-xl font-bold text-emerald-700 mb-3">
+                {orderData.en_company_name || orderData.company || "N/A"}
+              </h2>
+              <ul className="space-y-2 text-sm text-gray-600">
+                <li className="flex items-start">
+                  <span className="text-gray-400 mr-2 mt-0.5">•</span>
+                  <div><strong className="text-gray-800">Total worker:</strong> {allocated}</div>
+                </li>
+                <li className="flex items-start">
+                  <span className="text-gray-400 mr-2 mt-0.5">•</span>
+                  <div><strong className="text-gray-800">Job Type:</strong> {orderData.job_type_en || orderData.job_type || 'N/A'}</div>
+                </li>
+                <li className="flex items-start">
+                  <span className="text-gray-400 mr-2 mt-0.5">•</span>
+                  <div><strong className="text-gray-800">Salary:</strong> {orderData.salary_usd ? `${orderData.salary_usd.toLocaleString()} USD` : 'N/A'}</div>
+                </li>
+                {(orderData.meal_en || orderData.meal) && (
+                  <li className="flex items-start">
+                    <span className="text-gray-400 mr-2 mt-0.5">•</span>
+                    <div><strong className="text-gray-800">Meal:</strong> {orderData.meal_en || orderData.meal}</div>
+                  </li>
+                )}
+                {(orderData.dormitory_en || orderData.dormitory) && (
+                  <li className="flex items-start">
+                    <span className="text-gray-400 mr-2 mt-0.5">•</span>
+                    <div><strong className="text-gray-800">Dormitory:</strong> {orderData.dormitory_en || orderData.dormitory}</div>
+                  </li>
+                )}
+                {orderData.probation_en && (
+                  <li className="flex items-start">
+                    <span className="text-gray-400 mr-2 mt-0.5">•</span>
+                    <div><strong className="text-gray-800">Probation (EN):</strong> {orderData.probation_en}</div>
+                  </li>
+                )}
+              </ul>
             </div>
 
             {/* Probation badge */}
@@ -660,9 +746,17 @@ export default function OrderDetail() {
 
         {/* Candidates */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-          <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">
-            Candidates ({candidates.length})
-          </h2>
+          <div className="flex justify-between items-center mb-3">
+            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-2">
+              <input type="checkbox" onChange={handleSelectAll} checked={candidates.length > 0 && selectedCandidates.length === candidates.length} className="w-4 h-4 rounded text-blue-600 border-gray-300" />
+              Candidates ({candidates.length})
+            </h2>
+            {selectedCandidates.length > 0 && (
+              <button onClick={handleExportCSV} className="text-xs bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg flex items-center gap-1 transition-colors">
+                📥 Export CSV ({selectedCandidates.length})
+              </button>
+            )}
+          </div>
           {candidates.length === 0 ? (
             <p className="text-gray-400 text-sm text-center py-4">No candidates found for this order.</p>
           ) : (
@@ -677,6 +771,8 @@ export default function OrderDetail() {
                   onCandidateDelete={handleCandidateDelete}
                   isVideoUploading={videoUploadingCandidate === c.id_ld}
                   onVideoPlay={(url) => setPlayingVideo(url)}
+                  isSelected={selectedCandidates.includes(c.id_ld)}
+                  onToggleSelect={handleToggleSelect}
                 />
               ))}
             </div>

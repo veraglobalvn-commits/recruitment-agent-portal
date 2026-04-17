@@ -1,0 +1,239 @@
+{
+    "name": "[Telegram] Pass-Fail Handler",
+    "nodes": [
+        {
+            "parameters": {
+                "updates": [
+                    "callback_query"
+                ],
+                "additionalFields": {}
+            },
+            "id": "telegram-trigger",
+            "name": "Telegram Trigger",
+            "type": "n8n-nodes-base.telegramTrigger",
+            "typeVersion": 1.2,
+            "position": [
+                0,
+                0
+            ],
+            "credentials": {
+                "telegramApi": {
+                    "id": "TELEGRAM_CREDENTIAL_ID",
+                    "name": "Vera Bot"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "jsCode": "// Parse callback_data: format = 'pass:ID_LD' or 'fail:ID_LD'\nconst callback = $input.first().json.callback_query;\nconst data = callback.data;\nconst chatId = callback.message.chat.id;\nconst messageId = callback.message.message_id;\nconst fromName = callback.from.first_name || callback.from.username || 'Admin';\nconst callbackQueryId = callback.id;\nconst originalText = callback.message.text || '';\n\nconst [action, candidateId] = data.split(':');\n\nif (!action || !candidateId) {\n  return [{ json: { error: true, callback_query_id: callbackQueryId, raw: data } }];\n}\n\nconst status = action === 'pass' ? 'passed' : 'failed';\nconst emoji = action === 'pass' ? '✅' : '❌';\n\nreturn [{\n  json: {\n    error: false,\n    candidate_id: candidateId,\n    action: action,\n    status: status,\n    emoji: emoji,\n    chat_id: chatId,\n    message_id: messageId,\n    from_name: fromName,\n    callback_query_id: callbackQueryId,\n    original_text: originalText\n  }\n}];"
+            },
+            "id": "parse-callback",
+            "name": "Parse Callback",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                220,
+                0
+            ]
+        },
+        {
+            "parameters": {
+                "method": "PATCH",
+                "url": "=https://fpesidoqwxyyutgvalsp.supabase.co/rest/v1/candidates?id_ld=eq.{{$json.candidate_id}}",
+                "sendHeaders": true,
+                "headerParameters": {
+                    "parameters": [
+                        {
+                            "name": "apikey",
+                            "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZwZXNpZG9xd3h5eXV0Z3ZhbHNwIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTY3NDkzNywiZXhwIjoyMDkxMjUwOTM3fQ.X9s9a_rSNefhdd7UEsTulNB1xct4JK_QZe2UzIubPg8"
+                        },
+                        {
+                            "name": "Content-Type",
+                            "value": "application/json"
+                        },
+                        {
+                            "name": "Prefer",
+                            "value": "return=minimal"
+                        }
+                    ]
+                },
+                "sendBody": true,
+                "specifyBody": "json",
+                "jsonBody": "={{ JSON.stringify({ interview_status: $json.status }) }}",
+                "options": {}
+            },
+            "id": "update-supabase",
+            "name": "Update Supabase",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.2,
+            "position": [
+                440,
+                0
+            ]
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "=https://api.telegram.org/bot8213635094:AAEziFudsLcEnKzDYJXyNqLQKEdPoSeHTmc/answerCallbackQuery",
+                "sendBody": true,
+                "specifyBody": "json",
+                "jsonBody": "={{ JSON.stringify({ callback_query_id: $('Parse Callback').first().json.callback_query_id, text: `${$('Parse Callback').first().json.emoji} Đã ghi nhận: ${$('Parse Callback').first().json.status.toUpperCase()} cho ${$('Parse Callback').first().json.candidate_id}`, show_alert: false }) }}",
+                "options": {}
+            },
+            "id": "answer-callback",
+            "name": "Xác Nhận Callback",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.2,
+            "position": [
+                660,
+                0
+            ]
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {
+                        "caseSensitive": true,
+                        "leftValue": "",
+                        "typeValidation": "strict"
+                    },
+                    "conditions": [
+                        {
+                            "id": "condition-pass",
+                            "leftValue": "={{$('Parse Callback').first().json.action}}",
+                            "rightValue": "pass",
+                            "operator": {
+                                "type": "string",
+                                "operation": "equals",
+                                "name": "operator.equals"
+                            }
+                        }
+                    ],
+                    "combinator": "and"
+                },
+                "options": {}
+            },
+            "id": "if-pass-or-fail",
+            "name": "Pass hay Fail?",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2.2,
+            "position": [
+                880,
+                0
+            ]
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "=https://api.telegram.org/bot8213635094:AAEziFudsLcEnKzDYJXyNqLQKEdPoSeHTmc/editMessageText",
+                "sendBody": true,
+                "specifyBody": "json",
+                "jsonBody": "={{ JSON.stringify({ chat_id: $('Parse Callback').first().json.chat_id, message_id: $('Parse Callback').first().json.message_id, text: `${$('Parse Callback').first().json.original_text}\\n\\n✅ **PASS** bởi ${$('Parse Callback').first().json.from_name}`, parse_mode: 'Markdown' }) }}",
+                "options": {}
+            },
+            "id": "update-message-pass",
+            "name": "Hiển thị PASS",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.2,
+            "position": [
+                1100,
+                -100
+            ]
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "=https://api.telegram.org/bot8213635094:AAEziFudsLcEnKzDYJXyNqLQKEdPoSeHTmc/editMessageText",
+                "sendBody": true,
+                "specifyBody": "json",
+                "jsonBody": "={{ JSON.stringify({ chat_id: $('Parse Callback').first().json.chat_id, message_id: $('Parse Callback').first().json.message_id, text: `${$('Parse Callback').first().json.original_text}\\n\\n❌ **FAIL** bởi ${$('Parse Callback').first().json.from_name}`, parse_mode: 'Markdown' }) }}",
+                "options": {}
+            },
+            "id": "update-message-fail",
+            "name": "Hiển thị FAIL",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.2,
+            "position": [
+                1100,
+                100
+            ]
+        }
+    ],
+    "pinData": {},
+    "connections": {
+        "Telegram Trigger": {
+            "main": [
+                [
+                    {
+                        "node": "Parse Callback",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Parse Callback": {
+            "main": [
+                [
+                    {
+                        "node": "Update Supabase",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Update Supabase": {
+            "main": [
+                [
+                    {
+                        "node": "Xác Nhận Callback",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Xác Nhận Callback": {
+            "main": [
+                [
+                    {
+                        "node": "Pass hay Fail?",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Pass hay Fail?": {
+            "main": [
+                [
+                    {
+                        "node": "Hiển thị PASS",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "Hiển thị FAIL",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "active": true,
+    "settings": {
+        "executionOrder": "v1"
+    },
+    "tags": [
+        {
+            "name": "telegram"
+        },
+        {
+            "name": "recruitment"
+        }
+    ]
+}

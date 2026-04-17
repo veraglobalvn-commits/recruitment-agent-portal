@@ -19,6 +19,8 @@ interface CandidateCardProps {
   isNewVideo?: boolean;
   onVideoViewed?: () => void;
   onVideoPlay?: (url: string) => void;
+  isSelected?: boolean;
+  onToggleSelect?: (id: string, selected: boolean) => void;
 }
 
 export default function CandidateCard({
@@ -36,6 +38,8 @@ export default function CandidateCard({
   isNewVideo,
   onVideoViewed,
   onVideoPlay,
+  isSelected,
+  onToggleSelect,
 }: CandidateCardProps) {
 
   const [editing, setEditing] = useState(false);
@@ -237,6 +241,16 @@ export default function CandidateCard({
     <div className={`border rounded-xl hover:shadow-md transition-shadow bg-white overflow-hidden ${isNewVideo ? 'border-yellow-400 ring-2 ring-yellow-200' : isMissingCandidate ? 'border-red-200 bg-red-50/20' : 'border-gray-200'}`}>
       {/* Header: Photo + Name + ID */}
       <div className="flex items-start gap-3 p-4 pb-3">
+        {onToggleSelect && (
+          <div className="flex-shrink-0 pt-3">
+            <input
+              type="checkbox"
+              checked={!!isSelected}
+              onChange={(e) => onToggleSelect(candidate.id_ld, e.target.checked)}
+              className="w-5 h-5 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+            />
+          </div>
+        )}
         <div className="relative flex-shrink-0">
           {candidate.photo_link ? (
             <img src={candidate.photo_link} alt={candidate.full_name ?? ''} className="w-14 h-14 rounded-full object-cover border-2 border-gray-200" />

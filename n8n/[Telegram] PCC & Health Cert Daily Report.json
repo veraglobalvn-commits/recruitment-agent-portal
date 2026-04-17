@@ -1,0 +1,168 @@
+{
+    "name": "[Telegram] PCC & Health Cert Daily Report",
+    "nodes": [
+        {
+            "parameters": {
+                "rule": {
+                    "interval": [
+                        {
+                            "field": "cronExpression",
+                            "expression": "0 13 * * *"
+                        }
+                    ]
+                }
+            },
+            "id": "schedule-trigger",
+            "name": "Mỗi ngày 8PM SGT",
+            "type": "n8n-nodes-base.scheduleTrigger",
+            "typeVersion": 1.2,
+            "position": [
+                0,
+                0
+            ]
+        },
+        {
+            "parameters": {
+"jsCode": "// Compute today's date range in SGT (UTC+7)\n// Cron fires at 13:00 UTC = 20:00 SGT\nconst now = new Date();\nconst SGT_OFFSET = 7 * 60 * 60 * 1000;\nconst sgtNow = new Date(now.getTime() + SGT_OFFSET);\nconst sgtDateStr = sgtNow.toISOString().split('T')[0];\n\n// Start of SGT today in UTC\n// Example: 2026-04-13T00:00:00+07:00 -> 2026-04-12T17:00:00Z\nconst startDate = new Date(sgtDateStr + 'T00:00:00+07:00');\n\n// Format to YYYY-MM-DDTHH:mm:ssZ to avoid precision issues with Supabase\nconst formatDate = (d) => d.toISOString().split('.')[0] + 'Z';\n\nreturn [{\n json: {\n start_date: formatDate(startDate),\n end_date: formatDate(now),\n sgt_date: sgtDateStr\n }\n}];"
+            },
+            "id": "compute-dates",
+            "name": "Tính Ngày",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                220,
+                0
+            ]
+        },
+{
+    "parameters": {
+      "operation": "getAll",
+      "tableId": "candidates",
+      "returnAll": true,
+      "matchType": "allFilters",
+      "filters": {
+        "conditions": [
+          {
+            "keyName": "pcc_health_cert_link",
+            "condition": "notEmpty"
+          },
+          {
+            "keyName": "synced_at",
+            "condition": "gte",
+            "keyValue": "={{ $json.start_date }}"
+          },
+          {
+            "keyName": "synced_at",
+            "condition": "lt",
+            "keyValue": "={{ $json.end_date }}"
+          }
+        ]
+      }
+    },
+    "id": "query-candidates",
+    "name": "Query Supabase",
+    "type": "n8n-nodes-base.supabase",
+    "typeVersion": 1,
+    "position": [
+      440,
+      0
+    ],
+    "credentials": {
+      "supabaseApi": {
+        "id": "supabase-creds-id",
+        "name": "Supabase account"
+      }
+    }
+  },
+        {
+            "parameters": {
+                "jsCode": "// Aggregate all candidates and build report message\n// $input.all() gets all items from the HTTP Request (each candidate = 1 item)\nconst allItems = $input.all();\nconst candidates = allItems.map(item => item.json);\n\n// If no candidates, return empty to stop the flow\nif (!candidates || candidates.length === 0) {\n return [];\n}\n\nconst today = new Date().toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });\n\nconst lines = candidates.map((c, i) => {\n return `${i + 1}. ${c.full_name || 'N/A'} (${c.id_ld})\\n 📄 PCC/Khám SK | Đơn hàng: ${c.order_id || 'N/A'}`;\n});\n\nconst total = candidates.length;\nconst text = `📋 *Báo cáo PCC & Khám sức khỏe hôm nay*\\n📅 ${today}\\n\\n`\n + `Tổng: *${total}* ứng viên nộp PCC/Khám sức khỏe hôm nay\\n\\n`\n + lines.join('\\n\\n');\n\nreturn [{\n json: {\n text: text,\n chat_id: '-5163098733',\n total: total\n }\n}];"
+            },
+            "id": "format-message",
+            "name": "Tạo Tin Nhắn",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                660,
+                0
+            ]
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "=https://api.telegram.org/bot8213635094:AAEziFudsLcEnKzDYJXyNqLQKEdPoSeHTmc/sendMessage",
+                "sendBody": true,
+                "specifyBody": "json",
+                "jsonBody": "={{ JSON.stringify({ chat_id: $json.chat_id, text: $json.text, parse_mode: 'Markdown' }) }}",
+                "options": {}
+            },
+            "id": "send-telegram",
+            "name": "Gửi Telegram",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.2,
+            "position": [
+                880,
+                0
+            ]
+        }
+    ],
+    "pinData": {},
+    "connections": {
+        "Mỗi ngày 8PM SGT": {
+            "main": [
+                [
+                    {
+                        "node": "Tính Ngày",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Tính Ngày": {
+            "main": [
+                [
+                    {
+                        "node": "Query Supabase",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Query Supabase": {
+            "main": [
+                [
+                    {
+                        "node": "Tạo Tin Nhắn",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Tạo Tin Nhắn": {
+            "main": [
+                [
+                    {
+                        "node": "Gửi Telegram",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "active": true,
+    "settings": {
+        "executionOrder": "v1"
+    },
+    "tags": [
+        {
+            "name": "telegram"
+        },
+        {
+            "name": "daily-report"
+        }
+    ]
+}

@@ -140,6 +140,7 @@ export default function AddOrderModal({ onClose, onSaved, prefillCompanyId }: Ad
           order_id: data.id,
           agent_id: aid,
           assigned_labor_number: 0,
+          assigned_date: new Date().toISOString(),
         }));
         await supabase.from('order_agents').insert(oaRows);
       }

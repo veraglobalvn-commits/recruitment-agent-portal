@@ -6,3 +6,11 @@ out/
 .env.*.local
 *.tsbuildinfo
 next-env.d.ts
+.DS_Store
+.kilo/
+.kilocode/
+supabase/.temp/
+PROGRESS.md
+tmp_*.js
+scripts/
+.github/instructions/

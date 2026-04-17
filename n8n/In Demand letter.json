@@ -1,0 +1,381 @@
+{
+  "name": "In Demand letter",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "1a7de716-fe8a-43e3-87d9-979cfa18c8dc",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -32,
+        -80
+      ],
+      "id": "a0f69b20-de45-4618-9ce3-738cb80304b8",
+      "name": "Webhook",
+      "webhookId": "1a7de716-fe8a-43e3-87d9-979cfa18c8dc"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://open.larksuite.com/open-apis/auth/v3/tenant_access_token/internal",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"app_id\": \"cli_a79ddc7fa8f8d010\",\n  \"app_secret\": \"V8DaC5mUwBdDcJcYo7q7mcpJobjgk3C6\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        192,
+        -80
+      ],
+      "id": "70335847-cc70-43f5-b208-4ace637e55ec",
+      "name": "Get Lark Token"
+    },
+    {
+      "parameters": {
+        "url": "=https://open.larksuite.com/open-apis/bitable/v1/apps/CI8CwHwNuinVHskMDQAlN6Elgyf/tables/tbl3fyDEBbVkpmiq/records/{{ $('Webhook').item.json.body.record_id }}",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "value_type",
+              "value": "ToString"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.tenant_access_token }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        416,
+        -80
+      ],
+      "id": "5149546d-eb48-4f08-b625-ee3d50bf9e0e",
+      "name": "Fetch Order Data"
+    },
+    {
+      "parameters": {
+        "operation": "copy",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $json.data.record.fields.LinkMauDL[0].text }}",
+          "mode": "id"
+        },
+        "name": "={{ $now.toFormat('yyMMdd-hh:mm:ss') }} [{{ $json.data.record.fields.ShortComapnyName[0].text }}] Demand Letter ({{ $('Fetch Order Data').item.json.data.record.fields.TongSoLaoDong }} labor - {{ $now.toFormat('MMMM') }})",
+        "sameFolder": false,
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "={{ $json.data.record.fields.URL_DonHang.link }}",
+          "mode": "url"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        640,
+        -80
+      ],
+      "id": "5a8e1b3e-124e-474f-94e7-db75a3ef7a68",
+      "name": "Copy Template",
+      "retryOnFail": true,
+      "waitBetweenTries": 3000,
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "pQ6qTSMZRoiqUMQV",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentURL": "={{ $json.id }}",
+        "actionsUi": {
+          "actionFields": [
+            {
+              "action": "replaceAll",
+              "text": "{{NgayThangHD}}",
+              "replaceText": "={{new Date($('Fetch Order Data').item.json.data.record.fields.NgayThangHD).toDateTime().format('dd/MM/yyyy')}}"
+            },
+            {
+              "action": "replaceAll",
+              "text": "{{EN_TenCongTy}}",
+              "replaceText": "={{ $('Fetch Order Data').item.json.data.record.fields.EN_TenCongTy[0].text }}"
+            },
+            {
+              "action": "replaceAll",
+              "text": "{{EN_DiaChiCongTy}}",
+              "replaceText": "={{ $('Fetch Order Data').item.json.data.record.fields.EN_DiaChiCongTy[0].text }}"
+            },
+            {
+              "action": "replaceAll",
+              "text": "{{MST}}",
+              "replaceText": "={{ $('Fetch Order Data').item.json.data.record.fields.MST[0].text }}"
+            },
+            {
+              "action": "replaceAll",
+              "text": "{{LoaiHinhDN}}",
+              "replaceText": "={{ $('Fetch Order Data').item.json.data.record.fields.LoaiHinhDN[0].text }}"
+            },
+            {
+              "action": "replaceAll",
+              "text": "{{EN_NguoiDaiDien}}",
+              "replaceText": "={{ $('Fetch Order Data').item.json.data.record.fields.EN_NguoiDaiDien[0].text }}"
+            },
+            {
+              "action": "replaceAll",
+              "text": "{{EN_ChucVu}} ",
+              "replaceText": "={{ $('Fetch Order Data').item.json.data.record.fields.EN_ChucVu[0].text }}"
+            },
+            {
+              "action": "replaceAll",
+              "text": "{{EN_ViTriTuyen}}",
+              "replaceText": "={{ $('Fetch Order Data').item.json.data.record.fields.EN_ViTriTuyen }}"
+            },
+            {
+              "action": "replaceAll",
+              "text": "{{TongSoLaoDong}}",
+              "replaceText": "={{ $('Fetch Order Data').item.json.data.record.fields.TongSoLaoDong }}"
+            },
+            {
+              "action": "replaceAll",
+              "text": "{{WorkingHours}}",
+              "replaceText": "={{ $('Fetch Order Data').item.json.data.record.fields.WorkingHours }}"
+            },
+            {
+              "action": "replaceAll",
+              "text": "{{TotalMonthlySalaryVND}}",
+              "replaceText": "={{ Number($('Fetch Order Data').item.json.data.record.fields.TotalMonthlySalaryVND).toLocaleString('vi-VN') }}"
+            },
+            {
+              "action": "replaceAll",
+              "text": "{{TotalMonthlySalaryUSD}}",
+              "replaceText": "={{ Number($('Fetch Order Data').item.json.data.record.fields.TotalMonthlySalaryUSD).toLocaleString('en-US') }}"
+            },
+            {
+              "action": "replaceAll",
+              "text": "{{EN_HoTroBuaAn}}",
+              "replaceText": "={{ $('Fetch Order Data').item.json.data.record.fields.EN_HoTroBuaAn[0].text }}"
+            },
+            {
+              "action": "replaceAll",
+              "text": "{{EN_ThuViec}}",
+              "replaceText": "={{ $('Fetch Order Data').item.json.data.record.fields.EN_ThuViec[0].text }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.googleDocs",
+      "typeVersion": 2,
+      "position": [
+        848,
+        -80
+      ],
+      "id": "0f2e0b45-0033-4d30-9d7e-9d5f5ee5ec60",
+      "name": "Fill Data to Docs",
+      "retryOnFail": true,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "googleDocsOAuth2Api": {
+          "id": "E7ejRYB8dtcGQH00",
+          "name": "Vera GG Docs OAuth client ID"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "=https://www.googleapis.com/drive/v3/files/{{ $json.documentId }}/export?mimeType=application/pdf",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1072,
+        -80
+      ],
+      "id": "20a7fcda-6ec2-47dd-9bb2-e4c04604aac1",
+      "name": "Export PDF",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "pQ6qTSMZRoiqUMQV",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "name": "={{ $now.toFormat('yyMMdd-hh:mm:ss') }} [{{ $('Fetch Order Data').item.json.data.record.fields.ShortComapnyName[0].text }}] Demand Letter ({{ $('Fetch Order Data').item.json.data.record.fields.TongSoLaoDong }} labor - {{ $now.toFormat('MMMM') }}).pdf",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "={{ $('Fetch Order Data').item.json.data.record.fields.URL_DonHang.link }}",
+          "mode": "url"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        1296,
+        -80
+      ],
+      "id": "daac40d0-1d48-44f8-91bf-0e8586fb148c",
+      "name": "Upload PDF to Drive",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "pQ6qTSMZRoiqUMQV",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "=https://open.larksuite.com/open-apis/bitable/v1/apps/CI8CwHwNuinVHskMDQAlN6Elgyf/tables/tbl3fyDEBbVkpmiq/records/{{ $('Fetch Order Data').item.json.data.record.record_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Get Lark Token').item.json.tenant_access_token }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"fields\": {\n    \"URL_DL\": {\n      \"link\": \"{{ $json.webViewLink }}\",\n      \"text\": \"{{ $json.name }}\"\n    }\n  }\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1520,
+        -80
+      ],
+      "id": "cdc4d36f-b03c-4db5-9543-67b336421415",
+      "name": "Update Lark Link"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Get Lark Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Lark Token": {
+      "main": [
+        [
+          {
+            "node": "Fetch Order Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Order Data": {
+      "main": [
+        [
+          {
+            "node": "Copy Template",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Copy Template": {
+      "main": [
+        [
+          {
+            "node": "Fill Data to Docs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fill Data to Docs": {
+      "main": [
+        [
+          {
+            "node": "Export PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Export PDF": {
+      "main": [
+        [
+          {
+            "node": "Upload PDF to Drive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload PDF to Drive": {
+      "main": [
+        [
+          {
+            "node": "Update Lark Link",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "6f7e6a1f-c559-4327-885b-06bdc28051db",
+  "meta": {
+    "instanceId": "a41e7c642cf4595af91c3d0d5b5ab6ba94d7ea27d8f89ebe97e774c719177a50"
+  },
+  "id": "rCzoVqeEUNuUDvoo",
+  "tags": []
+}

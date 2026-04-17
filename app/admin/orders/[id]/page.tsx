@@ -70,6 +70,10 @@ export default function OrderDetailPage() {
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [enCompanyName, setEnCompanyName] = useState<string>('');
   const [enIndustry, setEnIndustry] = useState<string>('');
+  const [enAddress, setEnAddress] = useState<string>('');
+  const [enBusinessType, setEnBusinessType] = useState<string>('');
+  const [enLegalRep, setEnLegalRep] = useState<string>('');
+  const [enTitle, setEnTitle] = useState<string>('');
   const [agents, setAgents] = useState<AgentOption[]>([]);
   const [agentLaborAllocations, setAgentLaborAllocations] = useState<Record<string, string>>({});
   const [handovers, setHandovers] = useState<OrderHandover[]>([]);
@@ -88,6 +92,7 @@ export default function OrderDetailPage() {
   const [addingPaymentParty, setAddingPaymentParty] = useState<'company' | 'agent' | null>(null);
   const [newPayment, setNewPayment] = useState<Partial<OrderPayment>>({});
   const [translating, setTranslating] = useState(false);
+  const [isEnOpen, setIsEnOpen] = useState(false);
   const [docLinks, setDocLinks] = useState<OrderDocLink[]>([]);
   const [yctdLoading, setYctdLoading] = useState<Record<string, boolean>>({});
   const [contractType, setContractType] = useState<1 | 2>(1);
@@ -162,10 +167,14 @@ export default function OrderDetailPage() {
 setOrder(o);
         // Load English company name and industry if available
         if (o.company_id) {
-          const { data: compData, error: compError } = await supabase.from('companies').select('en_company_name, en_industry').eq('id', o.company_id).single();
+          const { data: compData, error: compError } = await supabase.from('companies').select('en_company_name, en_industry, en_address, en_business_type, en_legal_rep, en_title').eq('id', o.company_id).single();
           if (!compError) {
             setEnCompanyName(compData?.en_company_name ?? '');
             setEnIndustry(compData?.en_industry ?? '');
+            setEnAddress(compData?.en_address ?? '');
+            setEnBusinessType(compData?.en_business_type ?? '');
+            setEnLegalRep(compData?.en_legal_rep ?? '');
+            setEnTitle(compData?.en_title ?? '');
           }
         }
         setDocLinks((o.doc_links as OrderDocLink[]) ?? []);
@@ -220,7 +229,6 @@ setOrder(o);
   useEffect(() => { load(); }, [load]);
 
   const handleTranslateSilent = useCallback(async () => {
-    if (!order?.company_id) return;
     setTranslating(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -233,7 +241,8 @@ setOrder(o);
           Authorization: `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({
-          company_id: order.company_id,
+          order_id: id,
+          company_id: order?.company_id,
           job_type: form.job_type,
           meal: form.meal,
           dormitory: form.dormitory,
@@ -246,31 +255,81 @@ setOrder(o);
         console.error('[translate] API error:', res.status, await res.text());
         return;
       }
-      const data = await res.json() as {
-        job_type_en: string | null;
-        meal_en: string | null;
-        dormitory_en: string | null;
-      };
-      const updates: Record<string, string | null> = {};
-      if (data.job_type_en) updates.job_type_en = data.job_type_en;
-      if (data.meal_en) updates.meal_en = data.meal_en;
-      if (data.dormitory_en) updates.dormitory_en = data.dormitory_en;
-      if (Object.keys(updates).length === 0) return;
-      await supabase.from('orders').update(updates).eq('id', id);
-      setForm((f) => ({
-        ...f,
-        job_type_en: data.job_type_en ?? f.job_type_en,
-        meal_en: data.meal_en ?? f.meal_en,
-        dormitory_en: data.dormitory_en ?? f.dormitory_en,
-      }));
+      const { request_ids } = await res.json() as { request_ids: string[] };
+
+      let attempts = 0;
+      const maxAttempts = 30;
+      const completedSet = new Set<string>();
+
+      while (completedSet.size < request_ids.length && attempts < maxAttempts) {
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        attempts++;
+
+        const statuses = await Promise.all(
+          request_ids.map(async (reqId) => {
+            if (completedSet.has(reqId)) return null;
+            const statusRes = await fetch(`/api/translate?request_id=${reqId}`, {
+              headers: { Authorization: `Bearer ${session.access_token}` },
+            });
+            if (!statusRes.ok) return null;
+            return { reqId, data: await statusRes.json() };
+          })
+        );
+
+        for (const resItem of statuses) {
+          if (!resItem) continue;
+          const { reqId, data: statusData } = resItem;
+
+          if (statusData.status === 'completed' || statusData.status === 'failed') {
+            completedSet.add(reqId);
+
+            if (statusData.status === 'completed') {
+              const tdata = statusData.translated_data || {};
+              
+              if (statusData.entity_type === 'order') {
+                const updates: Record<string, string | null> = {};
+                const jobType = tdata.job_type_en || tdata.job_type;
+                const meal = tdata.meal_en || tdata.meal;
+                const dorm = tdata.dormitory_en || tdata.dormitory;
+                const probation = tdata.probation_en || tdata.probation;
+
+                if (jobType) updates.job_type_en = jobType;
+                if (meal) updates.meal_en = meal;
+                if (dorm) updates.dormitory_en = dorm;
+                if (probation) updates.probation_en = probation;
+                
+                if (Object.keys(updates).length > 0) {
+                  await supabase.from('orders').update(updates).eq('id', id);
+                  setForm((f) => ({
+                    ...f,
+                    job_type_en: jobType ?? f.job_type_en,
+                    meal_en: meal ?? f.meal_en,
+                    dormitory_en: dorm ?? f.dormitory_en,
+                    probation_en: probation ?? f.probation_en,
+                  }));
+                }
+              } else if (statusData.entity_type === 'company') {
+                // Update UI state for company fields if visible
+                if (tdata.en_company_name) setEnCompanyName(tdata.en_company_name);
+                if (tdata.en_address) setEnAddress(tdata.en_address);
+                if (tdata.en_business_type) setEnBusinessType(tdata.en_business_type);
+                if (tdata.en_legal_rep) setEnLegalRep(tdata.en_legal_rep);
+                if (tdata.en_title) setEnTitle(tdata.en_title);
+              }
+            } else if (statusData.status === 'failed') {
+              console.error(`[translate] n8n failed for request ${reqId}`);
+            }
+          }
+        }
+      }
     } catch (err) {
       console.error('[translate] error:', err);
     } finally {
       setTranslating(false);
     }
-  }, [order, form, id]);
+  }, [form, id, order?.company_id]);
 
-  const handleSave = useCallback(async () => {
+  const handleSave = useCallback(async (andTranslate = false) => {
     if (!order) return;
     setSaving(true);
     setSaveMsg(null);
@@ -315,8 +374,8 @@ setOrder(o);
     setSaveMsg('✅ Đã lưu');
     setDirty(false);
     setTimeout(() => setSaveMsg(null), 3000);
-    // Auto-translate silently
-    handleTranslateSilent();
+    
+    if (andTranslate) handleTranslateSilent();
   }, [id, order, form, handleTranslateSilent]);
 
   useEffect(() => {
@@ -347,6 +406,7 @@ setOrder(o);
         order_id: id,
         agent_id: agentId,
         assigned_labor_number: numValue,
+        assigned_date: new Date().toISOString(),
       }, { onConflict: 'order_id,agent_id' });
       if (error) throw error;
     } catch (err) {
@@ -657,7 +717,7 @@ setOrder(o);
         <RecruitmentPill status={form.status} laborMissing={(() => { const total = parseInt(form.total_labor) || 0; const passed = (candidates?.filter(c => c.interview_status === 'Passed').length) || 0; return Math.max(0, total - passed); })()} />
         {saveMsg && <span className="text-xs text-green-600 font-medium hidden sm:inline">{saveMsg}</span>}
         <button
-          onClick={handleSave}
+          onClick={() => handleSave(false)}
           disabled={saving}
           className={`px-4 py-2 rounded-xl text-sm font-semibold min-h-[44px] transition-colors ${
             dirty ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-100 text-gray-400 cursor-default'
@@ -845,7 +905,7 @@ setOrder(o);
                         setDirty(true);
                         setShowAgentDropdown(false);
                         await supabase.from('order_agents').upsert({
-                          order_id: id, agent_id: ag.id, assigned_labor_number: defaultAllocation,
+                          order_id: id, agent_id: ag.id, assigned_labor_number: defaultAllocation, assigned_date: new Date().toISOString(),
                         }, { onConflict: 'order_id,agent_id' });
                       }}
                         className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 first:rounded-t-lg last:rounded-b-lg">
@@ -961,17 +1021,34 @@ setOrder(o);
 
         {/* Thông tin tiếng Anh */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-          <div className="px-4 py-3 border-b border-gray-50 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-slate-700">Thông tin tiếng Anh</h2>
+          <div 
+            className="px-4 py-3 border-b border-gray-50 flex items-center justify-between cursor-pointer hover:bg-gray-50 transition-colors"
+            onClick={() => setIsEnOpen(!isEnOpen)}
+          >
+            <div className="flex items-center gap-2">
+              <h2 className="text-sm font-semibold text-slate-700">Thông tin tiếng Anh</h2>
+              <span className="text-gray-400 text-[10px]">{isEnOpen ? '▲' : '▼'}</span>
+            </div>
             <button
-              onClick={handleTranslateSilent}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleSave(true);
+              }}
               disabled={translating}
-              className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 disabled:opacity-50 min-h-[32px] flex items-center gap-1 transition-colors"
+              className={`text-xs text-white px-3 py-1.5 rounded-lg disabled:opacity-50 min-h-[32px] flex items-center gap-1 transition-colors ${
+                translating ? 'bg-gray-400' : (
+                  [form.job_type_en, form.meal_en, form.dormitory_en, form.probation_en, enCompanyName, enIndustry, enAddress, enBusinessType, enLegalRep, enTitle].some(x => !x || x.trim() === '')
+                  ? 'bg-red-600 hover:bg-red-700'
+                  : 'bg-green-600 hover:bg-green-700'
+                )
+              }`}
             >
               {translating ? '⏳ Đang dịch...' : '🌐 Dịch'}
             </button>
           </div>
-<div className="p-4 space-y-3">
+          
+          {isEnOpen && (
+            <div className="p-4 space-y-3">
               <div><label className="block text-xs text-gray-500 mb-1">Job Type (EN)</label><input type="text" value={form.job_type_en} onChange={(e) => setField('job_type_en', e.target.value)} className={inputClsBase} /></div>
               <div className="grid grid-cols-2 gap-3">
                 <div><label className="block text-xs text-gray-500 mb-1">Meal (EN)</label><input type="text" value={form.meal_en} onChange={(e) => setField('meal_en', e.target.value)} className={inputClsBase} /></div>
@@ -979,8 +1056,17 @@ setOrder(o);
               </div>
               <div><label className="block text-xs text-gray-500 mb-1">Probation (EN)</label><input type="text" value={form.probation_en} onChange={(e) => setField('probation_en', e.target.value)} className={inputClsBase} /></div>
               <div><label className="block text-xs text-gray-500 mb-1">Company (EN)</label><input type="text" value={enCompanyName} readOnly className={inputClsBase} /></div>
-              <div><label className="block text-xs text-gray-500 mb-1">Industry (EN)</label><input type="text" value={enIndustry} readOnly className={inputClsBase} /></div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className="block text-xs text-gray-500 mb-1">Industry (EN)</label><input type="text" value={enIndustry} readOnly className={inputClsBase} /></div>
+                <div><label className="block text-xs text-gray-500 mb-1">Business Type (EN)</label><input type="text" value={enBusinessType} readOnly className={inputClsBase} /></div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className="block text-xs text-gray-500 mb-1">Legal Rep (EN)</label><input type="text" value={enLegalRep} readOnly className={inputClsBase} /></div>
+                <div><label className="block text-xs text-gray-500 mb-1">Title (EN)</label><input type="text" value={enTitle} readOnly className={inputClsBase} /></div>
+              </div>
+              <div><label className="block text-xs text-gray-500 mb-1">Address (EN)</label><input type="text" value={enAddress} readOnly className={inputClsBase} /></div>
             </div>
+          )}
         </div>
 
         {/* Công nợ */}

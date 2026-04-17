@@ -15,6 +15,7 @@ export async function POST(req: NextRequest) {
 
   let body: {
     company_id?: string;
+    order_id?: string;
     job_type?: string;
     meal?: string;
     dormitory?: string;
@@ -31,44 +32,80 @@ export async function POST(req: NextRequest) {
 
   const supabase = getAdminClient();
 
-  const { data: request, error: insertError } = await supabase
-    .from('translation_requests')
-    .insert({
-      entity_type: body.company_id ? 'company' : 'order',
-      entity_id: body.company_id || '',
-      fields_to_translate: body.company_id
-        ? ['company_name', 'industry', 'business_type', 'address', 'legal_rep', 'legal_rep_title']
-        : ['job_type', 'recruitment_info'],
-      status: 'pending'
-    })
-    .select()
-    .single();
+  const requestIds: string[] = [];
+  const promises = [];
 
-  if (insertError) {
-    return NextResponse.json({ error: insertError.message }, { status: 500 });
+  if (body.order_id) {
+    promises.push((async () => {
+      const { data: request, error: insertError } = await supabase
+        .from('translation_requests')
+        .insert({
+          entity_type: 'order',
+          entity_id: body.order_id!,
+          fields_to_translate: ['job_type', 'meal', 'dormitory', 'probation'],
+          status: 'pending'
+        })
+        .select()
+        .single();
+      
+      if (!insertError && request) {
+        requestIds.push(request.id);
+        const url = process.env.N8N_TRANSLATE_URL || process.env.N8N_TRANSLATE_ORDER_URL;
+        if (url) {
+          fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              request_id: request.id,
+              entity_type: 'order',
+              entity_id: request.entity_id,
+              fields_to_translate: request.fields_to_translate
+            }),
+          }).catch(err => console.error('[translate] n8n order error:', err));
+        }
+      }
+    })());
   }
 
-  const n8nUrl = process.env.N8N_TRANSLATE_URL;
-  if (!n8nUrl) {
-    return NextResponse.json({ error: 'N8N_TRANSLATE_URL not configured' }, { status: 500 });
+  if (body.company_id) {
+    promises.push((async () => {
+      const { data: request, error: insertError } = await supabase
+        .from('translation_requests')
+        .insert({
+          entity_type: 'company',
+          entity_id: body.company_id!,
+          fields_to_translate: ['company_name', 'industry', 'address', 'business_type', 'legal_rep', 'legal_rep_title'],
+          status: 'pending'
+        })
+        .select()
+        .single();
+      
+      if (!insertError && request) {
+        requestIds.push(request.id);
+        const url = process.env.N8N_TRANSLATE_URL || process.env.N8N_TRANSLATE_ORDER_URL || process.env.N8N_TRANSLATE_COMPANY_URL;
+        if (url) {
+          fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              request_id: request.id,
+              entity_type: 'company',
+              entity_id: request.entity_id,
+              fields_to_translate: request.fields_to_translate
+            }),
+          }).catch(err => console.error('[translate] n8n company error:', err));
+        }
+      }
+    })());
   }
 
-  try {
-    await fetch(n8nUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        request_id: request.id,
-        entity_type: request.entity_type,
-        entity_id: request.entity_id,
-        fields_to_translate: request.fields_to_translate
-      }),
-    });
-  } catch (err) {
-    console.error('[translate] n8n error:', err);
+  await Promise.all(promises);
+
+  if (requestIds.length === 0) {
+    return NextResponse.json({ error: 'Failed to create translation requests' }, { status: 500 });
   }
 
-  return NextResponse.json({ request_id: request.id });
+  return NextResponse.json({ request_ids: requestIds });
 }
 
 export async function GET(req: NextRequest) {
