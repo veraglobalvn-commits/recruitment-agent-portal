@@ -121,7 +121,12 @@ export default function OrderDetail() {
 
       // Fetch company videos (use api route to bypass RLS for public Agent viewers)
       if (companyId) {
-        fetch(`/api/company/${companyId}`)
+        const { data: { session } } = await supabase.auth.getSession();
+        fetch(`/api/company/${companyId}`, {
+          headers: {
+            ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+          },
+        })
           .then(res => res.json())
           .then((resData) => {
             const data = resData.data;
