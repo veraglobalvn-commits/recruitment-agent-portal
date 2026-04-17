@@ -47,8 +47,7 @@ export default function CandidateCard({
   const [photoUploading, setPhotoUploading] = useState(false);
   const [pccUploading, setPccUploading] = useState(false);
   const [healthCertUploading, setHealthCertUploading] = useState(false);
-  const [height, setHeight] = useState<string>(candidate.height_ft?.toString() ?? '');
-  const [weight, setWeight] = useState<string>(candidate.weight_kg?.toString() ?? '');
+  const [showDetails, setShowDetails] = useState(false);
   const [form, setForm] = useState({
     full_name: candidate.full_name ?? '',
     pp_no: candidate.pp_no ?? '',
@@ -58,6 +57,8 @@ export default function CandidateCard({
     pob: candidate.pob ?? '',
     address: candidate.address ?? '',
     phone: candidate.phone ?? '',
+    height_ft: candidate.height_ft?.toString() ?? '',
+    weight_kg: candidate.weight_kg?.toString() ?? '',
   });
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
   const [pendingStatus, setPendingStatus] = useState<'Passed' | 'Failed' | null>(null);
@@ -90,40 +91,43 @@ export default function CandidateCard({
   const hasResult = !!candidate.interview_status;
   const canDelete = !hasFiles && !hasResult;
 
-  // Auto-save height/weight with debounce
-  useEffect(() => {
-    const timeoutId = setTimeout(async () => {
-      const updates: Partial<Candidate> = {
-        height_ft: height ? parseFloat(height) : null,
-        weight_kg: weight ? parseFloat(weight) : null,
-      };
-      try {
-        const { error } = await supabase
-          .from('candidates')
-          .update({ height_ft: updates.height_ft, weight_kg: updates.weight_kg })
-          .eq('id_ld', candidate.id_ld);
-        if (error) throw error;
+  const saveEdit = async () => {
+    setSaving(true);
+    const updates: Partial<Candidate> = {
+      full_name: form.full_name || null,
+      pp_no: form.pp_no || null,
+      dob: form.dob || null,
+      pp_doi: form.pp_doi || null,
+      pp_doe: form.pp_doe || null,
+      pob: form.pob || null,
+      address: form.address || null,
+      phone: form.phone || null,
+      height_ft: form.height_ft ? parseFloat(form.height_ft) : null,
+      weight_kg: form.weight_kg ? parseFloat(form.weight_kg) : null,
+    };
+    try {
+      const { error } = await supabase
+        .from('candidates')
+        .update(updates)
+        .eq('id_ld', candidate.id_ld);
+      if (error) throw new Error(error.message);
 
-        const n8nUrl = process.env.NEXT_PUBLIC_N8N_VIDEO_UPDATE_URL;
-        if (n8nUrl) {
-          fetch(n8nUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              candidate_id: candidate.id_ld,
-              height_ft: updates.height_ft,
-              weight_kg: updates.weight_kg,
-            }),
-          }).catch(() => {});
-        }
-        onCandidateUpdate(candidate.id_ld, updates);
-      } catch (err) {
-        console.error('Auto-save measurements failed:', err);
+      const n8nUrl = process.env.NEXT_PUBLIC_N8N_VIDEO_UPDATE_URL;
+      if (n8nUrl) {
+        fetch(n8nUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ candidate_id: candidate.id_ld, ...updates }),
+        }).catch(() => {});
       }
-    }, 1500);
-
-    return () => clearTimeout(timeoutId);
-  }, [height, weight, candidate.id_ld, onCandidateUpdate]);
+      onCandidateUpdate(candidate.id_ld, updates);
+      setEditing(false);
+    } catch (err) {
+      alert(`Lưu thất bại: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const uploadFile = async (
     file: File,
@@ -166,44 +170,6 @@ export default function CandidateCard({
       setUploading(false);
     }
   };
-
-  const saveEdit = async () => {
-    setSaving(true);
-    const updates: Partial<Candidate> = {
-      full_name: form.full_name || null,
-      pp_no: form.pp_no || null,
-      dob: form.dob || null,
-      pp_doi: form.pp_doi || null,
-      pp_doe: form.pp_doe || null,
-      pob: form.pob || null,
-      address: form.address || null,
-      phone: form.phone || null,
-    };
-    try {
-      const { error } = await supabase
-        .from('candidates')
-        .update(updates)
-        .eq('id_ld', candidate.id_ld);
-      if (error) throw new Error(error.message);
-
-      const n8nUrl = process.env.NEXT_PUBLIC_N8N_VIDEO_UPDATE_URL;
-      if (n8nUrl) {
-        fetch(n8nUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ candidate_id: candidate.id_ld, ...updates }),
-        }).catch(() => {});
-      }
-      onCandidateUpdate(candidate.id_ld, updates);
-      setEditing(false);
-    } catch (err) {
-      alert(`Lưu thất bại: ${err instanceof Error ? err.message : String(err)}`);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const inputCls = 'w-full text-sm border border-gray-200 rounded-lg px-2 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[44px]';
 
   const renderDocBtn = (
     label: string,
@@ -283,101 +249,67 @@ export default function CandidateCard({
         </div>
       </div>
 
-      {/* Passport Info */}
+      {/* Passport Info - Collapsible */}
       <div className="px-4 pb-3">
-        {editing ? (
-          <div className="bg-blue-50 rounded-lg p-3 space-y-2">
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Full Name</label>
-                <input value={form.full_name} onChange={(e) => setForm(f => ({ ...f, full_name: e.target.value }))} className={inputCls} />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">PP No</label>
-                <input value={form.pp_no} onChange={(e) => setForm(f => ({ ...f, pp_no: e.target.value }))} className={inputCls} />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">DOB</label>
-                <input value={form.dob} onChange={(e) => setForm(f => ({ ...f, dob: e.target.value }))} className={inputCls} placeholder="dd/mm/yyyy" />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Issued</label>
-                <input value={form.pp_doi} onChange={(e) => setForm(f => ({ ...f, pp_doi: e.target.value }))} className={inputCls} placeholder="dd/mm/yyyy" />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Expires</label>
-                <input value={form.pp_doe} onChange={(e) => setForm(f => ({ ...f, pp_doe: e.target.value }))} className={inputCls} placeholder="dd/mm/yyyy" />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">POB</label>
-                <input value={form.pob} onChange={(e) => setForm(f => ({ ...f, pob: e.target.value }))} className={inputCls} />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Phone</label>
-                <input value={form.phone} onChange={(e) => setForm(f => ({ ...f, phone: e.target.value }))} className={inputCls} />
-              </div>
-              <div className="sm:col-span-2">
-                <label className="block text-xs text-gray-500 mb-1">Address</label>
-                <input value={form.address} onChange={(e) => setForm(f => ({ ...f, address: e.target.value }))} className={inputCls} />
-              </div>
+        <div className="bg-gray-50 rounded-lg p-3">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <span className="text-gray-400 text-xs">Passport number:</span>
+              <span className={`font-semibold text-sm ${candidate.pp_no ? 'text-gray-800' : 'text-red-400'}`}>{candidate.pp_no || 'N/A'}</span>
             </div>
-            <div className="flex gap-2">
-              <button onClick={saveEdit} disabled={saving}
-                className="text-sm bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 min-h-[44px]">
-                {saving ? '⏳ Saving...' : 'Save'}
-              </button>
-              <button onClick={() => setEditing(false)} disabled={saving}
-                className="text-sm bg-gray-200 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-300 min-h-[44px]">
-                Cancel
-              </button>
-            </div>
+            <button
+              onClick={() => setShowDetails(!showDetails)}
+              className="text-xs text-blue-600 hover:text-blue-800 px-2 py-1 rounded hover:bg-blue-50 min-h-[32px] flex items-center gap-1"
+            >
+              {showDetails ? '▼ Hide' : '▶ Show'}
+            </button>
           </div>
-        ) : (
-          <div className="bg-gray-50 rounded-lg p-3">
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-3 gap-y-1.5 text-xs">
-              <div>
-                <span className="text-gray-400">PP No</span>
-                <p className={`font-semibold ${candidate.pp_no ? 'text-gray-800' : 'text-red-400'}`}>{candidate.pp_no || 'N/A'}</p>
+
+          {showDetails && (
+            <div className="space-y-1.5 text-xs border-t border-gray-200 pt-2 mt-2">
+              <div className="flex items-start gap-2">
+                <span className="text-gray-400 w-24 flex-shrink-0">Date of birth:</span>
+                <span className={`font-semibold ${candidate.dob ? 'text-gray-800' : 'text-red-400'}`}>{candidate.dob || 'N/A'}</span>
               </div>
-              <div>
-                <span className="text-gray-400">DOB</span>
-                <p className={`font-semibold ${candidate.dob ? 'text-gray-800' : 'text-red-400'}`}>{candidate.dob || 'N/A'}</p>
+              <div className="flex items-start gap-2">
+                <span className="text-gray-400 w-24 flex-shrink-0">Issued date:</span>
+                <span className={`font-semibold ${candidate.pp_doi ? 'text-gray-800' : 'text-red-400'}`}>{candidate.pp_doi || 'N/A'}</span>
               </div>
-              <div>
-                <span className="text-gray-400">Phone</span>
-                <p className={`font-semibold ${candidate.phone ? 'text-gray-800' : 'text-red-400'}`}>{candidate.phone || 'N/A'}</p>
+              <div className="flex items-start gap-2">
+                <span className="text-gray-400 w-24 flex-shrink-0">Expires date:</span>
+                <span className={`font-semibold ${candidate.pp_doe ? 'text-gray-800' : 'text-red-400'}`}>{candidate.pp_doe || 'N/A'}</span>
               </div>
-              <div>
-                <span className="text-gray-400">Issued</span>
-                <p className={`font-semibold ${candidate.pp_doi ? 'text-gray-800' : 'text-red-400'}`}>{candidate.pp_doi || 'N/A'}</p>
+              <div className="flex items-start gap-2">
+                <span className="text-gray-400 w-24 flex-shrink-0">Address:</span>
+                <span className={`font-semibold ${candidate.address ? 'text-gray-800' : 'text-red-400'}`}>{candidate.address || 'N/A'}</span>
               </div>
-              <div>
-                <span className="text-gray-400">Expires</span>
-                <p className={`font-semibold ${candidate.pp_doe ? 'text-gray-800' : 'text-red-400'}`}>{candidate.pp_doe || 'N/A'}</p>
+              <div className="flex items-start gap-2">
+                <span className="text-gray-400 w-24 flex-shrink-0">Phone:</span>
+                <span className={`font-semibold ${candidate.phone ? 'text-gray-800' : 'text-red-400'}`}>{candidate.phone || 'N/A'}</span>
               </div>
-              <div>
-                <span className="text-gray-400">POB</span>
-                <p className={`font-semibold ${candidate.pob ? 'text-gray-800' : 'text-red-400'}`}>{candidate.pob || 'N/A'}</p>
+              <div className="flex items-start gap-2">
+                <span className="text-gray-400 w-24 flex-shrink-0">Weight:</span>
+                <span className={`font-semibold ${candidate.weight_kg ? 'text-gray-800' : 'text-red-400'}`}>{candidate.weight_kg ? `${candidate.weight_kg}kg` : 'N/A'}</span>
               </div>
-              <div className="col-span-2 sm:col-span-3">
-                <span className="text-gray-400">Address</span>
-                <p className={`font-semibold ${candidate.address ? 'text-gray-800' : 'text-red-400'}`}>{candidate.address || 'N/A'}</p>
+              <div className="flex items-start gap-2">
+                <span className="text-gray-400 w-24 flex-shrink-0">Height:</span>
+                <span className={`font-semibold ${candidate.height_ft ? 'text-gray-800' : 'text-red-400'}`}>{candidate.height_ft ? `${candidate.height_ft}ft` : 'N/A'}</span>
               </div>
-            </div>
-            <div className="flex gap-2 mt-2">
-              <button onClick={() => setEditing(true)}
-                className="text-xs text-blue-600 hover:text-blue-800 px-2 py-1 rounded hover:bg-blue-50 min-h-[36px] flex items-center gap-1">
-                ✏️ Edit
-              </button>
-              {canDelete && onCandidateDelete && (
-                <button onClick={() => { if (confirm('Xoá ứng viên này?')) onCandidateDelete(candidate.id_ld); }}
-                  className="text-xs text-red-500 hover:text-red-700 px-2 py-1 rounded hover:bg-red-50 min-h-[36px] flex items-center gap-1">
-                  🗑 Delete
+              <div className="flex gap-2 mt-3 pt-2 border-t border-gray-200">
+                <button onClick={() => setEditing(true)}
+                  className="text-xs text-blue-600 hover:text-blue-800 px-2 py-1 rounded hover:bg-blue-50 min-h-[36px] flex items-center gap-1">
+                  ✏️ Edit
                 </button>
-              )}
+                {canDelete && onCandidateDelete && (
+                  <button onClick={() => { if (confirm('Xoá ứng viên này?')) onCandidateDelete(candidate.id_ld); }}
+                    className="text-xs text-red-500 hover:text-red-700 px-2 py-1 rounded hover:bg-red-50 min-h-[36px] flex items-center gap-1">
+                    🗑 Delete
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* Order & Agent Info */}
@@ -397,27 +329,6 @@ export default function CandidateCard({
             <span className="bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded-full">{agentInfo.short_name || agentInfo.full_name}</span>
           </>
         )}
-        <span className="ml-auto">
-          {candidate.height_ft && <span className="text-gray-500">{candidate.height_ft}ft</span>}
-          {candidate.height_ft && candidate.weight_kg && <span className="text-gray-300"> · </span>}
-          {candidate.weight_kg && <span className="text-gray-500">{candidate.weight_kg}kg</span>}
-        </span>
-      </div>
-
-      {/* Measurements - auto-save, no button */}
-      <div className="px-4 pb-3">
-        <div className="grid grid-cols-2 gap-2">
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Height (ft)</label>
-            <input type="number" step="0.1" value={height} onChange={(e) => setHeight(e.target.value)}
-              className={`w-full text-sm border rounded-lg px-2 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[44px] ${height ? 'border-gray-200' : 'border-red-300 text-red-400'}`} />
-          </div>
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Weight (kg)</label>
-            <input type="number" step="0.1" value={weight} onChange={(e) => setWeight(e.target.value)}
-              className={`w-full text-sm border rounded-lg px-2 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[44px] ${weight ? 'border-gray-200' : 'border-red-300 text-red-400'}`} />
-          </div>
-        </div>
       </div>
 
       {/* Doc Buttons: Video, Passport, PCC, Health Cert */}
@@ -550,6 +461,76 @@ export default function CandidateCard({
           </div>
         )}
       </div>
+
+      {/* Edit Modal */}
+      {editing && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-bold text-gray-800">Edit Candidate Info</h3>
+              <button onClick={() => setEditing(false)} className="text-gray-400 hover:text-gray-600 text-2xl">✕</button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Full Name</label>
+                <input value={form.full_name} onChange={(e) => setForm(f => ({ ...f, full_name: e.target.value }))} className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[44px]" />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Passport No</label>
+                <input value={form.pp_no} onChange={(e) => setForm(f => ({ ...f, pp_no: e.target.value }))} className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[44px]" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Date of Birth</label>
+                  <input value={form.dob} onChange={(e) => setForm(f => ({ ...f, dob: e.target.value }))} className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[44px]" placeholder="dd/mm/yyyy" />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Place of Birth</label>
+                  <input value={form.pob} onChange={(e) => setForm(f => ({ ...f, pob: e.target.value }))} className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[44px]" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Issued Date</label>
+                  <input value={form.pp_doi} onChange={(e) => setForm(f => ({ ...f, pp_doi: e.target.value }))} className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[44px]" placeholder="dd/mm/yyyy" />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Expires Date</label>
+                  <input value={form.pp_doe} onChange={(e) => setForm(f => ({ ...f, pp_doe: e.target.value }))} className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[44px]" placeholder="dd/mm/yyyy" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Address</label>
+                <input value={form.address} onChange={(e) => setForm(f => ({ ...f, address: e.target.value }))} className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[44px]" />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Phone</label>
+                <input value={form.phone} onChange={(e) => setForm(f => ({ ...f, phone: e.target.value }))} className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[44px]" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Height (ft)</label>
+                  <input type="number" step="0.1" value={form.height_ft} onChange={(e) => setForm(f => ({ ...f, height_ft: e.target.value }))} className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[44px]" />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Weight (kg)</label>
+                  <input type="number" step="0.1" value={form.weight_kg} onChange={(e) => setForm(f => ({ ...f, weight_kg: e.target.value }))} className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[44px]" />
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-2 pt-2">
+              <button onClick={saveEdit} disabled={saving}
+                className="flex-1 text-sm bg-blue-600 text-white px-4 py-2.5 rounded-lg hover:bg-blue-700 disabled:opacity-50 min-h-[44px] font-semibold">
+                {saving ? '⏳ Saving...' : 'Save'}
+              </button>
+              <button onClick={() => setEditing(false)} disabled={saving}
+                className="flex-1 text-sm bg-gray-200 text-gray-700 px-4 py-2.5 rounded-lg hover:bg-gray-300 min-h-[44px] font-semibold">
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
