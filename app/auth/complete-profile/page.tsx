@@ -7,6 +7,8 @@ import { useRouter } from 'next/navigation';
 export default function CompleteProfilePage() {
   const router = useRouter();
   const [fullName, setFullName] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasSession, setHasSession] = useState(false);
@@ -39,17 +41,24 @@ export default function CompleteProfilePage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!fullName.trim()) { setError('Vui lòng nhập họ tên'); return; }
+    if (password.length < 6) { setError('Mật khẩu phải có ít nhất 6 ký tự'); return; }
+    if (password !== confirmPassword) { setError('Mật khẩu xác nhận không khớp'); return; }
     if (!userId) return;
 
     setLoading(true);
     setError(null);
     try {
       const supabase = createSupabaseClient();
+
+      const { error: authErr } = await supabase.auth.updateUser({ password });
+      if (authErr) throw authErr;
+
       const { error: dbErr } = await supabase
         .from('users')
         .update({ full_name: fullName.trim() })
         .eq('supabase_uid', userId);
       if (dbErr) throw dbErr;
+
       router.replace('/');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Có lỗi xảy ra');
@@ -72,12 +81,14 @@ export default function CompleteProfilePage() {
         <div className="bg-white p-6 md:p-8 rounded-2xl shadow-md w-full max-w-sm text-center">
           <div className="text-3xl mb-3">⚠️</div>
           <h1 className="text-lg font-bold text-gray-800 mb-2">Link không hợp lệ</h1>
-          <p className="text-sm text-gray-500 mb-4">Link mời đã hết hạn.</p>
+          <p className="text-sm text-gray-500 mb-4">Link mời đã hết hạn. Vui lòng yêu cầu gửi lại.</p>
           <a href="/" className="text-sm text-blue-600 hover:underline">← Quay lại đăng nhập</a>
         </div>
       </div>
     );
   }
+
+  const inputCls = 'w-full px-3 py-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent';
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
@@ -85,7 +96,7 @@ export default function CompleteProfilePage() {
         <div className="text-center mb-6">
           <div className="text-3xl mb-2">👋</div>
           <h1 className="text-xl font-bold text-blue-900">Hoàn tất hồ sơ</h1>
-          <p className="text-sm text-gray-500 mt-1">Nhập họ tên để bắt đầu</p>
+          <p className="text-sm text-gray-500 mt-1">Điền thông tin và đặt mật khẩu để bắt đầu</p>
         </div>
 
         {error && (
@@ -96,15 +107,38 @@ export default function CompleteProfilePage() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Họ tên</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Họ tên <span className="text-red-500">*</span></label>
             <input
               type="text"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
               required
-              className="w-full px-3 py-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className={inputCls}
               placeholder="Nguyễn Văn A"
               autoFocus
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Mật khẩu <span className="text-red-500">*</span></label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              minLength={6}
+              className={inputCls}
+              placeholder="Tối thiểu 6 ký tự"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Xác nhận mật khẩu <span className="text-red-500">*</span></label>
+            <input
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              required
+              className={inputCls}
+              placeholder="Nhập lại mật khẩu"
             />
           </div>
           <button
