@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
+import { fetchActiveAgents } from '@/lib/query-helpers';
 import Link from 'next/link';
 import AddAgentModal from '@/components/admin/AddAgentModal';
 
@@ -40,16 +41,16 @@ export default function AgenciesPage() {
       const headers: Record<string, string> = {};
       if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
 
-      const [agRes, usersRes, ordersRes, candidatesRes, oaRes] = await Promise.all([
+      const [agRes, activeUsers, ordersRes, candidatesRes, oaRes] = await Promise.all([
         fetch('/api/admin/agencies', { headers }).then(r => r.json()),
-        supabase.from('users').select('id, agency_id, role').neq('role', 'admin'),
+        fetchActiveAgents('id, agency_id'),
         supabase.from('orders').select('id, agent_ids, total_labor'),
         supabase.from('candidates').select('id_ld, agent_id, interview_status'),
         supabase.from('order_agents').select('agent_id, assigned_labor_number'),
       ]);
 
       const agenciesRaw = agRes.agencies || [];
-      const users = usersRes.data || [];
+      const users = activeUsers || [];
       const orders = ordersRes.data || [];
       const candidates = candidatesRes.data || [];
 

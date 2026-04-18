@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import type { Candidate, AdminOrder, AgentOption, OrderHandover, OrderPayment, OrderDocLink } from '@/lib/types';
+import { fetchActiveAgents } from '@/lib/query-helpers';
 import CandidateCard from '@/components/CandidateCard';
 import Link from 'next/link';
 
@@ -151,11 +152,11 @@ export default function OrderDetailPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [ordRes, candRes, agRes, agencyRes, handRes, payRes, policyRes, oaRes] = await Promise.all([
+    const [ordRes, candRes, activeAgents, agencyRes, handRes, payRes, policyRes, oaRes] = await Promise.all([
       supabase.from('orders').select('*').eq('id', id).single(),
       supabase.from('candidates').select('*').eq('order_id', id),
-      supabase.from('users').select('id, full_name, short_name, agency_id').neq('role', 'admin'),
-      supabase.from('agencies').select('id, labor_percentage'),
+      fetchActiveAgents('id, full_name, short_name, agency_id'),
+      supabase.from('agencies').select('id, labor_percentage').eq('status', 'active'),
       supabase.from('order_handovers').select('*').eq('order_id', id).order('batch_no'),
       supabase.from('order_payments').select('*').eq('order_id', id).order('created_at'),
       supabase.from('policy_settings').select('key, value').in('key', ['default_fee_vnd', 'default_fee_usd']),
@@ -204,7 +205,7 @@ setOrder(o);
         });
     }
     setCandidates((candRes.data ?? []) as Candidate[]);
-    const agentsData = (agRes.data ?? []) as any[];
+    const agentsData = activeAgents as any[];
     const agencyMap = Object.fromEntries(
       ((agencyRes.data ?? []) as { id: string; labor_percentage: number | null }[]).map(a => [a.id, a.labor_percentage])
     );

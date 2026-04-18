@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import type { AdminOrder, AgentOption } from '@/lib/types';
 import { fmtUSD } from '@/lib/formatters';
+import { fetchActiveAgents } from '@/lib/query-helpers';
 
 interface AddOrderModalProps {
   onClose: () => void;
@@ -39,13 +40,13 @@ export default function AddOrderModal({ onClose, onSaved, prefillCompanyId }: Ad
 
   useEffect(() => {
     const load = async () => {
-      const [compRes, agRes, policyRes] = await Promise.all([
+      const [compRes, activeAgents, policyRes] = await Promise.all([
         supabase.from('companies').select('id, company_name, short_name').is('deleted_at', null).order('company_name'),
-        supabase.from('users').select('id, full_name, short_name').neq('role', 'admin').order('full_name'),
+        fetchActiveAgents(),
         supabase.from('policy_settings').select('key, value').in('key', ['default_fee_vnd', 'default_fee_usd']),
       ]);
       setCompanies((compRes.data ?? []) as CompanyOption[]);
-      setAgents((agRes.data ?? []) as AgentOption[]);
+      setAgents(activeAgents);
       if (policyRes.data) {
         const map = Object.fromEntries((policyRes.data as { key: string; value: string }[]).map(r => [r.key, r.value]));
         if (map.default_fee_vnd) setDefaultFeeVnd(map.default_fee_vnd);

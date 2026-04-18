@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { fmtVND, fmtUSD } from '@/lib/formatters';
+import { fetchActiveAgencies } from '@/lib/query-helpers';
 
 interface AgentRow {
   id: string;
@@ -28,9 +29,9 @@ export default function PolicyPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [policyRes, agentRes] = await Promise.all([
+    const [policyRes, activeAgencies] = await Promise.all([
       supabase.from('policy_settings').select('key, value').in('key', ['default_fee_vnd', 'default_fee_usd']),
-      supabase.from('agencies').select('id, company_name, labor_percentage').order('company_name'),
+      fetchActiveAgencies<{ id: string; company_name: string | null; labor_percentage: number | null }>('id, company_name, labor_percentage'),
     ]);
 
     if (policyRes.data) {
@@ -41,8 +42,8 @@ export default function PolicyPage() {
       setPrevFeeUsd(map.default_fee_usd ?? '1500');
     }
 
-    if (agentRes.data) {
-      const rows = agentRes.data as AgentRow[];
+    if (activeAgencies && activeAgencies.length > 0) {
+      const rows = activeAgencies as AgentRow[];
       setAgents(rows);
       const pct = Object.fromEntries(rows.map(a => [a.id, String(a.labor_percentage ?? '')]));
       setAgentPct(pct);

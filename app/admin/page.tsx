@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
+import { fetchActiveAgents } from '@/lib/query-helpers';
 import Link from 'next/link';
 
 // ── Types ──────────────────────────────────────────────
@@ -140,16 +141,16 @@ export default function AdminDashboard() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [ordersRes, candidatesRes, agentsRes, oaRes] = await Promise.all([
+    const [ordersRes, candidatesRes, activeAgents, oaRes] = await Promise.all([
       supabase.from('orders').select('id,company_name,job_type,total_labor,labor_missing,status,total_fee_vn,payment_status_vn,legal_status,agent_ids'),
       supabase.from('candidates').select('id_ld,agent_id,order_id,interview_status'),
-      supabase.from('users').select('id,full_name,short_name,role').neq('role', 'admin'),
+      fetchActiveAgents('id, full_name, short_name'),
       supabase.from('order_agents').select('agent_id,assigned_labor_number'),
     ]);
 
     const orders: OrderStat[] = (ordersRes.data || []) as OrderStat[];
     const candidates = candidatesRes.data || [];
-    const agentsRaw = agentsRes.data || [];
+    const agentsRaw = activeAgents || [];
 
     const oaTargetMap: Record<string, number> = {};
     (oaRes.data || []).forEach((oa: any) => {

@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import { fetchActiveAgents } from '@/lib/query-helpers';
 import type { AdminOrder, AgentOption } from '@/lib/types';
 import Link from 'next/link';
 import AddOrderModal from '@/components/admin/AddOrderModal';
@@ -64,9 +65,9 @@ export default function OrdersPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [ordRes, agRes] = await Promise.all([
+    const [ordRes, activeAgents] = await Promise.all([
       supabase.from('orders').select('*'),
-      supabase.from('users').select('id, full_name, short_name').neq('role', 'admin'),
+      fetchActiveAgents(),
     ]);
     const orders = (ordRes.data ?? []) as AdminOrder[];
     orders.sort((a, b) => {
@@ -77,7 +78,7 @@ export default function OrdersPage() {
       return bValid - aValid;
     });
     setOrders(orders);
-    setAgents((agRes.data ?? []) as AgentOption[]);
+    setAgents(activeAgents);
     setLoading(false);
   }, []);
 

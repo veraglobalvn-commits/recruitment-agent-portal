@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import type { Candidate, AgentOption } from '@/lib/types';
+import { fetchActiveAgents } from '@/lib/query-helpers';
 import Link from 'next/link';
 import CandidateCard from '@/components/CandidateCard';
 
@@ -131,9 +132,9 @@ export default function CandidatesPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [candRes, agRes, ordRes] = await Promise.all([
+    const [candRes, activeAgents, ordRes] = await Promise.all([
       supabase.from('candidates').select('*'),
-      supabase.from('users').select('id, full_name, short_name').neq('role', 'admin'),
+      fetchActiveAgents(),
       supabase.from('orders').select('id, company_name, job_type'),
     ]);
     const candidates = (candRes.data ?? []) as Candidate[];
@@ -143,7 +144,7 @@ export default function CandidatesPage() {
       return dateB - dateA;
     });
     setCandidates(candidates);
-    setAgents((agRes.data ?? []) as AgentOption[]);
+    setAgents(activeAgents);
     setOrders((ordRes.data ?? []) as OrderBrief[]);
     setLoading(false);
   }, []);
