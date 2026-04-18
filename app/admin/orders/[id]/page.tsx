@@ -151,10 +151,11 @@ export default function OrderDetailPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [ordRes, candRes, agRes, handRes, payRes, policyRes, oaRes] = await Promise.all([
+    const [ordRes, candRes, agRes, agencyRes, handRes, payRes, policyRes, oaRes] = await Promise.all([
       supabase.from('orders').select('*').eq('id', id).single(),
       supabase.from('candidates').select('*').eq('order_id', id),
-      supabase.from('users').select('id, full_name, short_name, labor_percentage').neq('role', 'admin'),
+      supabase.from('users').select('id, full_name, short_name, agency_id').neq('role', 'admin'),
+      supabase.from('agencies').select('id, labor_percentage'),
       supabase.from('order_handovers').select('*').eq('order_id', id).order('batch_no'),
       supabase.from('order_payments').select('*').eq('order_id', id).order('created_at'),
       supabase.from('policy_settings').select('key, value').in('key', ['default_fee_vnd', 'default_fee_usd']),
@@ -203,13 +204,20 @@ setOrder(o);
         });
     }
     setCandidates((candRes.data ?? []) as Candidate[]);
-    const agentsData = (agRes.data ?? []) as (AgentOption & { labor_percentage: number | null })[];
-    setAgents(agentsData);
+    const agentsData = (agRes.data ?? []) as any[];
+    const agencyMap = Object.fromEntries(
+      ((agencyRes.data ?? []) as { id: string; labor_percentage: number | null }[]).map(a => [a.id, a.labor_percentage])
+    );
+    const agentsWithPct = agentsData.map((ag: any) => ({
+      ...ag,
+      labor_percentage: agencyMap[ag.agency_id ?? ''] ?? null,
+    }));
+    setAgents(agentsWithPct);
     const allocations: Record<string, string> = {};
     const oaMap = Object.fromEntries(
       ((oaRes.data ?? []) as { agent_id: string; assigned_labor_number: number }[]).map((oa) => [oa.agent_id, oa.assigned_labor_number])
     );
-    agentsData.forEach((ag) => {
+    agentsWithPct.forEach((ag: any) => {
       if (oaMap[ag.id] !== undefined) {
         allocations[ag.id] = oaMap[ag.id].toString();
       } else {

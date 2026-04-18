@@ -24,9 +24,15 @@ WHERE role != 'admin';
 ALTER TABLE agents ADD COLUMN IF NOT EXISTS agency_id TEXT;
 ALTER TABLE agents ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'active';
 ALTER TABLE agents ADD COLUMN IF NOT EXISTS permissions JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE agents ADD COLUMN IF NOT EXISTS avatar_url TEXT;
+ALTER TABLE agents ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
 
 -- 4. Rename agents -> users
 ALTER TABLE agents RENAME TO users;
+
+-- 4b. Ensure all required columns exist on users (in case originals were missing)
+ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
 
 -- 5. Drop business columns from users
 ALTER TABLE users DROP COLUMN IF EXISTS company_name;
