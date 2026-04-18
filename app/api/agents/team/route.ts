@@ -117,7 +117,7 @@ export async function POST(req: NextRequest) {
       id: normalizedId,
       supabase_uid: authData.user.id,
       full_name: body.full_name.trim(),
-      short_name: body.short_name?.trim() || null,
+      short_name: normalizedId,
       role: memberRole,
       agency_id: targetAgencyId,
       permissions: defaultPerms,

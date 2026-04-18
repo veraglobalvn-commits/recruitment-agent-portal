@@ -15,14 +15,12 @@ interface AddAgentModalProps {
 export default function AddAgentModal({ onClose, onSaved, showRoleSelector, showAgencySelector }: AddAgentModalProps) {
   const [form, setForm] = useState({
     email: '',
-    full_name: '',
-    short_name: '',
-    agent_id: '',
     role: 'agent',
     agency_id: '',
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
   const [agencies, setAgencies] = useState<Agency[]>([]);
 
   const set = (k: keyof typeof form, v: string) =>
@@ -46,8 +44,6 @@ export default function AddAgentModal({ onClose, onSaved, showRoleSelector, show
 
   const handleSave = async () => {
     if (!form.email.trim()) { setError('Email là bắt buộc'); return; }
-    if (!form.full_name.trim()) { setError('Họ tên là bắt buộc'); return; }
-    if (!form.agent_id.trim()) { setError('Agent ID là bắt buộc'); return; }
 
     const role = showRoleSelector ? form.role : 'agent';
     if ((role === 'manager' || role === 'operator') && !form.agency_id) {
@@ -61,13 +57,13 @@ export default function AddAgentModal({ onClose, onSaved, showRoleSelector, show
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
-        setError('Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại');
+        setError('Phiên đăng nhập đã hết hạn');
         setSaving(false);
         return;
       }
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) {
-        setError('Không lấy được token, vui lòng đăng nhập lại');
+        setError('Không lấy được token');
         setSaving(false);
         return;
       }
@@ -80,9 +76,6 @@ export default function AddAgentModal({ onClose, onSaved, showRoleSelector, show
         },
         body: JSON.stringify({
           email: form.email.trim().toLowerCase(),
-          full_name: form.full_name.trim(),
-          short_name: form.short_name.trim() || undefined,
-          agent_id: form.agent_id.trim().toUpperCase(),
           role,
           agency_id: form.agency_id || undefined,
         }),
@@ -94,6 +87,7 @@ export default function AddAgentModal({ onClose, onSaved, showRoleSelector, show
         throw new Error(data.error || 'Tạo tài khoản thất bại');
       }
 
+      setSuccess(true);
       onSaved(data.agent as Agent);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -120,103 +114,90 @@ export default function AddAgentModal({ onClose, onSaved, showRoleSelector, show
           <button onClick={onClose} className="min-h-[44px] min-w-[44px] flex items-center justify-center text-gray-400 hover:text-gray-700 text-xl">✕</button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
-          {error && (
-            <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg">{error}</div>
-          )}
-
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Email <span className="text-red-500">*</span></label>
-            <input
-              type="email"
-              value={form.email}
-              onChange={(e) => set('email', e.target.value)}
-              placeholder="agent@example.com"
-              className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[44px]"
-            />
-            <p className="text-xs text-gray-400 mt-1">Lời mời sẽ được gửi qua email</p>
+        {success ? (
+          <div className="px-5 py-8 text-center">
+            <div className="text-3xl mb-3">📧</div>
+            <h3 className="font-bold text-gray-800 mb-1">Đã gửi lời mời</h3>
+            <p className="text-sm text-gray-500 mb-4">
+              Email đã được gửi đến <strong>{form.email}</strong>.<br />
+              Người dùng sẽ tự điền thông tin khi chấp nhận lời mời.
+            </p>
+            <button
+              onClick={onClose}
+              className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-3 rounded-xl text-sm min-h-[44px]"
+            >
+              Xong
+            </button>
           </div>
+        ) : (
+          <>
+            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+              {error && (
+                <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg">{error}</div>
+              )}
 
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Họ tên <span className="text-red-500">*</span></label>
-            <input
-              type="text"
-              value={form.full_name}
-              onChange={(e) => set('full_name', e.target.value)}
-              placeholder="Nguyễn Văn A"
-              className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[44px]"
-            />
-          </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Email <span className="text-red-500">*</span></label>
+                <input
+                  type="email"
+                  value={form.email}
+                  onChange={(e) => set('email', e.target.value)}
+                  placeholder="agent@example.com"
+                  className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[44px]"
+                />
+                <p className="text-xs text-gray-400 mt-1">Lời mời sẽ được gửi qua email này</p>
+              </div>
 
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">ID hệ thống <span className="text-red-500">*</span></label>
-            <input
-              type="text"
-              value={form.agent_id}
-              onChange={(e) => set('agent_id', e.target.value.toUpperCase())}
-              className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[44px] font-mono"
-            />
-            <p className="text-xs text-gray-400 mt-1">VD: GTA, AMBA, GTA-MGR1</p>
-          </div>
+              {showRoleSelector && (
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Vai trò</label>
+                  <select
+                    value={form.role}
+                    onChange={(e) => set('role', e.target.value)}
+                    className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[44px] bg-white"
+                  >
+                    <option value="admin">Admin</option>
+                    <option value="agent">Agent (Owner)</option>
+                    <option value="manager">Manager</option>
+                    <option value="operator">Operator</option>
+                  </select>
+                </div>
+              )}
 
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Tên viết tắt</label>
-            <input
-              type="text"
-              value={form.short_name}
-              onChange={(e) => set('short_name', e.target.value)}
-              className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[44px]"
-            />
-          </div>
-
-          {showRoleSelector && (
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">Vai trò</label>
-              <select
-                value={form.role}
-                onChange={(e) => set('role', e.target.value)}
-                className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[44px] bg-white"
-              >
-                <option value="admin">Admin</option>
-                <option value="agent">Agent (Owner)</option>
-                <option value="manager">Manager</option>
-                <option value="operator">Operator</option>
-              </select>
+              {showAgencyField && agencies.length > 0 && (
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Agency</label>
+                  <select
+                    value={form.agency_id}
+                    onChange={(e) => set('agency_id', e.target.value)}
+                    className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[44px] bg-white"
+                  >
+                    <option value="">— Chọn agency —</option>
+                    {agencies.map((ag) => (
+                      <option key={ag.id} value={ag.id}>{ag.company_name || ag.id}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
-          )}
 
-          {showAgencyField && agencies.length > 0 && (
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">Agency</label>
-              <select
-                value={form.agency_id}
-                onChange={(e) => set('agency_id', e.target.value)}
-                className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[44px] bg-white"
+            <div className="px-5 py-4 border-t border-gray-100 flex gap-2 flex-shrink-0">
+              <button
+                onClick={onClose}
+                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 rounded-xl text-sm min-h-[44px]"
               >
-                <option value="">— Chọn agency —</option>
-                {agencies.map((ag) => (
-                  <option key={ag.id} value={ag.id}>{ag.company_name || ag.id}</option>
-                ))}
-              </select>
+                Huỷ
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl text-sm disabled:opacity-50 min-h-[44px]"
+              >
+                {saving ? 'Đang gửi...' : 'Gửi lời mời'}
+              </button>
             </div>
-          )}
-        </div>
-
-        <div className="px-5 py-4 border-t border-gray-100 flex gap-2 flex-shrink-0">
-          <button
-            onClick={onClose}
-            className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 rounded-xl text-sm min-h-[44px]"
-          >
-            Huỷ
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl text-sm disabled:opacity-50 min-h-[44px]"
-          >
-            {saving ? 'Đang gửi lời mời...' : 'Gửi lời mời'}
-          </button>
-        </div>
+          </>
+        )}
       </div>
     </div>
   );

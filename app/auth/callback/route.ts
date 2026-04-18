@@ -32,6 +32,19 @@ export async function GET(request: NextRequest) {
       console.error('[auth/callback] Exchange error:', error.message);
       return NextResponse.redirect(new URL('/?error=auth_callback_failed', request.url));
     }
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      const { data: userData } = await supabase
+        .from('users')
+        .select('full_name')
+        .eq('supabase_uid', user.id)
+        .maybeSingle();
+
+      if (!userData?.full_name) {
+        return NextResponse.redirect(new URL('/auth/complete-profile', request.url));
+      }
+    }
   }
 
   return NextResponse.redirect(new URL('/', request.url));

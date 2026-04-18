@@ -32,6 +32,11 @@ async function getAdminFromRequest(req: NextRequest): Promise<ReturnType<typeof 
   return getAdminClient();
 }
 
+function generateUserId(email: string): string {
+  const localPart = email.split('@')[0].replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+  return localPart.slice(0, 20);
+}
+
 export async function POST(req: NextRequest) {
   try {
     const adminClient = await getAdminFromRequest(req);
@@ -42,33 +47,27 @@ export async function POST(req: NextRequest) {
     const body = await req.json() as {
       email?: string;
       full_name?: string;
-      short_name?: string;
       agent_id?: string;
       role?: string;
       agency_id?: string;
     };
 
-    const { email, full_name, short_name, agent_id, role, agency_id } = body;
+    const { email, role, agency_id } = body;
 
     if (!email?.trim()) {
       return NextResponse.json({ error: 'Email là bắt buộc' }, { status: 400 });
     }
-    if (!full_name?.trim()) {
-      return NextResponse.json({ error: 'Họ tên là bắt buộc' }, { status: 400 });
-    }
-    if (!agent_id?.trim()) {
-      return NextResponse.json({ error: 'Agent ID là bắt buộc' }, { status: 400 });
-    }
 
-    const normalizedAgentId = agent_id.trim().toUpperCase();
     const assignedRole = role || 'agent';
     if (!['admin', 'agent', 'manager', 'operator'].includes(assignedRole)) {
       return NextResponse.json({ error: 'Role không hợp lệ' }, { status: 400 });
     }
 
     if ((assignedRole === 'manager' || assignedRole === 'operator') && !agency_id) {
-      return NextResponse.json({ error: 'Agency ID là bắt buộc cho manager/operator' }, { status: 400 });
+      return NextResponse.json({ error: 'Agency là bắt buộc cho manager/operator' }, { status: 400 });
     }
+
+    const normalizedAgentId = (body.agent_id?.trim() || generateUserId(email)).toUpperCase();
 
     const { data: existingById } = await adminClient
       .from('users')
@@ -76,18 +75,7 @@ export async function POST(req: NextRequest) {
       .ilike('id', normalizedAgentId)
       .maybeSingle();
     if (existingById) {
-      return NextResponse.json({ error: `ID "${normalizedAgentId}" đã tồn tại` }, { status: 409 });
-    }
-
-    if (short_name?.trim()) {
-      const { data: existingByShortName } = await adminClient
-        .from('users')
-        .select('id')
-        .ilike('short_name', short_name.trim())
-        .maybeSingle();
-      if (existingByShortName) {
-        return NextResponse.json({ error: `Tên viết tắt "${short_name.trim()}" đã được sử dụng` }, { status: 409 });
-      }
+      return NextResponse.json({ error: `User "${normalizedAgentId}" đã tồn tại` }, { status: 409 });
     }
 
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || url;
@@ -110,8 +98,8 @@ export async function POST(req: NextRequest) {
     const insertData: Record<string, unknown> = {
       id: normalizedAgentId,
       supabase_uid: uid,
-      full_name: full_name.trim(),
-      short_name: short_name?.trim() || null,
+      full_name: body.full_name?.trim() || null,
+      short_name: normalizedAgentId,
       role: assignedRole,
       permissions: defaultPerms,
       status: 'active',
@@ -135,7 +123,7 @@ export async function POST(req: NextRequest) {
       await adminClient.auth.admin.deleteUser(uid);
       const dbMsg = dbErr.message.toLowerCase();
       if (dbMsg.includes('duplicate') || dbMsg.includes('unique') || dbMsg.includes('already exists')) {
-        return NextResponse.json({ error: 'ID hoặc tên viết tắt đã tồn tại' }, { status: 409 });
+        return NextResponse.json({ error: 'User ID đã tồn tại' }, { status: 409 });
       }
       return NextResponse.json({ error: `Tạo user thất bại: ${dbErr.message}` }, { status: 500 });
     }
