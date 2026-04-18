@@ -65,7 +65,7 @@ export default function Home() {
           if (newSession) {
             try {
               const { data: agentData } = await supabase
-                .from('agents')
+                .from('users')
                 .select('role')
                 .eq('supabase_uid', newSession.user.id)
                 .maybeSingle();
@@ -92,7 +92,7 @@ export default function Home() {
 
       try {
         const { data: agentData } = await supabase
-          .from('agents')
+          .from('users')
           .select('role')
           .eq('supabase_uid', session.user.id)
           .maybeSingle();
@@ -150,7 +150,7 @@ export default function Home() {
         let agentData, agentErr;
         try {
           const agentRes = await supabase
-            .from('agents')
+            .from('users')
             .select('id, full_name, short_name')
             .eq('supabase_uid', uid)
             .maybeSingle();
@@ -332,7 +332,7 @@ export default function Home() {
       }
       if (data?.user) {
         const { data: agentData } = await supabase
-          .from('agents')
+          .from('users')
           .select('role')
           .eq('supabase_uid', data.user.id)
           .maybeSingle();
@@ -372,7 +372,7 @@ export default function Home() {
       const publicUrl = urlData.publicUrl;
 
       const { error: dbErr } = await supabase
-        .from('agents')
+        .from('users')
         .update({ avatar_url: publicUrl })
         .eq('id', agentId);
       if (dbErr) throw new Error(`DB: ${dbErr.message}`);

@@ -1,16 +1,13 @@
-import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { NextRequest, NextResponse } from 'next/server';
+import { getAdminUser, unauthorizedResponse } from '@/lib/auth-helpers';
 
-export async function GET() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !serviceKey) {
-    return NextResponse.json({ error: 'Missing Supabase env vars' }, { status: 500 });
-  }
-  const supabase = createClient(url, serviceKey);
-  const { data, error } = await supabase
-    .from('agents')
-    .select('id, full_name, short_name, role, labor_percentage');
+export async function GET(req: NextRequest) {
+  const auth = await getAdminUser(req);
+  if (!auth) return unauthorizedResponse();
+
+  const { data, error } = await auth.supabase
+    .from('users')
+    .select('id, full_name, short_name, role, status, agency_id, permissions, avatar_url, created_at');
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

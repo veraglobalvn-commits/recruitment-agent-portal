@@ -6,8 +6,7 @@ import { fmtVND, fmtUSD } from '@/lib/formatters';
 
 interface AgentRow {
   id: string;
-  full_name: string | null;
-  short_name: string | null;
+  company_name: string | null;
   labor_percentage: number | null;
 }
 
@@ -31,7 +30,7 @@ export default function PolicyPage() {
     setLoading(true);
     const [policyRes, agentRes] = await Promise.all([
       supabase.from('policy_settings').select('key, value').in('key', ['default_fee_vnd', 'default_fee_usd']),
-      supabase.from('agents').select('id, full_name, short_name, labor_percentage').eq('role', 'agent').order('full_name'),
+      supabase.from('agencies').select('id, company_name, labor_percentage').order('company_name'),
     ]);
 
     if (policyRes.data) {
@@ -73,7 +72,7 @@ export default function PolicyPage() {
       labor_percentage: agentPct[a.id] ? parseInt(agentPct[a.id], 10) : null,
     }));
     for (const upd of agentUpdates) {
-      const { error: aErr } = await supabase.from('agents').update({ labor_percentage: upd.labor_percentage }).eq('id', upd.id);
+      const { error: aErr } = await supabase.from('agencies').update({ labor_percentage: upd.labor_percentage }).eq('id', upd.id);
       if (aErr) { setSaving(false); setSaveMsg(`❌ ${aErr.message}`); return; }
     }
 
@@ -167,7 +166,7 @@ export default function PolicyPage() {
           ) : (
             <div className="divide-y divide-gray-50">
               {agents.map((a) => {
-                const displayName = a.short_name || a.full_name || 'Agent';
+                const displayName = a.company_name || a.id;
                 return (
                   <div key={a.id} className="px-4 py-3 flex items-center gap-3">
                     <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 text-xs font-bold flex-shrink-0">

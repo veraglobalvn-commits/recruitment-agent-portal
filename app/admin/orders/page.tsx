@@ -66,7 +66,7 @@ export default function OrdersPage() {
     setLoading(true);
     const [ordRes, agRes] = await Promise.all([
       supabase.from('orders').select('*'),
-      supabase.from('agents').select('id, full_name, short_name').neq('role', 'admin'),
+      supabase.from('users').select('id, full_name, short_name').neq('role', 'admin'),
     ]);
     const orders = (ordRes.data ?? []) as AdminOrder[];
     orders.sort((a, b) => {

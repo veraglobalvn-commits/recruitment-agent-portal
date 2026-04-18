@@ -143,7 +143,7 @@ export default function AdminDashboard() {
     const [ordersRes, candidatesRes, agentsRes, oaRes] = await Promise.all([
       supabase.from('orders').select('id,company_name,job_type,total_labor,labor_missing,status,total_fee_vn,payment_status_vn,legal_status,agent_ids'),
       supabase.from('candidates').select('id_ld,agent_id,order_id,interview_status'),
-      supabase.from('agents').select('id,full_name,short_name,role').neq('role', 'admin'),
+      supabase.from('users').select('id,full_name,short_name,role').neq('role', 'admin'),
       supabase.from('order_agents').select('agent_id,assigned_labor_number'),
     ]);
 
@@ -266,7 +266,7 @@ export default function AdminDashboard() {
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
             <h2 className="text-sm font-semibold text-slate-700">Hoạt động Agent</h2>
-            <Link href="/admin/agents" className="text-xs text-blue-600 hover:underline font-medium">Xem tất cả →</Link>
+            <Link href="/admin/agencies" className="text-xs text-blue-600 hover:underline font-medium">Xem tất cả →</Link>
           </div>
           {data.agents.length === 0 ? (
             <p className="text-center text-gray-300 text-sm py-8">Chưa có agent</p>
@@ -277,7 +277,7 @@ export default function AdminDashboard() {
                   <div className="flex justify-between items-center mb-2 gap-2">
                     <div className="min-w-0">
                       <Link
-                        href={`/admin/agents/${ag.id}`}
+                        href={`/admin/agencies/${ag.id}`}
                         className="font-semibold text-sm text-slate-800 hover:text-blue-600 block truncate"
                       >
                         {ag.short_name || ag.full_name}

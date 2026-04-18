@@ -14,7 +14,7 @@ const NAV = [
   { href: '/admin', label: 'Tổng quan', icon: '📊' },
   { href: '/admin/companies', label: 'Công ty VN', icon: '🏭' },
   { href: '/admin/orders', label: 'Đơn hàng', icon: '📋' },
-  { href: '/admin/agents', label: 'Agent BD', icon: '👥' },
+  { href: '/admin/agencies', label: 'Đại lý', icon: '🏢' },
   { href: '/admin/users', label: 'Tài khoản', icon: '🔑' },
   { href: '/admin/candidates', label: 'Ứng viên', icon: '🧑‍💼' },
   { href: '/admin/debt', label: 'Công nợ', icon: '💰' },
@@ -90,12 +90,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       if (!user) { router.replace('/'); return; }
 
       const { data: agentData } = await supabase
-        .from('agents')
-        .select('role, full_name')
+        .from('users')
+        .select('role, status, full_name')
         .eq('supabase_uid', user.id)
         .maybeSingle();
 
-      if (!agentData || agentData.role !== 'admin') {
+      if (!agentData || agentData.role !== 'admin' || agentData.status !== 'active') {
         router.replace('/');
         return;
       }

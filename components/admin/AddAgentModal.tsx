@@ -1,43 +1,64 @@
 'use client';
 
-import { useState } from 'react';
-import type { Agent } from '@/lib/types';
+import { useState, useEffect } from 'react';
+import type { Agent, Agency } from '@/lib/types';
 import { supabase } from '@/lib/supabase';
 
 interface AddAgentModalProps {
   onClose: () => void;
   onSaved: (agent: Agent) => void;
   showRoleSelector?: boolean;
+  showAgencySelector?: boolean;
+  agencies?: Agency[];
 }
 
-export default function AddAgentModal({ onClose, onSaved, showRoleSelector }: AddAgentModalProps) {
+export default function AddAgentModal({ onClose, onSaved, showRoleSelector, showAgencySelector }: AddAgentModalProps) {
   const [form, setForm] = useState({
     email: '',
-    password: '',
     full_name: '',
     short_name: '',
     agent_id: '',
     role: 'agent',
+    agency_id: '',
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showPw, setShowPw] = useState(false);
+  const [agencies, setAgencies] = useState<Agency[]>([]);
 
   const set = (k: keyof typeof form, v: string) =>
     setForm((f) => ({ ...f, [k]: v }));
 
+  useEffect(() => {
+    if (showAgencySelector || form.role === 'manager' || form.role === 'operator') {
+      const loadAgencies = async () => {
+        const { data: { session } } = await supabase.auth.getSession();
+        const headers: Record<string, string> = {};
+        if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
+        try {
+          const res = await fetch('/api/admin/agencies', { headers });
+          const json = await res.json();
+          setAgencies(json.agencies || []);
+        } catch {}
+      };
+      loadAgencies();
+    }
+  }, [showAgencySelector, form.role]);
+
   const handleSave = async () => {
     if (!form.email.trim()) { setError('Email là bắt buộc'); return; }
-    if (!form.password || form.password.length < 6) { setError('Mật khẩu phải có ít nhất 6 ký tự'); return; }
     if (!form.full_name.trim()) { setError('Họ tên là bắt buộc'); return; }
     if (!form.agent_id.trim()) { setError('Agent ID là bắt buộc'); return; }
+
+    const role = showRoleSelector ? form.role : 'agent';
+    if ((role === 'manager' || role === 'operator') && !form.agency_id) {
+      setError('Agency là bắt buộc cho manager/operator');
+      return;
+    }
 
     setSaving(true);
     setError(null);
 
     try {
-      // getUser() validates against Supabase server và auto-refresh token nếu expired
-      // Phải gọi TRƯỚC getSession() để đảm bảo token luôn còn hạn
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         setError('Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại');
@@ -59,18 +80,18 @@ export default function AddAgentModal({ onClose, onSaved, showRoleSelector }: Ad
         },
         body: JSON.stringify({
           email: form.email.trim().toLowerCase(),
-          password: form.password,
           full_name: form.full_name.trim(),
           short_name: form.short_name.trim() || undefined,
           agent_id: form.agent_id.trim().toUpperCase(),
-          role: form.role,
+          role,
+          agency_id: form.agency_id || undefined,
         }),
       });
 
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.error || 'Tạo agent thất bại');
+        throw new Error(data.error || 'Tạo tài khoản thất bại');
       }
 
       onSaved(data.agent as Agent);
@@ -80,6 +101,8 @@ export default function AddAgentModal({ onClose, onSaved, showRoleSelector }: Ad
       setSaving(false);
     }
   };
+
+  const showAgencyField = showAgencySelector || form.role === 'manager' || form.role === 'operator';
 
   return (
     <div
@@ -93,7 +116,7 @@ export default function AddAgentModal({ onClose, onSaved, showRoleSelector }: Ad
         <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mt-3 sm:hidden flex-shrink-0" />
 
         <div className="flex justify-between items-center px-5 pt-4 pb-3 flex-shrink-0">
-          <h2 className="text-base font-bold text-gray-800">{showRoleSelector ? 'Thêm tài khoản' : 'Thêm Agent BD'}</h2>
+          <h2 className="text-base font-bold text-gray-800">{showRoleSelector ? 'Thêm tài khoản' : 'Thêm Agent'}</h2>
           <button onClick={onClose} className="min-h-[44px] min-w-[44px] flex items-center justify-center text-gray-400 hover:text-gray-700 text-xl">✕</button>
         </div>
 
@@ -111,26 +134,7 @@ export default function AddAgentModal({ onClose, onSaved, showRoleSelector }: Ad
               placeholder="agent@example.com"
               className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[44px]"
             />
-          </div>
-
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Mật khẩu <span className="text-red-500">*</span></label>
-            <div className="relative">
-              <input
-                type={showPw ? 'text' : 'password'}
-                value={form.password}
-                onChange={(e) => set('password', e.target.value)}
-                placeholder="Tối thiểu 6 ký tự"
-                className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 pr-12 focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[44px]"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPw(!showPw)}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-400 hover:text-gray-600 min-h-[36px] px-2"
-              >
-                {showPw ? 'Ẩn' : 'Hiện'}
-              </button>
-            </div>
+            <p className="text-xs text-gray-400 mt-1">Lời mời sẽ được gửi qua email</p>
           </div>
 
           <div>
@@ -145,14 +149,14 @@ export default function AddAgentModal({ onClose, onSaved, showRoleSelector }: Ad
           </div>
 
           <div>
-            <label className="block text-xs text-gray-500 mb-1">Agent ID <span className="text-red-500">*</span></label>
+            <label className="block text-xs text-gray-500 mb-1">ID hệ thống <span className="text-red-500">*</span></label>
             <input
               type="text"
               value={form.agent_id}
               onChange={(e) => set('agent_id', e.target.value.toUpperCase())}
               className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[44px] font-mono"
             />
-            <p className="text-xs text-gray-400 mt-1">ID dùng để đăng nhập. Ví dụ: GTA, AMBA, NAM-HCM</p>
+            <p className="text-xs text-gray-400 mt-1">VD: GTA, AMBA, GTA-MGR1</p>
           </div>
 
           <div>
@@ -173,8 +177,26 @@ export default function AddAgentModal({ onClose, onSaved, showRoleSelector }: Ad
                 onChange={(e) => set('role', e.target.value)}
                 className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[44px] bg-white"
               >
-                <option value="agent">Agent BD</option>
                 <option value="admin">Admin</option>
+                <option value="agent">Agent (Owner)</option>
+                <option value="manager">Manager</option>
+                <option value="operator">Operator</option>
+              </select>
+            </div>
+          )}
+
+          {showAgencyField && agencies.length > 0 && (
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Agency</label>
+              <select
+                value={form.agency_id}
+                onChange={(e) => set('agency_id', e.target.value)}
+                className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[44px] bg-white"
+              >
+                <option value="">— Chọn agency —</option>
+                {agencies.map((ag) => (
+                  <option key={ag.id} value={ag.id}>{ag.company_name || ag.id}</option>
+                ))}
               </select>
             </div>
           )}
@@ -192,7 +214,7 @@ export default function AddAgentModal({ onClose, onSaved, showRoleSelector }: Ad
             disabled={saving}
             className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl text-sm disabled:opacity-50 min-h-[44px]"
           >
-            {saving ? 'Đang tạo...' : showRoleSelector ? 'Tạo tài khoản' : 'Tạo Agent'}
+            {saving ? 'Đang gửi lời mời...' : 'Gửi lời mời'}
           </button>
         </div>
       </div>

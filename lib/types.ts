@@ -207,22 +207,33 @@ export interface OrderPayment {
   created_at: string;
 }
 
-export interface Agent {
+export interface Agency {
   id: string;
-  supabase_uid: string | null;
-  full_name: string | null;
-  short_name: string | null;
-  role: string | null;
-  avatar_url: string | null;
-  labor_percentage: number | null;
   company_name: string | null;
   company_address: string | null;
   legal_rep: string | null;
   legal_rep_title: string | null;
   license_no: string | null;
   doc_links: DocLink[];
+  labor_percentage: number | null;
+  status: string | null;
+  created_at: string | null;
+}
+
+export interface User {
+  id: string;
+  supabase_uid: string | null;
+  full_name: string | null;
+  short_name: string | null;
+  role: string | null;
+  status?: string | null;
+  agency_id?: string | null;
+  permissions?: string[] | null;
+  avatar_url: string | null;
   created_at?: string | null;
 }
+
+export type Agent = User;
 
 export interface TranslationRequest {
   id: string;

@@ -5,24 +5,36 @@ import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
 import AddAgentModal from '@/components/admin/AddAgentModal';
 
-type RoleFilter = 'all' | 'agent' | 'admin';
+type RoleFilter = 'all' | 'agent' | 'manager' | 'operator' | 'admin' | 'inactive';
 
 interface UserRow {
   id: string;
   full_name: string | null;
   short_name: string | null;
   role: string | null;
+  status?: string | null;
+  agency_id?: string | null;
 }
 
 function RolePill({ role }: { role: string | null }) {
-  if (role === 'admin') return <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-medium whitespace-nowrap">Admin</span>;
-  return <span className="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full font-medium whitespace-nowrap">Agent BD</span>;
+  const map: Record<string, string> = {
+    admin: 'bg-purple-100 text-purple-700',
+    agent: 'bg-blue-100 text-blue-600',
+    manager: 'bg-indigo-100 text-indigo-700',
+    operator: 'bg-gray-100 text-gray-600',
+  };
+  const labels: Record<string, string> = { admin: 'Admin', agent: 'Agent', manager: 'Manager', operator: 'Operator' };
+  const cls = map[role || ''] || 'bg-gray-100 text-gray-600';
+  return <span className={`text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap ${cls}`}>{labels[role || ''] || role || '—'}</span>;
 }
 
 const ROLE_FILTERS: { key: RoleFilter; label: string }[] = [
   { key: 'all', label: 'Tất cả' },
-  { key: 'agent', label: 'Agent BD' },
+  { key: 'agent', label: 'Agent' },
+  { key: 'manager', label: 'Manager' },
+  { key: 'operator', label: 'Operator' },
   { key: 'admin', label: 'Admin' },
+  { key: 'inactive', label: 'Ngừng HD' },
 ];
 
 export default function UsersPage() {
@@ -32,40 +44,16 @@ export default function UsersPage() {
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState<RoleFilter>('all');
   const [showModal, setShowModal] = useState(false);
-  const [debugResult, setDebugResult] = useState<string | null>(null);
-  const [debugging, setDebugging] = useState(false);
-
-  const runAuthDebug = async () => {
-    setDebugging(true);
-    setDebugResult(null);
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { setDebugResult('getUser() trả null — phiên hết hạn, đăng nhập lại'); return; }
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) { setDebugResult('getSession() không có access_token'); return; }
-
-      const res = await fetch('/api/auth/debug', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      });
-      const data = await res.json() as { ok: boolean; failedAt?: string; steps: string[] };
-      setDebugResult(
-        `${data.ok ? '✅ Auth OK' : `❌ FAIL: ${data.failedAt}`}\n\n${data.steps.join('\n')}`,
-      );
-    } catch (err) {
-      setDebugResult(`Exception: ${err instanceof Error ? err.message : String(err)}`);
-    } finally {
-      setDebugging(false);
-    }
-  };
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await fetch('/api/admin/agents');
-      const json = await response.json();
-      const agents = json.agents || [];
-      setUsers(agents as UserRow[]);
+      const { data, error } = await supabase
+        .from('users')
+        .select('id, full_name, short_name, role, status, agency_id')
+        .order('id');
+      if (error) throw error;
+      setUsers((data || []) as UserRow[]);
     } catch (err) {
       console.error('Error loading users:', err);
     } finally {
@@ -83,30 +71,26 @@ export default function UsersPage() {
           (u.full_name ?? '').toLowerCase().includes(q) ||
           (u.short_name ?? '').toLowerCase().includes(q) ||
           u.id.toLowerCase().includes(q);
-        const matchRole = roleFilter === 'all' || u.role === roleFilter;
+        const matchRole = roleFilter === 'all'
+          ? u.status !== 'inactive'
+          : roleFilter === 'inactive'
+            ? u.status === 'inactive'
+            : u.role === roleFilter && u.status !== 'inactive';
         return matchSearch && matchRole;
       }),
     );
   }, [search, roleFilter, users]);
 
-  const agentCount = users.filter((u) => u.role !== 'admin').length;
-  const adminCount = users.filter((u) => u.role === 'admin').length;
+  const activeCount = users.filter((u) => u.status !== 'inactive').length;
+  const inactiveCount = users.filter((u) => u.status === 'inactive').length;
 
   return (
     <div className="p-4 pb-24 space-y-4">
       <div className="flex items-center gap-3 pt-1">
         <div className="flex-1">
           <h1 className="text-lg font-bold text-slate-800">Tài khoản</h1>
-          <p className="text-xs text-gray-400">{agentCount} agent · {adminCount} admin</p>
+          <p className="text-xs text-gray-400">{activeCount} hoạt động · {inactiveCount} ngừng</p>
         </div>
-        <button
-          onClick={runAuthDebug}
-          disabled={debugging}
-          title="Kiểm tra quyền admin"
-          className="bg-gray-100 hover:bg-gray-200 text-gray-600 font-medium px-3 py-2.5 rounded-xl text-xs min-h-[44px] transition-colors disabled:opacity-50"
-        >
-          {debugging ? '...' : 'Test quyền'}
-        </button>
         <button
           onClick={() => setShowModal(true)}
           className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2.5 rounded-xl text-sm min-h-[44px] flex items-center gap-1.5 transition-colors"
@@ -114,18 +98,6 @@ export default function UsersPage() {
           + Thêm
         </button>
       </div>
-
-      {debugResult && (
-        <div className="bg-slate-900 text-green-400 text-xs font-mono p-4 rounded-xl whitespace-pre-wrap">
-          {debugResult}
-          <button
-            onClick={() => setDebugResult(null)}
-            className="ml-4 text-gray-500 hover:text-gray-300"
-          >
-            [đóng]
-          </button>
-        </div>
-      )}
 
       <div className="relative">
         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔍</span>
@@ -172,7 +144,7 @@ export default function UsersPage() {
                 href={`/admin/agents/${u.id}`}
                 className="flex items-center gap-3 p-4 bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow active:scale-[0.99]"
               >
-                <div className={`w-11 h-11 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0 ${u.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                <div className={`w-11 h-11 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0 ${u.status === 'inactive' ? 'bg-red-100 text-red-400' : u.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
                   {(u.short_name || u.full_name || '?')[0].toUpperCase()}
                 </div>
                 <div className="flex-1 min-w-0">
@@ -188,7 +160,7 @@ export default function UsersPage() {
             <table className="w-full text-sm">
               <thead className="bg-gray-50 border-b border-gray-100">
                 <tr>
-                  {['Tên', 'ID hệ thống', 'Vai trò', ''].map((h) => (
+                  {['Tên', 'ID hệ thống', 'Vai trò', 'Trạng thái', ''].map((h) => (
                     <th key={h} className="text-left px-4 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
@@ -198,7 +170,7 @@ export default function UsersPage() {
                   <tr key={u.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
-                        <div className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0 ${u.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                        <div className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0 ${u.status === 'inactive' ? 'bg-red-100 text-red-400' : u.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
                           {(u.short_name || u.full_name || '?')[0].toUpperCase()}
                         </div>
                         <span className="font-medium text-slate-800">{u.full_name || '—'}</span>
@@ -206,6 +178,11 @@ export default function UsersPage() {
                     </td>
                     <td className="px-4 py-3 text-xs text-gray-500">{u.id}</td>
                     <td className="px-4 py-3"><RolePill role={u.role} /></td>
+                    <td className="px-4 py-3">
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${u.status === 'inactive' ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-700'}`}>
+                        {u.status === 'inactive' ? 'Ngừng HD' : 'Hoạt động'}
+                      </span>
+                    </td>
                     <td className="px-4 py-3">
                       <Link href={`/admin/agents/${u.id}`} className="text-xs text-blue-600 hover:underline font-medium">Xem →</Link>
                     </td>
@@ -225,6 +202,7 @@ export default function UsersPage() {
             load();
           }}
           showRoleSelector
+          showAgencySelector
         />
       )}
     </div>

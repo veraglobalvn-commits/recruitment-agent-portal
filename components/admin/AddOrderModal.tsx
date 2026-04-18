@@ -41,7 +41,7 @@ export default function AddOrderModal({ onClose, onSaved, prefillCompanyId }: Ad
     const load = async () => {
       const [compRes, agRes, policyRes] = await Promise.all([
         supabase.from('companies').select('id, company_name, short_name').is('deleted_at', null).order('company_name'),
-        supabase.from('agents').select('id, full_name, short_name').neq('role', 'admin').order('full_name'),
+        supabase.from('users').select('id, full_name, short_name').neq('role', 'admin').order('full_name'),
         supabase.from('policy_settings').select('key, value').in('key', ['default_fee_vnd', 'default_fee_usd']),
       ]);
       setCompanies((compRes.data ?? []) as CompanyOption[]);

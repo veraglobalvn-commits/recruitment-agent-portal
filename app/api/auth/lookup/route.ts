@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
 
     // Tìm agent theo id (case-insensitive), VD: GTA, AMBA
     let { data: agent, error: agentErr } = await supabase
-      .from('agents')
+      .from('users')
       .select('supabase_uid')
       .ilike('id', username)
       .maybeSingle();
@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
     // Fallback: tìm theo short_name
     if (!agent?.supabase_uid) {
       const { data: agentByShortName, error: shortNameErr } = await supabase
-        .from('agents')
+        .from('users')
         .select('supabase_uid')
         .ilike('short_name', username)
         .maybeSingle();

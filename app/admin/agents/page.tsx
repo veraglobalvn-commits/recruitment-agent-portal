@@ -5,19 +5,16 @@ import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
 import AddAgentModal from '@/components/admin/AddAgentModal';
 
-interface AgentRow {
+interface AgencyRow {
   id: string;
-  full_name: string | null;
-  short_name: string | null;
+  company_name: string | null;
+  legal_rep: string | null;
   labor_percentage: number | null;
+  status: string | null;
+  memberCount: number;
   totalOrders: number;
   totalCandidates: number;
   passed: number;
-  target: number;
-}
-
-function isMissingAgent(ag: AgentRow) {
-  return !ag.labor_percentage || ag.labor_percentage <= 0;
 }
 
 function ProgressBar({ value, max }: { value: number; max: number }) {
@@ -29,9 +26,9 @@ function ProgressBar({ value, max }: { value: number; max: number }) {
   );
 }
 
-export default function AgentsPage() {
-  const [agents, setAgents] = useState<AgentRow[]>([]);
-  const [filtered, setFiltered] = useState<AgentRow[]>([]);
+export default function AgenciesPage() {
+  const [agencies, setAgencies] = useState<AgencyRow[]>([]);
+  const [filtered, setFiltered] = useState<AgencyRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [showModal, setShowModal] = useState(false);
@@ -39,51 +36,66 @@ export default function AgentsPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-const response = await fetch('/api/admin/agents');
-        const json = await response.json();
-        const agentsRes = { data: json.agents, error: null };
-        const { data: ordersData, error: ordersError } = await supabase.from('orders').select('id, agent_ids, total_labor');
-        if (ordersError) throw new Error('orders: ' + (ordersError as any).message);
-        const { data: candidatesData, error: candidatesError } = await supabase.from('candidates').select('id_ld, agent_id, interview_status');
-        if (candidatesError) throw new Error('candidates: ' + (candidatesError as any).message);
-        const ordersRes = { data: ordersData };
-        const candidatesRes = { data: candidatesData };
-        
-// agentsRes.error check removed
+      const { data: { session } } = await supabase.auth.getSession();
+      const headers: Record<string, string> = {};
+      if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
 
-      // agentsRes.error check removed
+      const [agRes, usersRes, ordersRes, candidatesRes, oaRes] = await Promise.all([
+        fetch('/api/admin/agencies', { headers }).then(r => r.json()),
+        supabase.from('users').select('id, agency_id, role').neq('role', 'admin'),
+        supabase.from('orders').select('id, agent_ids, total_labor'),
+        supabase.from('candidates').select('id_ld, agent_id, interview_status'),
+        supabase.from('order_agents').select('agent_id, assigned_labor_number'),
+      ]);
 
-      const agentsRaw = agentsRes.data || [];
+      const agenciesRaw = agRes.agencies || [];
+      const users = usersRes.data || [];
       const orders = ordersRes.data || [];
       const candidates = candidatesRes.data || [];
 
-      const oaRes = await supabase.from('order_agents').select('agent_id,assigned_labor_number');
       const oaTargetMap: Record<string, number> = {};
       (oaRes.data || []).forEach((oa: any) => {
         oaTargetMap[oa.agent_id] = (oaTargetMap[oa.agent_id] || 0) + (oa.assigned_labor_number || 0);
       });
 
-      const rows: AgentRow[] = agentsRaw.map((ag: any) => {
-        const agCands = candidates.filter((c: any) => c.agent_id === ag.id);
+      const memberCountMap: Record<string, number> = {};
+      users.forEach((u: any) => {
+        if (u.agency_id) memberCountMap[u.agency_id] = (memberCountMap[u.agency_id] || 0) + 1;
+      });
+
+      const agencyUserIds: Record<string, string[]> = {};
+      users.forEach((u: any) => {
+        const aid = u.agency_id;
+        if (aid) {
+          if (!agencyUserIds[aid]) agencyUserIds[aid] = [];
+          agencyUserIds[aid].push(u.id);
+        }
+      });
+
+      const rows: AgencyRow[] = agenciesRaw.map((ag: any) => {
+        const memberIds = agencyUserIds[ag.id] || [];
+        const agCands = candidates.filter((c: any) => memberIds.includes(c.agent_id));
         const passed = agCands.filter((c: any) => c.interview_status === 'Passed').length;
-        const agOrders = orders.filter((o: any) => (o.agent_ids || []).includes(ag.id));
-        const target = oaTargetMap[ag.id] || 0;
+        const agOrders = orders.filter((o: any) =>
+          (o.agent_ids || []).some((aid: string) => memberIds.includes(aid))
+        );
         return {
           id: ag.id,
-          full_name: ag.full_name,
-          short_name: ag.short_name,
+          company_name: ag.company_name,
+          legal_rep: ag.legal_rep,
           labor_percentage: ag.labor_percentage,
+          status: ag.status,
+          memberCount: (memberCountMap[ag.id] || 0) + 1,
           totalOrders: agOrders.length,
           totalCandidates: agCands.length,
           passed,
-          target,
         };
       });
 
-      setAgents(rows);
+      setAgencies(rows);
       setFiltered(rows);
     } catch (error) {
-      console.error('Error loading agents:', error);
+      console.error('Error loading agencies:', error);
     } finally {
       setLoading(false);
     }
@@ -94,20 +106,21 @@ const response = await fetch('/api/admin/agents');
   useEffect(() => {
     const q = search.toLowerCase();
     setFiltered(
-      agents.filter(
+      agencies.filter(
         (a) =>
-          (a.full_name ?? '').toLowerCase().includes(q) ||
-          (a.short_name ?? '').toLowerCase().includes(q),
+          (a.company_name ?? '').toLowerCase().includes(q) ||
+          a.id.toLowerCase().includes(q) ||
+          (a.legal_rep ?? '').toLowerCase().includes(q),
       ),
     );
-  }, [search, agents]);
+  }, [search, agencies]);
 
   return (
     <div className="p-4 pb-24 space-y-4">
       <div className="flex items-center gap-3 pt-1">
         <div className="flex-1">
-          <h1 className="text-lg font-bold text-slate-800">Agent BD</h1>
-          <p className="text-xs text-gray-400">{agents.length} agent</p>
+          <h1 className="text-lg font-bold text-slate-800">Đại lý</h1>
+          <p className="text-xs text-gray-400">{agencies.length} agency</p>
         </div>
         <button
           onClick={() => setShowModal(true)}
@@ -123,7 +136,7 @@ const response = await fetch('/api/admin/agents');
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Tìm theo tên agent..."
+          placeholder="Tìm theo tên công ty, ID..."
           className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[44px]"
         />
       </div>
@@ -134,8 +147,8 @@ const response = await fetch('/api/admin/agents');
         </div>
       ) : filtered.length === 0 ? (
         <div className="text-center py-12">
-          <p className="text-gray-300 text-4xl mb-3">👥</p>
-          <p className="text-gray-500 text-sm">{search ? 'Không tìm thấy kết quả' : 'Chưa có agent nào'}</p>
+          <p className="text-gray-300 text-4xl mb-3">🏢</p>
+          <p className="text-gray-500 text-sm">{search ? 'Không tìm thấy kết quả' : 'Chưa có agency nào'}</p>
         </div>
       ) : (
         <>
@@ -143,22 +156,19 @@ const response = await fetch('/api/admin/agents');
             {filtered.map((ag) => (
               <Link
                 key={ag.id}
-                href={`/admin/agents/${ag.id}`}
-                className={`flex items-center gap-3 p-4 bg-white rounded-2xl border shadow-sm hover:shadow-md transition-shadow active:scale-[0.99] ${isMissingAgent(ag) ? 'border-red-200 bg-red-50/30' : 'border-gray-100'}`}
+                href={`/admin/agencies/${ag.id}`}
+                className={`flex items-center gap-3 p-4 bg-white rounded-2xl border shadow-sm hover:shadow-md transition-shadow active:scale-[0.99] ${ag.status === 'inactive' ? 'border-red-200 opacity-60' : 'border-gray-100'}`}
               >
                 <div className="w-11 h-11 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-sm flex-shrink-0">
-                  {(ag.short_name || ag.full_name || '?')[0].toUpperCase()}
+                  {(ag.company_name || ag.id)[0].toUpperCase()}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-sm text-slate-800 truncate">{ag.short_name || ag.full_name}</p>
-                  <p className="text-xs text-gray-400">{ag.totalCandidates} ứng viên · {ag.passed} passed</p>
-                  <div className="mt-1.5">
-                    <ProgressBar value={ag.passed} max={ag.target} />
-                  </div>
+                  <p className="font-semibold text-sm text-slate-800 truncate">{ag.company_name || ag.id}</p>
+                  <p className="text-xs text-gray-400">{ag.memberCount} members · {ag.totalCandidates} ứng viên · {ag.passed} passed</p>
                 </div>
                 <div className="text-right flex-shrink-0">
-                  <span className="text-sm font-bold text-slate-700">{ag.passed}</span>
-                  <span className="text-xs text-gray-400">/{ag.target}</span>
+                  <span className="text-sm font-bold text-green-600">{ag.passed}</span>
+                  <span className="text-xs text-gray-400"> UV</span>
                 </div>
               </Link>
             ))}
@@ -168,33 +178,38 @@ const response = await fetch('/api/admin/agents');
             <table className="w-full text-sm">
               <thead className="bg-gray-50 border-b border-gray-100">
                 <tr>
-                  {['Agent', 'Đơn hàng', 'Ứng viên', 'Passed', 'Chỉ tiêu', 'Tiến độ', ''].map((h) => (
+                  {['Agency', 'Members', 'Đơn hàng', 'Ứng viên', 'Passed', 'Trạng thái', ''].map((h) => (
                     <th key={h} className="text-left px-4 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {filtered.map((ag) => (
-                  <tr key={ag.id} className={`transition-colors ${isMissingAgent(ag) ? 'bg-red-50/30 hover:bg-red-50/50' : 'hover:bg-gray-50'}`}>
+                  <tr key={ag.id} className={`transition-colors ${ag.status === 'inactive' ? 'opacity-60' : 'hover:bg-gray-50'}`}>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
                         <div className="w-9 h-9 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-xs flex-shrink-0">
-                          {(ag.short_name || ag.full_name || '?')[0].toUpperCase()}
+                          {(ag.company_name || ag.id)[0].toUpperCase()}
                         </div>
-                        <Link href={`/admin/agents/${ag.id}`} className="font-medium text-slate-800 hover:text-blue-600 text-sm">
-                          {ag.short_name || ag.full_name}
-                        </Link>
+                        <div>
+                          <Link href={`/admin/agencies/${ag.id}`} className="font-medium text-slate-800 hover:text-blue-600 text-sm">
+                            {ag.company_name || ag.id}
+                          </Link>
+                          <p className="text-xs text-gray-400">{ag.legal_rep || '—'}</p>
+                        </div>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-xs font-semibold text-slate-700">{ag.totalOrders}</td>
+                    <td className="px-4 py-3 text-xs font-semibold text-slate-700">{ag.memberCount}</td>
+                    <td className="px-4 py-3 text-xs text-gray-600">{ag.totalOrders}</td>
                     <td className="px-4 py-3 text-xs text-gray-600">{ag.totalCandidates}</td>
                     <td className="px-4 py-3 text-xs font-semibold text-green-600">{ag.passed}</td>
-                    <td className="px-4 py-3 text-xs text-gray-600">{ag.target}</td>
-                    <td className="px-4 py-3 w-32">
-                      <ProgressBar value={ag.passed} max={ag.target} />
+                    <td className="px-4 py-3">
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${ag.status === 'inactive' ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-700'}`}>
+                        {ag.status === 'inactive' ? 'Ngừng HD' : 'Hoạt động'}
+                      </span>
                     </td>
                     <td className="px-4 py-3">
-                      <Link href={`/admin/agents/${ag.id}`} className="text-xs text-blue-600 hover:underline font-medium">Xem →</Link>
+                      <Link href={`/admin/agencies/${ag.id}`} className="text-xs text-blue-600 hover:underline font-medium">Xem →</Link>
                     </td>
                   </tr>
                 ))}

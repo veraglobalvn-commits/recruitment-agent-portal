@@ -26,7 +26,7 @@ export async function getAdminUser(req: NextRequest) {
   if (!result) return null;
 
   const { data: agent } = await result.supabase
-    .from('agents')
+    .from('users')
     .select('role')
     .eq('supabase_uid', result.user.id)
     .single();

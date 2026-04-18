@@ -133,7 +133,7 @@ export default function CandidatesPage() {
     setLoading(true);
     const [candRes, agRes, ordRes] = await Promise.all([
       supabase.from('candidates').select('*'),
-      supabase.from('agents').select('id, full_name, short_name').neq('role', 'admin'),
+      supabase.from('users').select('id, full_name, short_name').neq('role', 'admin'),
       supabase.from('orders').select('id, company_name, job_type'),
     ]);
     const candidates = (candRes.data ?? []) as Candidate[];

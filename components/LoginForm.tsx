@@ -22,12 +22,85 @@ export default function LoginForm({
   onPasswordChange,
 }: LoginFormProps) {
   const [ready, setReady] = useState(false);
+  const [mode, setMode] = useState<'login' | 'forgot'>('login');
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotMsg, setForgotMsg] = useState<string | null>(null);
+
   useEffect(() => { setReady(true); }, []);
 
   if (!ready) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-gray-400 text-sm">Loading...</div>
+      </div>
+    );
+  }
+
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!forgotEmail.trim()) return;
+    setForgotLoading(true);
+    setForgotMsg(null);
+    try {
+      const res = await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: forgotEmail.trim() }),
+      });
+      const data = await res.json();
+      setForgotMsg(data.message || 'Kiểm tra email của bạn');
+    } catch {
+      setForgotMsg('Có lỗi xảy ra, vui lòng thử lại');
+    } finally {
+      setForgotLoading(false);
+    }
+  };
+
+  if (mode === 'forgot') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+        <div className="bg-white p-6 md:p-8 rounded-2xl shadow-md w-full max-w-sm">
+          <div className="text-center mb-6">
+            <div className="text-3xl mb-2">🔑</div>
+            <h1 className="text-xl font-bold text-blue-900">Quên mật khẩu</h1>
+            <p className="text-sm text-gray-500 mt-1">Nhập email để nhận hướng dẫn đặt lại</p>
+          </div>
+
+          {forgotMsg && (
+            <div className="mb-4 p-3 bg-green-50 border border-green-200 text-green-700 text-sm rounded-lg">
+              {forgotMsg}
+            </div>
+          )}
+
+          <form onSubmit={handleForgotPassword} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+              <input
+                type="email"
+                value={forgotEmail}
+                onChange={(e) => setForgotEmail(e.target.value)}
+                required
+                className="w-full px-3 py-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="your@email.com"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={forgotLoading}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg text-sm transition-colors disabled:opacity-50 min-h-[44px]"
+            >
+              {forgotLoading ? 'Đang gửi...' : 'Gửi hướng dẫn'}
+            </button>
+          </form>
+
+          <button
+            onClick={() => { setMode('login'); setForgotMsg(null); }}
+            className="w-full mt-3 text-sm text-blue-600 hover:text-blue-800 py-2"
+          >
+            ← Quay lại đăng nhập
+          </button>
+        </div>
       </div>
     );
   }
@@ -80,6 +153,13 @@ export default function LoginForm({
             {loading ? 'Signing in...' : 'Sign In'}
           </button>
         </form>
+
+        <button
+          onClick={() => setMode('forgot')}
+          className="w-full mt-3 text-sm text-gray-500 hover:text-blue-600 py-2"
+        >
+          Quên mật khẩu?
+        </button>
       </div>
     </div>
   );

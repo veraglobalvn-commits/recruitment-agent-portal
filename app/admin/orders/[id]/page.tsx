@@ -154,7 +154,7 @@ export default function OrderDetailPage() {
     const [ordRes, candRes, agRes, handRes, payRes, policyRes, oaRes] = await Promise.all([
       supabase.from('orders').select('*').eq('id', id).single(),
       supabase.from('candidates').select('*').eq('order_id', id),
-      supabase.from('agents').select('id, full_name, short_name, labor_percentage').neq('role', 'admin'),
+      supabase.from('users').select('id, full_name, short_name, labor_percentage').neq('role', 'admin'),
       supabase.from('order_handovers').select('*').eq('order_id', id).order('batch_no'),
       supabase.from('order_payments').select('*').eq('order_id', id).order('created_at'),
       supabase.from('policy_settings').select('key, value').in('key', ['default_fee_vnd', 'default_fee_usd']),

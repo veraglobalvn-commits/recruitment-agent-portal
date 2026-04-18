@@ -191,11 +191,19 @@ export default function CompanyDetailPage() {
     setOrders((ordRes.data ?? []) as CompanyOrderStat[]);
     setDirty(false);
     setLoading(false);
-
-    if (searchParams.get('addOrder') === '1') setShowAddOrder(true);
-  }, [id, searchParams]);
+  }, [id]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    if (searchParams.get('addOrder') === '1') {
+      setShowAddOrder(true);
+      // Remove the parameter so it doesn't trigger again on re-renders/loads
+      const url = new URL(window.location.href);
+      url.searchParams.delete('addOrder');
+      window.history.replaceState({}, '', url.pathname);
+    }
+  }, [searchParams]);
 
   const handleSave = useCallback(async () => {
     setSaving(true);
