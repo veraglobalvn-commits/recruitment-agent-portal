@@ -9,6 +9,7 @@ export async function GET(req: NextRequest) {
   const { data, error } = await auth.supabase
     .from('agencies')
     .select('*')
+    .eq('status', 'active')
     .order('company_name');
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
