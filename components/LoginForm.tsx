@@ -49,9 +49,9 @@ export default function LoginForm({
         body: JSON.stringify({ email: forgotEmail.trim() }),
       });
       const data = await res.json();
-      setForgotMsg(data.message || 'Kiểm tra email của bạn');
+      setForgotMsg(data.message || 'Check your email for instructions');
     } catch {
-      setForgotMsg('Có lỗi xảy ra, vui lòng thử lại');
+      setForgotMsg('Something went wrong. Please try again.');
     } finally {
       setForgotLoading(false);
     }
@@ -63,8 +63,8 @@ export default function LoginForm({
         <div className="bg-white p-6 md:p-8 rounded-2xl shadow-md w-full max-w-sm">
           <div className="text-center mb-6">
             <div className="text-3xl mb-2">🔑</div>
-            <h1 className="text-xl font-bold text-blue-900">Quên mật khẩu</h1>
-            <p className="text-sm text-gray-500 mt-1">Nhập email để nhận hướng dẫn đặt lại</p>
+            <h1 className="text-xl font-bold text-blue-900">Forgot Password</h1>
+            <p className="text-sm text-gray-500 mt-1">Enter your email to receive reset instructions</p>
           </div>
 
           {forgotMsg && (
@@ -90,7 +90,7 @@ export default function LoginForm({
               disabled={forgotLoading}
               className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg text-sm transition-colors disabled:opacity-50 min-h-[44px]"
             >
-              {forgotLoading ? 'Đang gửi...' : 'Gửi hướng dẫn'}
+              {forgotLoading ? 'Sending...' : 'Send Instructions'}
             </button>
           </form>
 
@@ -98,7 +98,7 @@ export default function LoginForm({
             onClick={() => { setMode('login'); setForgotMsg(null); }}
             className="w-full mt-3 text-sm text-blue-600 hover:text-blue-800 py-2"
           >
-            ← Quay lại đăng nhập
+            ← Back to Login
           </button>
         </div>
       </div>
@@ -134,7 +134,7 @@ export default function LoginForm({
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Mật khẩu</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
             <input
               type="password"
               value={password}
@@ -150,7 +150,7 @@ export default function LoginForm({
             disabled={loading}
             className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg text-sm transition-colors disabled:opacity-50 min-h-[44px]"
           >
-            {loading ? 'Đang đăng nhập...' : 'Đăng nhập'}
+            {loading ? 'Signing in...' : 'Sign In'}
           </button>
         </form>
 
@@ -159,13 +159,13 @@ export default function LoginForm({
             onClick={() => setMode('forgot')}
             className="w-full text-sm text-gray-500 hover:text-blue-600 py-2"
           >
-            Quên mật khẩu?
+            Forgot password?
           </button>
           <a
             href="/auth/register"
             className="w-full text-center text-sm text-blue-600 hover:text-blue-800 py-2"
           >
-            Chưa có tài khoản? Đăng ký
+            Don&apos;t have an account? Register
           </a>
         </div>
       </div>

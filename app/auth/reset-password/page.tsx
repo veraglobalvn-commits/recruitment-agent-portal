@@ -17,9 +17,8 @@ export default function ResetPasswordPage() {
       try {
         const supabase = createSupabaseClient();
         const params = new URLSearchParams(window.location.hash.replace('#', '?'));
-        let accessToken = params.get('access_token');
-        let refreshToken = params.get('refresh_token');
-        let type = params.get('type');
+        const accessToken = params.get('access_token');
+        const refreshToken = params.get('refresh_token');
 
         if (!accessToken) {
           const urlParams = new URLSearchParams(window.location.search);
@@ -62,11 +61,11 @@ export default function ResetPasswordPage() {
     setError(null);
 
     if (password.length < 6) {
-      setError('Mật khẩu phải có ít nhất 6 ký tự');
+      setError('Password must be at least 6 characters');
       return;
     }
     if (password !== confirmPassword) {
-      setError('Mật khẩu xác nhận không khớp');
+      setError('Passwords do not match');
       return;
     }
 
@@ -82,7 +81,7 @@ export default function ResetPasswordPage() {
       await supabase.auth.signOut();
       setTimeout(() => router.replace('/'), 3000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Có lỗi xảy ra');
+      setError(err instanceof Error ? err.message : 'Something went wrong');
     } finally {
       setLoading(false);
     }
@@ -101,9 +100,9 @@ export default function ResetPasswordPage() {
       <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
         <div className="bg-white p-6 md:p-8 rounded-2xl shadow-md w-full max-w-sm text-center">
           <div className="text-3xl mb-3">⚠️</div>
-          <h1 className="text-lg font-bold text-gray-800 mb-2">Link không hợp lệ</h1>
-          <p className="text-sm text-gray-500 mb-4">Link đặt lại mật khẩu đã hết hạn. Vui lòng yêu cầu gửi lại.</p>
-          <a href="/" className="text-sm text-blue-600 hover:underline">← Quay lại đăng nhập</a>
+          <h1 className="text-lg font-bold text-gray-800 mb-2">Invalid Link</h1>
+          <p className="text-sm text-gray-500 mb-4">This password reset link has expired. Please request a new one.</p>
+          <a href="/" className="text-sm text-blue-600 hover:underline">← Back to Login</a>
         </div>
       </div>
     );
@@ -114,9 +113,9 @@ export default function ResetPasswordPage() {
       <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
         <div className="bg-white p-6 md:p-8 rounded-2xl shadow-md w-full max-w-sm text-center">
           <div className="text-3xl mb-3">✅</div>
-          <h1 className="text-lg font-bold text-green-700 mb-2">Mật khẩu đã được cập nhật</h1>
-          <p className="text-sm text-gray-500 mb-4">Đang chuyển về trang đăng nhập...</p>
-          <a href="/" className="text-sm text-blue-600 hover:underline">← Đăng nhập ngay</a>
+          <h1 className="text-lg font-bold text-green-700 mb-2">Password Updated</h1>
+          <p className="text-sm text-gray-500 mb-4">Redirecting to login...</p>
+          <a href="/" className="text-sm text-blue-600 hover:underline">← Sign in now</a>
         </div>
       </div>
     );
@@ -129,7 +128,7 @@ export default function ResetPasswordPage() {
       <div className="bg-white p-6 md:p-8 rounded-2xl shadow-md w-full max-w-sm">
         <div className="text-center mb-6">
           <div className="text-3xl mb-2">🔑</div>
-          <h1 className="text-xl font-bold text-blue-900">Đặt mật khẩu mới</h1>
+          <h1 className="text-xl font-bold text-blue-900">Set New Password</h1>
         </div>
 
         {error && (
@@ -140,7 +139,7 @@ export default function ResetPasswordPage() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Mật khẩu mới</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">New Password</label>
             <input
               type="password"
               value={password}
@@ -148,18 +147,18 @@ export default function ResetPasswordPage() {
               required
               minLength={6}
               className={inputCls}
-              placeholder="Tối thiểu 6 ký tự"
+              placeholder="At least 6 characters"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Xác nhận mật khẩu</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Confirm Password</label>
             <input
               type="password"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               required
               className={inputCls}
-              placeholder="Nhập lại mật khẩu"
+              placeholder="Re-enter your password"
             />
           </div>
           <button
@@ -167,7 +166,7 @@ export default function ResetPasswordPage() {
             disabled={loading}
             className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg text-sm transition-colors disabled:opacity-50 min-h-[44px]"
           >
-            {loading ? 'Đang cập nhật...' : 'Cập nhật mật khẩu'}
+            {loading ? 'Updating...' : 'Update Password'}
           </button>
         </form>
       </div>

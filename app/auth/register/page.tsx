@@ -14,11 +14,11 @@ export default function RegisterPage() {
     setError(null);
 
     if (form.password !== form.confirm) {
-      setError('Mật khẩu xác nhận không khớp');
+      setError('Passwords do not match');
       return;
     }
     if (form.password.length < 8) {
-      setError('Mật khẩu phải có ít nhất 8 ký tự');
+      setError('Password must be at least 8 characters');
       return;
     }
 
@@ -36,12 +36,12 @@ export default function RegisterPage() {
       });
       const data = await res.json() as { message?: string; error?: string };
       if (!res.ok) {
-        setError(data.error || 'Đăng ký thất bại');
+        setError(data.error || 'Registration failed');
         return;
       }
       router.replace('/auth/pending');
     } catch {
-      setError('Có lỗi xảy ra, vui lòng thử lại');
+      setError('Something went wrong. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -52,7 +52,7 @@ export default function RegisterPage() {
       <div className="bg-white p-6 md:p-8 rounded-2xl shadow-md w-full max-w-sm">
         <div className="text-center mb-6">
           <div className="text-3xl mb-2">🌏</div>
-          <h1 className="text-xl font-bold text-blue-900">Tạo tài khoản</h1>
+          <h1 className="text-xl font-bold text-blue-900">Create Account</h1>
           <p className="text-sm text-gray-500 mt-1">Agent Portal — Vietnam Recruitment</p>
         </div>
 
@@ -64,25 +64,25 @@ export default function RegisterPage() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Họ tên đầy đủ</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
             <input
               type="text"
               value={form.full_name}
               onChange={(e) => setForm(f => ({ ...f, full_name: e.target.value }))}
               required
               className="w-full px-3 py-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Nguyễn Văn A"
+              placeholder="John Smith"
               autoComplete="name"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Tên công ty / Tổ chức</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Company / Organisation</label>
             <input
               type="text"
               value={form.company_name}
               onChange={(e) => setForm(f => ({ ...f, company_name: e.target.value }))}
               className="w-full px-3 py-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Công ty TNHH ABC (không bắt buộc)"
+              placeholder="ABC Recruitment Ltd. (optional)"
               autoComplete="organization"
             />
           </div>
@@ -99,7 +99,7 @@ export default function RegisterPage() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Mật khẩu</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
             <input
               type="password"
               value={form.password}
@@ -107,19 +107,19 @@ export default function RegisterPage() {
               required
               minLength={8}
               className="w-full px-3 py-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Tối thiểu 8 ký tự"
+              placeholder="At least 8 characters"
               autoComplete="new-password"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Xác nhận mật khẩu</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Confirm Password</label>
             <input
               type="password"
               value={form.confirm}
               onChange={(e) => setForm(f => ({ ...f, confirm: e.target.value }))}
               required
               className="w-full px-3 py-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Nhập lại mật khẩu"
+              placeholder="Re-enter your password"
               autoComplete="new-password"
             />
           </div>
@@ -128,7 +128,7 @@ export default function RegisterPage() {
             disabled={loading}
             className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg text-sm transition-colors disabled:opacity-50 min-h-[44px]"
           >
-            {loading ? 'Đang đăng ký...' : 'Đăng ký'}
+            {loading ? 'Creating account...' : 'Create Account'}
           </button>
         </form>
 
@@ -136,7 +136,7 @@ export default function RegisterPage() {
           href="/"
           className="block w-full text-center mt-3 text-sm text-gray-500 hover:text-blue-600 py-2"
         >
-          ← Quay lại đăng nhập
+          ← Back to Login
         </a>
       </div>
     </div>
