@@ -65,21 +65,26 @@ export default function OrdersPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [ordRes, activeAgents] = await Promise.all([
-      supabase.from('orders').select('*'),
-      fetchActiveAgents(),
-    ]);
-    const orders = (ordRes.data ?? []) as AdminOrder[];
-    orders.sort((a, b) => {
-      const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
-      const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
-      const aValid = !isNaN(dateA) && dateA > 0 ? dateA : 0;
-      const bValid = !isNaN(dateB) && dateB > 0 ? dateB : 0;
-      return bValid - aValid;
-    });
-    setOrders(orders);
-    setAgents(activeAgents);
-    setLoading(false);
+    try {
+      const [ordRes, activeAgents] = await Promise.all([
+        supabase.from('orders').select('*'),
+        fetchActiveAgents(),
+      ]);
+      const orders = (ordRes.data ?? []) as AdminOrder[];
+      orders.sort((a, b) => {
+        const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+        const aValid = !isNaN(dateA) && dateA > 0 ? dateA : 0;
+        const bValid = !isNaN(dateB) && dateB > 0 ? dateB : 0;
+        return bValid - aValid;
+      });
+      setOrders(orders);
+      setAgents(activeAgents);
+    } catch {
+      // data stays empty
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => { load(); }, [load]);

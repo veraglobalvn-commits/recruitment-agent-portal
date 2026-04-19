@@ -89,22 +89,26 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   useEffect(() => {
     const checkAdmin = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { router.replace('/'); return; }
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) { router.replace('/'); return; }
 
-      const { data: agentData } = await supabase
-        .from('users')
-        .select('role, status, full_name')
-        .eq('supabase_uid', user.id)
-        .maybeSingle();
+        const { data: agentData, error: dbErr } = await supabase
+          .from('users')
+          .select('role, status, full_name')
+          .eq('supabase_uid', user.id)
+          .maybeSingle();
 
-      if (!agentData || !ADMIN_ROLES.includes(agentData.role) || agentData.status !== 'active') {
+        if (dbErr || !agentData || !ADMIN_ROLES.includes(agentData.role) || agentData.status !== 'active') {
+          router.replace('/');
+          return;
+        }
+
+        setAdmin({ uid: user.id, email: user.email ?? '', role: agentData.role });
+        setChecking(false);
+      } catch {
         router.replace('/');
-        return;
       }
-
-      setAdmin({ uid: user.id, email: user.email ?? '', role: agentData.role });
-      setChecking(false);
     };
     checkAdmin();
   }, [router]);

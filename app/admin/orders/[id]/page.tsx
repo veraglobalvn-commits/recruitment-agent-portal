@@ -154,6 +154,7 @@ export default function OrderDetailPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
+    try {
     const [ordRes, candRes, activeAgents, agencyRes, handRes, payRes, policyRes, oaRes] = await Promise.all([
       supabase.from('orders').select('*').eq('id', id).single(),
       supabase.from('candidates').select('*').eq('order_id', id),
@@ -234,7 +235,11 @@ setOrder(o);
     setHandovers((handRes.data ?? []) as OrderHandover[]);
     setPayments((payRes.data ?? []) as OrderPayment[]);
     setDirty(false);
-    setLoading(false);
+    } catch {
+      // data stays empty
+    } finally {
+      setLoading(false);
+    }
   }, [id]);
 
   useEffect(() => { load(); }, [load]);

@@ -160,39 +160,44 @@ export default function CompanyDetailPage() {
   // Load data
   const load = useCallback(async () => {
     setLoading(true);
-    const [compRes, ordRes] = await Promise.all([
-      supabase.from('companies').select('*').eq('id', id).single(),
-      supabase.from('orders').select('id,company_id,job_type,total_labor,labor_missing,status,total_fee_vn,payment_status_vn,service_fee_per_person').eq('company_id', id),
-    ]);
+    try {
+      const [compRes, ordRes] = await Promise.all([
+        supabase.from('companies').select('*').eq('id', id).single(),
+        supabase.from('orders').select('id,company_id,job_type,total_labor,labor_missing,status,total_fee_vn,payment_status_vn,service_fee_per_person').eq('company_id', id),
+      ]);
 
-    if (compRes.data) {
-      const c = compRes.data as Company;
-      setCompany({ ...c, company_media: c.company_media ?? [], doc_links: c.doc_links ?? [], bct_bh_links: c.bct_bh_links ?? [] });
-      setBctDocs((c.bct_bh_links as DocLink[]) ?? []);
-      setForm({
-        company_name: c.company_name ?? '',
-        short_name: c.short_name ?? '',
-        tax_code: c.tax_code ?? '',
-        legal_rep: c.legal_rep ?? '',
-        legal_rep_title: c.legal_rep_title ?? '',
-        address: c.address ?? '',
-        phone: c.phone ?? '',
-        email: c.email ?? '',
-        industry: c.industry ?? '',
-        business_type: c.business_type ?? '',
-        business_reg_authority: c.business_reg_authority ?? '',
-        business_reg_date: c.business_reg_date ?? '',
-        en_company_name: c.en_company_name ?? '',
-        en_industry: c.en_industry ?? '',
-        en_business_type: c.en_business_type ?? '',
-        en_address: c.en_address ?? '',
-        en_legal_rep: c.en_legal_rep ?? '',
-        en_title: c.en_title ?? '',
-      });
+      if (compRes.data) {
+        const c = compRes.data as Company;
+        setCompany({ ...c, company_media: c.company_media ?? [], doc_links: c.doc_links ?? [], bct_bh_links: c.bct_bh_links ?? [] });
+        setBctDocs((c.bct_bh_links as DocLink[]) ?? []);
+        setForm({
+          company_name: c.company_name ?? '',
+          short_name: c.short_name ?? '',
+          tax_code: c.tax_code ?? '',
+          legal_rep: c.legal_rep ?? '',
+          legal_rep_title: c.legal_rep_title ?? '',
+          address: c.address ?? '',
+          phone: c.phone ?? '',
+          email: c.email ?? '',
+          industry: c.industry ?? '',
+          business_type: c.business_type ?? '',
+          business_reg_authority: c.business_reg_authority ?? '',
+          business_reg_date: c.business_reg_date ?? '',
+          en_company_name: c.en_company_name ?? '',
+          en_industry: c.en_industry ?? '',
+          en_business_type: c.en_business_type ?? '',
+          en_address: c.en_address ?? '',
+          en_legal_rep: c.en_legal_rep ?? '',
+          en_title: c.en_title ?? '',
+        });
+      }
+      setOrders((ordRes.data ?? []) as CompanyOrderStat[]);
+      setDirty(false);
+    } catch {
+      // data stays empty
+    } finally {
+      setLoading(false);
     }
-    setOrders((ordRes.data ?? []) as CompanyOrderStat[]);
-    setDirty(false);
-    setLoading(false);
   }, [id]);
 
   useEffect(() => { load(); }, [load]);

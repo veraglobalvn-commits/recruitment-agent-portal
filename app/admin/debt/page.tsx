@@ -27,32 +27,37 @@ export default function DebtPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [ordersRes, paymentsRes] = await Promise.all([
-      supabase.from('orders').select('id, company_name, total_fee_vn, total_fee_bd').order('created_at', { ascending: false }),
-      supabase.from('order_payments').select('order_id, payment_party, currency, amount'),
-    ]);
+    try {
+      const [ordersRes, paymentsRes] = await Promise.all([
+        supabase.from('orders').select('id, company_name, total_fee_vn, total_fee_bd').order('created_at', { ascending: false }),
+        supabase.from('order_payments').select('order_id, payment_party, currency, amount'),
+      ]);
 
-    const orders = (ordersRes.data ?? []) as { id: string; company_name: string | null; total_fee_vn: number | null; total_fee_bd: number | null }[];
-    const payments = (paymentsRes.data ?? []) as { order_id: string; payment_party: string; currency: string; amount: number }[];
+      const orders = (ordersRes.data ?? []) as { id: string; company_name: string | null; total_fee_vn: number | null; total_fee_bd: number | null }[];
+      const payments = (paymentsRes.data ?? []) as { order_id: string; payment_party: string; currency: string; amount: number }[];
 
-    const result: DebtRow[] = orders.map(o => {
-      const orderPayments = payments.filter(p => p.order_id === o.id);
-      return {
-        order_id: o.id,
-        company_name: o.company_name,
-        total_fee_vn: o.total_fee_vn ? Number(o.total_fee_vn) : null,
-        total_paid_company: orderPayments
-          .filter(p => p.payment_party === 'company' && p.currency === 'VND')
-          .reduce((s, p) => s + Number(p.amount), 0),
-        total_fee_bd: o.total_fee_bd ? Number(o.total_fee_bd) : null,
-        total_paid_agent: orderPayments
-          .filter(p => p.payment_party === 'agent')
-          .reduce((s, p) => s + Number(p.amount), 0),
-      };
-    });
+      const result: DebtRow[] = orders.map(o => {
+        const orderPayments = payments.filter(p => p.order_id === o.id);
+        return {
+          order_id: o.id,
+          company_name: o.company_name,
+          total_fee_vn: o.total_fee_vn ? Number(o.total_fee_vn) : null,
+          total_paid_company: orderPayments
+            .filter(p => p.payment_party === 'company' && p.currency === 'VND')
+            .reduce((s, p) => s + Number(p.amount), 0),
+          total_fee_bd: o.total_fee_bd ? Number(o.total_fee_bd) : null,
+          total_paid_agent: orderPayments
+            .filter(p => p.payment_party === 'agent')
+            .reduce((s, p) => s + Number(p.amount), 0),
+        };
+      });
 
-    setRows(result);
-    setLoading(false);
+      setRows(result);
+    } catch {
+      // data stays empty
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => { load(); }, [load]);

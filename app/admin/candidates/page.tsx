@@ -132,21 +132,26 @@ export default function CandidatesPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [candRes, activeAgents, ordRes] = await Promise.all([
-      supabase.from('candidates').select('*'),
-      fetchActiveAgents(),
-      supabase.from('orders').select('id, company_name, job_type'),
-    ]);
-    const candidates = (candRes.data ?? []) as Candidate[];
-    candidates.sort((a, b) => {
-      const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
-      const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
-      return dateB - dateA;
-    });
-    setCandidates(candidates);
-    setAgents(activeAgents);
-    setOrders((ordRes.data ?? []) as OrderBrief[]);
-    setLoading(false);
+    try {
+      const [candRes, activeAgents, ordRes] = await Promise.all([
+        supabase.from('candidates').select('*'),
+        fetchActiveAgents(),
+        supabase.from('orders').select('id, company_name, job_type'),
+      ]);
+      const candidates = (candRes.data ?? []) as Candidate[];
+      candidates.sort((a, b) => {
+        const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+        return dateB - dateA;
+      });
+      setCandidates(candidates);
+      setAgents(activeAgents);
+      setOrders((ordRes.data ?? []) as OrderBrief[]);
+    } catch {
+      // data stays empty, loading stops
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => { load(); }, [load]);

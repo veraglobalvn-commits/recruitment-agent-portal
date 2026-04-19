@@ -338,20 +338,27 @@ export default function Home() {
           router.replace('/auth/pending');
           return;
         }
-        if (agentData?.status === 'inactive') {
+        if (!agentData) {
+          await supabase.auth.signOut();
+          setError('Tài khoản chưa được thiết lập. Liên hệ admin để được hỗ trợ.');
+          setLoading(false);
+          return;
+        }
+        if (agentData.status === 'inactive') {
           await supabase.auth.signOut();
           setError('Tài khoản đã bị vô hiệu hóa. Liên hệ admin để được hỗ trợ.');
           setLoading(false);
           return;
         }
         const adminRoles = ['admin', 'operator', 'read_only'];
-        if (agentData?.role && adminRoles.includes(agentData.role)) {
+        if (adminRoles.includes(agentData.role)) {
           setLoading(false);
           router.replace('/admin');
           return;
         }
         setUserId(data.user.id);
         setIsLoggedIn(true);
+        setLoading(false);
       }
     } catch (err) {
       setError(`Lỗi: ${err instanceof Error ? err.message : String(err)}`);

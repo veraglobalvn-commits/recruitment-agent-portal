@@ -29,28 +29,32 @@ export default function PolicyPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [policyRes, activeAgencies] = await Promise.all([
-      supabase.from('policy_settings').select('key, value').in('key', ['default_fee_vnd', 'default_fee_usd']),
-      fetchActiveAgencies<{ id: string; company_name: string | null; labor_percentage: number | null }>('id, company_name, labor_percentage'),
-    ]);
+    try {
+      const [policyRes, activeAgencies] = await Promise.all([
+        supabase.from('policy_settings').select('key, value').in('key', ['default_fee_vnd', 'default_fee_usd']),
+        fetchActiveAgencies<{ id: string; company_name: string | null; labor_percentage: number | null }>('id, company_name, labor_percentage'),
+      ]);
 
-    if (policyRes.data) {
-      const map = Object.fromEntries((policyRes.data as { key: string; value: string }[]).map(r => [r.key, r.value]));
-      setFeeVnd(map.default_fee_vnd ?? '18270000');
-      setFeeUsd(map.default_fee_usd ?? '1500');
-      setPrevFeeVnd(map.default_fee_vnd ?? '18270000');
-      setPrevFeeUsd(map.default_fee_usd ?? '1500');
+      if (policyRes.data) {
+        const map = Object.fromEntries((policyRes.data as { key: string; value: string }[]).map(r => [r.key, r.value]));
+        setFeeVnd(map.default_fee_vnd ?? '18270000');
+        setFeeUsd(map.default_fee_usd ?? '1500');
+        setPrevFeeVnd(map.default_fee_vnd ?? '18270000');
+        setPrevFeeUsd(map.default_fee_usd ?? '1500');
+      }
+
+      if (activeAgencies && activeAgencies.length > 0) {
+        const rows = activeAgencies as AgentRow[];
+        setAgents(rows);
+        const pct = Object.fromEntries(rows.map(a => [a.id, String(a.labor_percentage ?? '')]));
+        setAgentPct(pct);
+        setPrevAgentPct(pct);
+      }
+    } catch {
+      // data stays empty
+    } finally {
+      setLoading(false);
     }
-
-    if (activeAgencies && activeAgencies.length > 0) {
-      const rows = activeAgencies as AgentRow[];
-      setAgents(rows);
-      const pct = Object.fromEntries(rows.map(a => [a.id, String(a.labor_percentage ?? '')]));
-      setAgentPct(pct);
-      setPrevAgentPct(pct);
-    }
-
-    setLoading(false);
   }, []);
 
   useEffect(() => { load(); }, [load]);

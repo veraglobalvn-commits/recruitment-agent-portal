@@ -50,34 +50,39 @@ export default function CompaniesPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('companies')
-      .select(`
-        *,
-        orders!orders_company_id_fkey(
-          id, status, total_fee_vn
-        )
-      `)
-      .is('deleted_at', null)
-      .order('created_at', { ascending: false });
+    try {
+      const { data, error } = await supabase
+        .from('companies')
+        .select(`
+          *,
+          orders!orders_company_id_fkey(
+            id, status, total_fee_vn
+          )
+        `)
+        .is('deleted_at', null)
+        .order('created_at', { ascending: false });
 
-    if (error) { console.error(error); setLoading(false); return; }
+      if (error) throw error;
 
-    const rows: CompanyRow[] = (data ?? []).map((c: any) => {
-      const orders = c.orders ?? [];
-      return {
-        ...c,
-        company_media: c.company_media ?? [],
-        doc_links: c.doc_links ?? [],
-        total_orders: orders.length,
-        active_orders: orders.filter((o: any) => o.status !== 'Đã tuyển đủ').length,
-        total_revenue: orders.reduce((s: number, o: any) => s + (o.total_fee_vn || 0), 0),
-      };
-    });
+      const rows: CompanyRow[] = (data ?? []).map((c: any) => {
+        const orders = c.orders ?? [];
+        return {
+          ...c,
+          company_media: c.company_media ?? [],
+          doc_links: c.doc_links ?? [],
+          total_orders: orders.length,
+          active_orders: orders.filter((o: any) => o.status !== 'Đã tuyển đủ').length,
+          total_revenue: orders.reduce((s: number, o: any) => s + (o.total_fee_vn || 0), 0),
+        };
+      });
 
-    setCompanies(rows);
-    setFiltered(rows);
-    setLoading(false);
+      setCompanies(rows);
+      setFiltered(rows);
+    } catch {
+      // data stays empty
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => { load(); }, [load]);

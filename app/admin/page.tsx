@@ -141,36 +141,41 @@ export default function AdminDashboard() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [ordersRes, candidatesRes, activeAgents, oaRes] = await Promise.all([
-      supabase.from('orders').select('id,company_name,job_type,total_labor,labor_missing,status,total_fee_vn,payment_status_vn,legal_status,agent_ids'),
-      supabase.from('candidates').select('id_ld,agent_id,order_id,interview_status'),
-      fetchActiveAgents('id, full_name, short_name'),
-      supabase.from('order_agents').select('agent_id,assigned_labor_number'),
-    ]);
+    try {
+      const [ordersRes, candidatesRes, activeAgents, oaRes] = await Promise.all([
+        supabase.from('orders').select('id,company_name,job_type,total_labor,labor_missing,status,total_fee_vn,payment_status_vn,legal_status,agent_ids'),
+        supabase.from('candidates').select('id_ld,agent_id,order_id,interview_status'),
+        fetchActiveAgents('id, full_name, short_name'),
+        supabase.from('order_agents').select('agent_id,assigned_labor_number'),
+      ]);
 
-    const orders: OrderStat[] = (ordersRes.data || []) as OrderStat[];
-    const candidates = candidatesRes.data || [];
-    const agentsRaw = activeAgents || [];
+      const orders: OrderStat[] = (ordersRes.data || []) as OrderStat[];
+      const candidates = candidatesRes.data || [];
+      const agentsRaw = activeAgents || [];
 
-    const oaTargetMap: Record<string, number> = {};
-    (oaRes.data || []).forEach((oa: any) => {
-      oaTargetMap[oa.agent_id] = (oaTargetMap[oa.agent_id] || 0) + (oa.assigned_labor_number || 0);
-    });
+      const oaTargetMap: Record<string, number> = {};
+      (oaRes.data || []).forEach((oa: any) => {
+        oaTargetMap[oa.agent_id] = (oaTargetMap[oa.agent_id] || 0) + (oa.assigned_labor_number || 0);
+      });
 
-    const agents: AgentStat[] = agentsRaw.map((ag: any) => {
-      const agCands = candidates.filter((c: any) => c.agent_id === ag.id);
-      const passed = agCands.filter((c: any) => c.interview_status === 'Passed').length;
-      const target = oaTargetMap[ag.id] || 0;
-      return { id: ag.id, full_name: ag.full_name, short_name: ag.short_name, total_candidates: agCands.length, passed, target };
-    });
+      const agents: AgentStat[] = agentsRaw.map((ag: any) => {
+        const agCands = candidates.filter((c: any) => c.agent_id === ag.id);
+        const passed = agCands.filter((c: any) => c.interview_status === 'Passed').length;
+        const target = oaTargetMap[ag.id] || 0;
+        return { id: ag.id, full_name: ag.full_name, short_name: ag.short_name, total_candidates: agCands.length, passed, target };
+      });
 
-    const totalRevenue = orders.reduce((s, o) => s + (o.total_fee_vn || 0), 0);
-    const totalLaborTarget = orders.reduce((s, o) => s + (o.total_labor || 0), 0);
-    const totalPassed = candidates.filter((c: any) => c.interview_status === 'Passed').length;
+      const totalRevenue = orders.reduce((s, o) => s + (o.total_fee_vn || 0), 0);
+      const totalLaborTarget = orders.reduce((s, o) => s + (o.total_labor || 0), 0);
+      const totalPassed = candidates.filter((c: any) => c.interview_status === 'Passed').length;
 
-    setData({ orders, agents, totalRevenue, totalLaborTarget, totalPassed });
-    setLastUpdated(new Date());
-    setLoading(false);
+      setData({ orders, agents, totalRevenue, totalLaborTarget, totalPassed });
+      setLastUpdated(new Date());
+    } catch {
+      // data stays empty
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => { load(); }, [load]);
