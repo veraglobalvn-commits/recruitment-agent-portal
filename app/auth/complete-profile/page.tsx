@@ -11,30 +11,51 @@ export default function CompleteProfilePage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [hasSession, setHasSession] = useState(false);
-  const [checking, setChecking] = useState(true);
+  const [pageState, setPageState] = useState<'checking' | 'invalid' | 'ready' | 'success'>('checking');
   const [userId, setUserId] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
       try {
         const supabase = createSupabaseClient();
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session) {
-          setHasSession(true);
-          setUserId(session.user.id);
-          const { data } = await supabase
-            .from('users')
-            .select('full_name')
-            .eq('supabase_uid', session.user.id)
-            .maybeSingle();
-          if (data?.full_name) {
-            router.replace('/');
+
+        // Handle PKCE code from invite link if present
+        const urlParams = new URLSearchParams(window.location.search);
+        const code = urlParams.get('code');
+        if (code) {
+          const { error: exchangeErr } = await supabase.auth.exchangeCodeForSession(code);
+          if (exchangeErr) {
+            console.error('[complete-profile] Code exchange error:', exchangeErr.message);
+            setPageState('invalid');
             return;
           }
         }
-      } catch {}
-      setChecking(false);
+
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          setPageState('invalid');
+          return;
+        }
+
+        setUserId(session.user.id);
+
+        // Use service role via API to bypass RLS
+        const { data: userData } = await supabase
+          .from('users')
+          .select('full_name')
+          .eq('supabase_uid', session.user.id)
+          .maybeSingle();
+
+        if (userData?.full_name) {
+          router.replace('/');
+          return;
+        }
+
+        setPageState('ready');
+      } catch (err) {
+        console.error('[complete-profile] Init error:', err);
+        setPageState('invalid');
+      }
     })();
   }, [router]);
 
@@ -59,7 +80,21 @@ export default function CompleteProfilePage() {
         .eq('supabase_uid', userId);
       if (dbErr) throw dbErr;
 
-      router.replace('/');
+      setPageState('success');
+      setTimeout(() => {
+        // After profile complete, route based on role
+        supabase.auth.getUser().then(({ data: { user: u } }) => {
+          if (u) {
+            supabase.from('users').select('role').eq('supabase_uid', u.id).maybeSingle()
+              .then(({ data: d }) => {
+                if (d?.role === 'admin') router.replace('/admin');
+                else router.replace('/');
+              });
+          } else {
+            router.replace('/');
+          }
+        });
+      }, 1500);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Có lỗi xảy ra');
     } finally {
@@ -67,7 +102,7 @@ export default function CompleteProfilePage() {
     }
   };
 
-  if (checking) {
+  if (pageState === 'checking') {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-gray-400 text-sm">Loading...</div>
@@ -75,7 +110,7 @@ export default function CompleteProfilePage() {
     );
   }
 
-  if (!hasSession) {
+  if (pageState === 'invalid') {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
         <div className="bg-white p-6 md:p-8 rounded-2xl shadow-md w-full max-w-sm text-center">
@@ -83,6 +118,18 @@ export default function CompleteProfilePage() {
           <h1 className="text-lg font-bold text-gray-800 mb-2">Link không hợp lệ</h1>
           <p className="text-sm text-gray-500 mb-4">Link mời đã hết hạn. Vui lòng yêu cầu gửi lại.</p>
           <a href="/" className="text-sm text-blue-600 hover:underline">← Quay lại đăng nhập</a>
+        </div>
+      </div>
+    );
+  }
+
+  if (pageState === 'success') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+        <div className="bg-white p-6 md:p-8 rounded-2xl shadow-md w-full max-w-sm text-center">
+          <div className="text-3xl mb-3">✅</div>
+          <h1 className="text-lg font-bold text-green-700 mb-2">Hoàn tất!</h1>
+          <p className="text-sm text-gray-500">Đang chuyển đến trang chính...</p>
         </div>
       </div>
     );

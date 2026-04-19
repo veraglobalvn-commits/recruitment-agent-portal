@@ -10,33 +10,50 @@ export default function ResetPasswordPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
-  const [hasSession, setHasSession] = useState(false);
-  const [checking, setChecking] = useState(true);
-  const [exchanging, setExchanging] = useState(true);
+  const [pageState, setPageState] = useState<'checking' | 'invalid' | 'ready' | 'success'>('checking');
 
   useEffect(() => {
     (async () => {
       try {
         const supabase = createSupabaseClient();
-        const params = new URLSearchParams(window.location.search);
-        const code = params.get('code');
+        const params = new URLSearchParams(window.location.hash.replace('#', '?'));
+        let accessToken = params.get('access_token');
+        let refreshToken = params.get('refresh_token');
+        let type = params.get('type');
 
-        if (code) {
-          const { error: exchangeErr } = await supabase.auth.exchangeCodeForSession(code);
-          if (exchangeErr) {
-            console.error('[reset-password] Exchange error:', exchangeErr.message);
-            setExchanging(false);
-            setChecking(false);
+        if (!accessToken) {
+          const urlParams = new URLSearchParams(window.location.search);
+          const code = urlParams.get('code');
+          if (code) {
+            const { error: exchangeErr } = await supabase.auth.exchangeCodeForSession(code);
+            if (exchangeErr) {
+              console.error('[reset-password] Code exchange error:', exchangeErr.message);
+              setPageState('invalid');
+              return;
+            }
+          }
+        } else if (accessToken && refreshToken) {
+          const { error: sessionErr } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+          if (sessionErr) {
+            console.error('[reset-password] Set session error:', sessionErr.message);
+            setPageState('invalid');
             return;
           }
         }
 
         const { data: { session } } = await supabase.auth.getSession();
-        setHasSession(!!session);
-      } catch {}
-      setExchanging(false);
-      setChecking(false);
+        if (session) {
+          setPageState('ready');
+        } else {
+          setPageState('invalid');
+        }
+      } catch (err) {
+        console.error('[reset-password] Init error:', err);
+        setPageState('invalid');
+      }
     })();
   }, []);
 
@@ -61,7 +78,8 @@ export default function ResetPasswordPage() {
         setError(updateErr.message);
         return;
       }
-      setSuccess(true);
+      setPageState('success');
+      await supabase.auth.signOut();
       setTimeout(() => router.replace('/'), 3000);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Có lỗi xảy ra');
@@ -70,7 +88,7 @@ export default function ResetPasswordPage() {
     }
   };
 
-  if (checking || exchanging) {
+  if (pageState === 'checking') {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-gray-400 text-sm">Loading...</div>
@@ -78,7 +96,7 @@ export default function ResetPasswordPage() {
     );
   }
 
-  if (!hasSession) {
+  if (pageState === 'invalid') {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
         <div className="bg-white p-6 md:p-8 rounded-2xl shadow-md w-full max-w-sm text-center">
@@ -91,13 +109,14 @@ export default function ResetPasswordPage() {
     );
   }
 
-  if (success) {
+  if (pageState === 'success') {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
         <div className="bg-white p-6 md:p-8 rounded-2xl shadow-md w-full max-w-sm text-center">
           <div className="text-3xl mb-3">✅</div>
           <h1 className="text-lg font-bold text-green-700 mb-2">Mật khẩu đã được cập nhật</h1>
-          <p className="text-sm text-gray-500">Đang chuyển về trang đăng nhập...</p>
+          <p className="text-sm text-gray-500 mb-4">Đang chuyển về trang đăng nhập...</p>
+          <a href="/" className="text-sm text-blue-600 hover:underline">← Đăng nhập ngay</a>
         </div>
       </div>
     );
