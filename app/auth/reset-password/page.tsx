@@ -13,14 +13,29 @@ export default function ResetPasswordPage() {
   const [success, setSuccess] = useState(false);
   const [hasSession, setHasSession] = useState(false);
   const [checking, setChecking] = useState(true);
+  const [exchanging, setExchanging] = useState(true);
 
   useEffect(() => {
     (async () => {
       try {
         const supabase = createSupabaseClient();
+        const params = new URLSearchParams(window.location.search);
+        const code = params.get('code');
+
+        if (code) {
+          const { error: exchangeErr } = await supabase.auth.exchangeCodeForSession(code);
+          if (exchangeErr) {
+            console.error('[reset-password] Exchange error:', exchangeErr.message);
+            setExchanging(false);
+            setChecking(false);
+            return;
+          }
+        }
+
         const { data: { session } } = await supabase.auth.getSession();
         setHasSession(!!session);
       } catch {}
+      setExchanging(false);
       setChecking(false);
     })();
   }, []);
@@ -55,7 +70,7 @@ export default function ResetPasswordPage() {
     }
   };
 
-  if (checking) {
+  if (checking || exchanging) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-gray-400 text-sm">Loading...</div>
@@ -69,7 +84,7 @@ export default function ResetPasswordPage() {
         <div className="bg-white p-6 md:p-8 rounded-2xl shadow-md w-full max-w-sm text-center">
           <div className="text-3xl mb-3">⚠️</div>
           <h1 className="text-lg font-bold text-gray-800 mb-2">Link không hợp lệ</h1>
-          <p className="text-sm text-gray-500 mb-4">Link đặt lại mật khẩu đã hết hạn hoặc không hợp lệ.</p>
+          <p className="text-sm text-gray-500 mb-4">Link đặt lại mật khẩu đã hết hạn. Vui lòng yêu cầu gửi lại.</p>
           <a href="/" className="text-sm text-blue-600 hover:underline">← Quay lại đăng nhập</a>
         </div>
       </div>
@@ -87,6 +102,8 @@ export default function ResetPasswordPage() {
       </div>
     );
   }
+
+  const inputCls = 'w-full px-3 py-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent';
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
@@ -111,7 +128,7 @@ export default function ResetPasswordPage() {
               onChange={(e) => setPassword(e.target.value)}
               required
               minLength={6}
-              className="w-full px-3 py-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className={inputCls}
               placeholder="Tối thiểu 6 ký tự"
             />
           </div>
@@ -122,7 +139,7 @@ export default function ResetPasswordPage() {
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               required
-              className="w-full px-3 py-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className={inputCls}
               placeholder="Nhập lại mật khẩu"
             />
           </div>
