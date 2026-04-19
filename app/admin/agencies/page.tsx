@@ -60,14 +60,12 @@ export default function AgenciesPage() {
       });
 
       const memberCountMap: Record<string, number> = {};
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      users.forEach((u: any) => {
+      (users as unknown as { id: string; agency_id: string | null }[]).forEach((u) => {
         if (u.agency_id) memberCountMap[u.agency_id] = (memberCountMap[u.agency_id] || 0) + 1;
       });
 
       const agencyUserIds: Record<string, string[]> = {};
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      users.forEach((u: any) => {
+      (users as unknown as { id: string; agency_id: string | null }[]).forEach((u) => {
         const aid = u.agency_id;
         if (aid) {
           if (!agencyUserIds[aid]) agencyUserIds[aid] = [];
