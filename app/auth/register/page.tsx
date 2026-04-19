@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 
 export default function RegisterPage() {
   const router = useRouter();
-  const [form, setForm] = useState({ email: '', full_name: '', password: '', confirm: '' });
+  const [form, setForm] = useState({ email: '', full_name: '', company_name: '', password: '', confirm: '' });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -30,6 +30,7 @@ export default function RegisterPage() {
         body: JSON.stringify({
           email: form.email.trim(),
           full_name: form.full_name.trim(),
+          company_name: form.company_name.trim() || undefined,
           password: form.password,
         }),
       });
@@ -72,6 +73,17 @@ export default function RegisterPage() {
               className="w-full px-3 py-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               placeholder="Nguyễn Văn A"
               autoComplete="name"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Tên công ty / Tổ chức</label>
+            <input
+              type="text"
+              value={form.company_name}
+              onChange={(e) => setForm(f => ({ ...f, company_name: e.target.value }))}
+              className="w-full px-3 py-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="Công ty TNHH ABC (không bắt buộc)"
+              autoComplete="organization"
             />
           </div>
           <div>

@@ -20,9 +20,10 @@ export async function POST(req: NextRequest) {
       email?: string;
       full_name?: string;
       password?: string;
+      company_name?: string;
     };
 
-    const { email, full_name, password } = body;
+    const { email, full_name, password, company_name } = body;
 
     if (!email?.trim()) {
       return NextResponse.json({ error: 'Email là bắt buộc' }, { status: 400 });
@@ -79,8 +80,22 @@ export async function POST(req: NextRequest) {
       suffix++;
     }
 
-    const defaultPerms = ROLE_PERMISSIONS['agent'] || [];
+    // Step 1: Create agency row first (FK agencies.id must exist before users.agency_id)
+    const { error: agencyErr } = await adminClient
+      .from('agencies')
+      .insert({
+        id: finalId,
+        company_name: company_name?.trim() || null,
+        status: 'active',
+      });
 
+    if (agencyErr) {
+      await adminClient.auth.admin.deleteUser(uid);
+      return NextResponse.json({ error: `Tạo agency thất bại: ${agencyErr.message}` }, { status: 500 });
+    }
+
+    // Step 2: Create user row with agency_id pointing to the agency just created
+    const defaultPerms = ROLE_PERMISSIONS['agent'] || [];
     const { error: dbErr } = await adminClient
       .from('users')
       .insert({
@@ -91,15 +106,15 @@ export async function POST(req: NextRequest) {
         role: 'agent',
         permissions: defaultPerms,
         status: 'pending',
+        agency_id: finalId,
       });
 
     if (dbErr) {
+      // Rollback: delete agency then auth user
+      await adminClient.from('agencies').delete().eq('id', finalId);
       await adminClient.auth.admin.deleteUser(uid);
       return NextResponse.json({ error: `Tạo hồ sơ thất bại: ${dbErr.message}` }, { status: 500 });
     }
-
-    // Set agency_id = own ID after insert (self-reference requires row to exist first)
-    await adminClient.from('users').update({ agency_id: finalId }).eq('id', finalId);
 
     return NextResponse.json(
       { message: 'Đăng ký thành công. Vui lòng chờ admin kích hoạt tài khoản.' },

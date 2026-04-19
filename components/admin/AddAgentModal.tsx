@@ -17,6 +17,7 @@ export default function AddAgentModal({ onClose, onSaved, showRoleSelector, show
     email: '',
     role: 'agent',
     agency_id: '',
+    company_name: '',
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -78,6 +79,7 @@ export default function AddAgentModal({ onClose, onSaved, showRoleSelector, show
           email: form.email.trim().toLowerCase(),
           role,
           agency_id: form.agency_id || undefined,
+          company_name: form.company_name.trim() || undefined,
         }),
       });
 
@@ -189,6 +191,19 @@ export default function AddAgentModal({ onClose, onSaved, showRoleSelector, show
                     <option value="agent">Agent (Owner)</option>
                     <option value="member">Member (Agent)</option>
                   </select>
+                </div>
+              )}
+
+              {(showRoleSelector ? form.role === 'agent' : true) && !showAgencySelector && (
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Tên công ty / Agency</label>
+                  <input
+                    type="text"
+                    value={form.company_name}
+                    onChange={(e) => set('company_name', e.target.value)}
+                    placeholder="Công ty TNHH ABC (không bắt buộc)"
+                    className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[44px]"
+                  />
                 </div>
               )}
 

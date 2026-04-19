@@ -55,6 +55,7 @@ export async function POST(req: NextRequest) {
       agent_id?: string;
       role?: string;
       agency_id?: string;
+      company_name?: string;
     };
 
     const { email, role, agency_id } = body;
@@ -102,6 +103,68 @@ export async function POST(req: NextRequest) {
     const uid = authData.user.id;
     const defaultPerms = ROLE_PERMISSIONS[assignedRole] || [];
 
+    // For agent role: create agency row first so FK constraint is satisfied
+    if (assignedRole === 'agent') {
+      const agencyInsertId = agency_id || normalizedAgentId;
+      // Only create agency if we're using a new ID (not an existing agency)
+      if (!agency_id) {
+        const { error: agencyErr } = await adminClient
+          .from('agencies')
+          .insert({
+            id: agencyInsertId,
+            company_name: body.company_name?.trim() || null,
+            status: 'active',
+          });
+
+        if (agencyErr) {
+          const msg = agencyErr.message.toLowerCase();
+          if (!msg.includes('duplicate') && !msg.includes('unique') && !msg.includes('already exists')) {
+            await adminClient.auth.admin.deleteUser(uid);
+            return NextResponse.json({ error: `Tạo agency thất bại: ${agencyErr.message}` }, { status: 500 });
+          }
+          // If duplicate, the agency already exists — OK to proceed
+        }
+      }
+
+      const { data: agentData, error: dbErr } = await adminClient
+        .from('users')
+        .insert({
+          id: normalizedAgentId,
+          supabase_uid: uid,
+          full_name: body.full_name?.trim() || null,
+          short_name: normalizedAgentId,
+          role: assignedRole,
+          permissions: defaultPerms,
+          status: 'active',
+          agency_id: agencyInsertId,
+        })
+        .select()
+        .single();
+
+      if (dbErr) {
+        // Rollback: delete newly created agency (only if we created it) and auth user
+        if (!agency_id) {
+          await adminClient.from('agencies').delete().eq('id', agencyInsertId);
+        }
+        await adminClient.auth.admin.deleteUser(uid);
+        const dbMsg = dbErr.message.toLowerCase();
+        if (dbMsg.includes('duplicate') || dbMsg.includes('unique') || dbMsg.includes('already exists')) {
+          return NextResponse.json({ error: 'User ID đã tồn tại' }, { status: 409 });
+        }
+        return NextResponse.json({ error: `Tạo user thất bại: ${dbErr.message}` }, { status: 500 });
+      }
+
+      return NextResponse.json({
+        agent: agentData,
+        status: 'created',
+        credentials: {
+          email: email.trim().toLowerCase(),
+          password: tempPassword,
+        },
+      });
+    }
+
+    // For non-agent roles (admin, operator, read_only, member): no agency creation
     const insertData: Record<string, unknown> = {
       id: normalizedAgentId,
       supabase_uid: uid,
@@ -112,10 +175,7 @@ export async function POST(req: NextRequest) {
       status: 'active',
     };
 
-    if (assignedRole === 'agent') {
-      // Agent is their own agency; agency_id defaults to their own ID
-      insertData.agency_id = agency_id || normalizedAgentId;
-    } else if (agency_id) {
+    if (agency_id) {
       insertData.agency_id = agency_id;
     }
 
