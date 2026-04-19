@@ -91,13 +91,15 @@ export async function POST(req: NextRequest) {
         role: 'agent',
         permissions: defaultPerms,
         status: 'pending',
-        agency_id: finalId,
       });
 
     if (dbErr) {
       await adminClient.auth.admin.deleteUser(uid);
       return NextResponse.json({ error: `Tạo hồ sơ thất bại: ${dbErr.message}` }, { status: 500 });
     }
+
+    // Set agency_id = own ID after insert (self-reference requires row to exist first)
+    await adminClient.from('users').update({ agency_id: finalId }).eq('id', finalId);
 
     return NextResponse.json(
       { message: 'Đăng ký thành công. Vui lòng chờ admin kích hoạt tài khoản.' },
