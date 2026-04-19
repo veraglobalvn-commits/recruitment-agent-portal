@@ -334,6 +334,7 @@ export default function Home() {
 
         if (agentData?.status === 'pending') {
           await supabase.auth.signOut();
+          setLoading(false);
           router.replace('/auth/pending');
           return;
         }
@@ -345,6 +346,7 @@ export default function Home() {
         }
         const adminRoles = ['admin', 'operator', 'read_only'];
         if (agentData?.role && adminRoles.includes(agentData.role)) {
+          setLoading(false);
           router.replace('/admin');
           return;
         }
