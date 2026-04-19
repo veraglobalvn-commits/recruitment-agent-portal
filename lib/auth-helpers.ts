@@ -29,7 +29,7 @@ export async function getAdminUser(req: NextRequest) {
     .from('users')
     .select('role')
     .eq('supabase_uid', result.user.id)
-    .single();
+    .maybeSingle();
 
   if (!agent || agent.role !== 'admin') return null;
   return result;

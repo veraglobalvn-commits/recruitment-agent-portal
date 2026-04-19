@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
 import AddAgentModal from '@/components/admin/AddAgentModal';
 
-type RoleFilter = 'all' | 'agent' | 'manager' | 'operator' | 'admin' | 'inactive';
+type RoleFilter = 'all' | 'agent' | 'member' | 'operator' | 'read_only' | 'admin' | 'pending' | 'inactive';
 
 interface UserRow {
   id: string;
@@ -19,20 +19,30 @@ interface UserRow {
 function RolePill({ role }: { role: string | null }) {
   const map: Record<string, string> = {
     admin: 'bg-purple-100 text-purple-700',
+    operator: 'bg-orange-100 text-orange-700',
+    read_only: 'bg-gray-100 text-gray-500',
     agent: 'bg-blue-100 text-blue-600',
-    manager: 'bg-indigo-100 text-indigo-700',
-    operator: 'bg-gray-100 text-gray-600',
+    member: 'bg-teal-100 text-teal-700',
   };
-  const labels: Record<string, string> = { admin: 'Admin', agent: 'Agent', manager: 'Manager', operator: 'Operator' };
+  const labels: Record<string, string> = {
+    admin: 'Admin',
+    operator: 'Operator',
+    read_only: 'Read Only',
+    agent: 'Agent',
+    member: 'Member',
+    manager: 'Member',
+  };
   const cls = map[role || ''] || 'bg-gray-100 text-gray-600';
   return <span className={`text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap ${cls}`}>{labels[role || ''] || role || '—'}</span>;
 }
 
 const ROLE_FILTERS: { key: RoleFilter; label: string }[] = [
   { key: 'all', label: 'Tất cả' },
+  { key: 'pending', label: 'Chờ duyệt' },
   { key: 'agent', label: 'Agent' },
-  { key: 'manager', label: 'Manager' },
+  { key: 'member', label: 'Member' },
   { key: 'operator', label: 'Operator' },
+  { key: 'read_only', label: 'Read Only' },
   { key: 'admin', label: 'Admin' },
   { key: 'inactive', label: 'Ngừng HD' },
 ];
@@ -44,6 +54,7 @@ export default function UsersPage() {
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState<RoleFilter>('all');
   const [showModal, setShowModal] = useState(false);
+  const [approvingId, setApprovingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -51,7 +62,7 @@ export default function UsersPage() {
       const { data, error } = await supabase
         .from('users')
         .select('id, full_name, short_name, role, status, agency_id')
-        .order('id');
+        .order('created_at', { ascending: false });
       if (error) throw error;
       setUsers((data || []) as UserRow[]);
     } catch (err) {
@@ -71,17 +82,44 @@ export default function UsersPage() {
           (u.full_name ?? '').toLowerCase().includes(q) ||
           (u.short_name ?? '').toLowerCase().includes(q) ||
           u.id.toLowerCase().includes(q);
-        const matchRole = roleFilter === 'all'
-          ? u.status !== 'inactive'
-          : roleFilter === 'inactive'
-            ? u.status === 'inactive'
-            : u.role === roleFilter && u.status !== 'inactive';
+        const matchRole =
+          roleFilter === 'all' ? u.status !== 'inactive' && u.status !== 'pending'
+          : roleFilter === 'inactive' ? u.status === 'inactive'
+          : roleFilter === 'pending' ? u.status === 'pending'
+          : u.role === roleFilter && u.status === 'active';
         return matchSearch && matchRole;
       }),
     );
   }, [search, roleFilter, users]);
 
-  const activeCount = users.filter((u) => u.status !== 'inactive').length;
+  const handleApprove = useCallback(async (userId: string) => {
+    setApprovingId(userId);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const res = await fetch(`/api/admin/agents/${userId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ status: 'active' }),
+      });
+      if (res.ok) {
+        setUsers(prev => prev.map(u => u.id === userId ? { ...u, status: 'active' } : u));
+      } else {
+        const err = await res.json() as { error?: string };
+        alert(err.error || 'Kích hoạt thất bại');
+      }
+    } catch {
+      alert('Có lỗi xảy ra');
+    } finally {
+      setApprovingId(null);
+    }
+  }, []);
+
+  const activeCount = users.filter((u) => u.status === 'active').length;
+  const pendingCount = users.filter((u) => u.status === 'pending').length;
   const inactiveCount = users.filter((u) => u.status === 'inactive').length;
 
   return (
@@ -89,7 +127,9 @@ export default function UsersPage() {
       <div className="flex items-center gap-3 pt-1">
         <div className="flex-1">
           <h1 className="text-lg font-bold text-slate-800">Tài khoản</h1>
-          <p className="text-xs text-gray-400">{activeCount} hoạt động · {inactiveCount} ngừng</p>
+          <p className="text-xs text-gray-400">
+            {activeCount} hoạt động · {pendingCount > 0 && <span className="text-orange-500 font-semibold">{pendingCount} chờ duyệt · </span>}{inactiveCount} ngừng
+          </p>
         </div>
         <button
           onClick={() => setShowModal(true)}
@@ -115,13 +155,18 @@ export default function UsersPage() {
           <button
             key={f.key}
             onClick={() => setRoleFilter(f.key)}
-            className={`text-xs px-3 py-1.5 rounded-full font-medium whitespace-nowrap transition-colors min-h-[36px] ${
+            className={`relative text-xs px-3 py-1.5 rounded-full font-medium whitespace-nowrap transition-colors min-h-[36px] ${
               roleFilter === f.key
                 ? 'bg-blue-600 text-white'
                 : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
             }`}
           >
             {f.label}
+            {f.key === 'pending' && pendingCount > 0 && (
+              <span className="ml-1 bg-orange-500 text-white text-[10px] rounded-full px-1.5 py-0.5 font-bold">
+                {pendingCount}
+              </span>
+            )}
           </button>
         ))}
       </div>
@@ -133,26 +178,41 @@ export default function UsersPage() {
       ) : filtered.length === 0 ? (
         <div className="text-center py-12">
           <p className="text-gray-300 text-4xl mb-3">🔑</p>
-          <p className="text-gray-500 text-sm">{search || roleFilter !== 'all' ? 'Không tìm thấy kết quả' : 'Chưa có tài khoản nào'}</p>
+          <p className="text-gray-500 text-sm">
+            {roleFilter === 'pending' ? 'Không có tài khoản nào chờ duyệt' : search || roleFilter !== 'all' ? 'Không tìm thấy kết quả' : 'Chưa có tài khoản nào'}
+          </p>
         </div>
       ) : (
         <>
           <div className="md:hidden space-y-3">
             {filtered.map((u) => (
-              <Link
-                key={u.id}
-                href={`/admin/agents/${u.id}`}
-                className="flex items-center gap-3 p-4 bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow active:scale-[0.99]"
-              >
-                <div className={`w-11 h-11 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0 ${u.status === 'inactive' ? 'bg-red-100 text-red-400' : u.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+              <div key={u.id} className="flex items-center gap-3 p-4 bg-white rounded-2xl border border-gray-100 shadow-sm">
+                <div className={`w-11 h-11 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0 ${
+                  u.status === 'pending' ? 'bg-orange-100 text-orange-500'
+                  : u.status === 'inactive' ? 'bg-red-100 text-red-400'
+                  : u.role === 'admin' ? 'bg-purple-100 text-purple-700'
+                  : 'bg-blue-100 text-blue-700'
+                }`}>
                   {(u.short_name || u.full_name || '?')[0].toUpperCase()}
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-sm text-slate-800 truncate">{u.full_name || u.id}</p>
                   <p className="text-xs text-gray-400 truncate">{u.id}</p>
                 </div>
-                <RolePill role={u.role} />
-              </Link>
+                {u.status === 'pending' ? (
+                  <button
+                    onClick={() => handleApprove(u.id)}
+                    disabled={approvingId === u.id}
+                    className="text-xs bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg font-medium transition-colors disabled:opacity-50 min-h-[36px]"
+                  >
+                    {approvingId === u.id ? '...' : 'Kích hoạt'}
+                  </button>
+                ) : (
+                  <Link href={`/admin/users/${u.id}`}>
+                    <RolePill role={u.role} />
+                  </Link>
+                )}
+              </div>
             ))}
           </div>
 
@@ -170,7 +230,12 @@ export default function UsersPage() {
                   <tr key={u.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
-                        <div className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0 ${u.status === 'inactive' ? 'bg-red-100 text-red-400' : u.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                        <div className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0 ${
+                          u.status === 'pending' ? 'bg-orange-100 text-orange-500'
+                          : u.status === 'inactive' ? 'bg-red-100 text-red-400'
+                          : u.role === 'admin' ? 'bg-purple-100 text-purple-700'
+                          : 'bg-blue-100 text-blue-700'
+                        }`}>
                           {(u.short_name || u.full_name || '?')[0].toUpperCase()}
                         </div>
                         <span className="font-medium text-slate-800">{u.full_name || '—'}</span>
@@ -179,12 +244,26 @@ export default function UsersPage() {
                     <td className="px-4 py-3 text-xs text-gray-500">{u.id}</td>
                     <td className="px-4 py-3"><RolePill role={u.role} /></td>
                     <td className="px-4 py-3">
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${u.status === 'inactive' ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-700'}`}>
-                        {u.status === 'inactive' ? 'Ngừng HD' : 'Hoạt động'}
-                      </span>
+                      {u.status === 'pending' ? (
+                        <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-orange-100 text-orange-600">Chờ duyệt</span>
+                      ) : (
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${u.status === 'inactive' ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-700'}`}>
+                          {u.status === 'inactive' ? 'Ngừng HD' : 'Hoạt động'}
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3">
-                      <Link href={`/admin/agents/${u.id}`} className="text-xs text-blue-600 hover:underline font-medium">Xem →</Link>
+                      {u.status === 'pending' ? (
+                        <button
+                          onClick={() => handleApprove(u.id)}
+                          disabled={approvingId === u.id}
+                          className="text-xs bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg font-medium transition-colors disabled:opacity-50"
+                        >
+                          {approvingId === u.id ? 'Đang xử lý...' : 'Kích hoạt'}
+                        </button>
+                      ) : (
+                        <Link href={`/admin/users/${u.id}`} className="text-xs text-blue-600 hover:underline font-medium">Xem →</Link>
+                      )}
                     </td>
                   </tr>
                 ))}

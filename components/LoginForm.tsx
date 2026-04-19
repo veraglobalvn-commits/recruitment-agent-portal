@@ -122,19 +122,19 @@ export default function LoginForm({
 
         <form onSubmit={onSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Tên đăng nhập</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
             <input
-              type="text"
+              type="email"
               value={username}
               onChange={(e) => onUsernameChange(e.target.value)}
               required
               className="w-full px-3 py-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Email hoặc ID tài khoản (VD: NAM_2026)"
-              autoComplete="username"
+              placeholder="your@email.com"
+              autoComplete="email"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Mật khẩu</label>
             <input
               type="password"
               value={password}
@@ -150,16 +150,24 @@ export default function LoginForm({
             disabled={loading}
             className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg text-sm transition-colors disabled:opacity-50 min-h-[44px]"
           >
-            {loading ? 'Signing in...' : 'Sign In'}
+            {loading ? 'Đang đăng nhập...' : 'Đăng nhập'}
           </button>
         </form>
 
-        <button
-          onClick={() => setMode('forgot')}
-          className="w-full mt-3 text-sm text-gray-500 hover:text-blue-600 py-2"
-        >
-          Quên mật khẩu?
-        </button>
+        <div className="mt-3 flex flex-col gap-1">
+          <button
+            onClick={() => setMode('forgot')}
+            className="w-full text-sm text-gray-500 hover:text-blue-600 py-2"
+          >
+            Quên mật khẩu?
+          </button>
+          <a
+            href="/auth/register"
+            className="w-full text-center text-sm text-blue-600 hover:text-blue-800 py-2"
+          >
+            Chưa có tài khoản? Đăng ký
+          </a>
+        </div>
       </div>
     </div>
   );

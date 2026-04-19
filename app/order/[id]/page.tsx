@@ -216,11 +216,17 @@ export default function OrderDetail() {
 
   const handleCandidateDelete = useCallback(async (id: string) => {
     try {
-      const { error } = await supabase
-        .from('candidates')
-        .delete()
-        .eq('id_ld', id);
-      if (error) throw error;
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Chưa đăng nhập');
+
+      const res = await fetch(`/api/candidates/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (!res.ok) {
+        const err = await res.json() as { error?: string };
+        throw new Error(err.error || 'Xóa thất bại');
+      }
 
       setCandidates((prev) => {
         const updated = prev.filter((c) => c.id_ld !== id);

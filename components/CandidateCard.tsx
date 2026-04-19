@@ -87,9 +87,8 @@ export default function CandidateCard({
   const safeId = candidate.id_ld.replace(/[^a-zA-Z0-9-]/g, '_');
   const safeOrder = orderId.replace(/[^a-zA-Z0-9-]/g, '_');
 
-  const hasFiles = !!(candidate.passport_link || candidate.video_link || candidate.photo_link || candidate.pcc_link || candidate.health_cert_link);
-  const hasResult = !!candidate.interview_status;
-  const canDelete = !hasFiles && !hasResult;
+  // Passed candidates are locked — enforced at API level too
+  const canDelete = candidate.interview_status !== 'Passed';
 
   const saveEdit = async () => {
     setSaving(true);

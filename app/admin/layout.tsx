@@ -4,10 +4,13 @@ import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
+import { AdminContext } from '@/lib/admin-context';
+import { ADMIN_ROLES } from '@/lib/permissions';
 
 interface AdminUser {
   uid: string;
   email: string;
+  role: string;
 }
 
 const NAV = [
@@ -95,12 +98,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         .eq('supabase_uid', user.id)
         .maybeSingle();
 
-      if (!agentData || agentData.role !== 'admin' || agentData.status !== 'active') {
+      if (!agentData || !ADMIN_ROLES.includes(agentData.role) || agentData.status !== 'active') {
         router.replace('/');
         return;
       }
 
-      setAdmin({ uid: user.id, email: user.email ?? '' });
+      setAdmin({ uid: user.id, email: user.email ?? '', role: agentData.role });
       setChecking(false);
     };
     checkAdmin();
@@ -168,7 +171,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </header>
 
         <main className="flex-1">
-          {children}
+          <AdminContext.Provider value={{ role: admin?.role ?? null, userId: admin?.uid ?? null }}>
+            {children}
+          </AdminContext.Provider>
         </main>
       </div>
     </div>

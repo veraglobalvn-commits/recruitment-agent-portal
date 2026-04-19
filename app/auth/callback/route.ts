@@ -48,22 +48,30 @@ export async function GET(request: NextRequest) {
   );
 
   const { data: { user } } = await supabase.auth.getUser();
-  if (user) {
-    const { data: userData } = await adminClient
-      .from('users')
-      .select('full_name, role')
-      .eq('supabase_uid', user.id)
-      .maybeSingle();
+  if (!user) {
+    return NextResponse.redirect(new URL('/?error=auth_failed', request.url));
+  }
 
-    if (!userData?.full_name) {
-      response = NextResponse.redirect(new URL('/auth/complete-profile', request.url));
-    } else if (next) {
-      response = NextResponse.redirect(new URL(next, request.url));
-    } else if (userData.role === 'admin') {
-      response = NextResponse.redirect(new URL('/admin', request.url));
-    } else {
-      response = NextResponse.redirect(new URL('/', request.url));
-    }
+  const { data: userData } = await adminClient
+    .from('users')
+    .select('full_name, role')
+    .eq('supabase_uid', user.id)
+    .maybeSingle();
+
+  if (!userData) {
+    // Auth user exists but no profile in DB — sign out and show error
+    await supabase.auth.signOut();
+    return NextResponse.redirect(new URL('/?error=no_profile', request.url));
+  }
+
+  if (!userData.full_name) {
+    response = NextResponse.redirect(new URL('/auth/complete-profile', request.url));
+  } else if (next) {
+    response = NextResponse.redirect(new URL(next, request.url));
+  } else if (['admin', 'operator', 'read_only'].includes(userData.role ?? '')) {
+    response = NextResponse.redirect(new URL('/admin', request.url));
+  } else {
+    response = NextResponse.redirect(new URL('/', request.url));
   }
 
   return response;

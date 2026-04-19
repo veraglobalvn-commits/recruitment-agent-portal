@@ -53,13 +53,13 @@ export async function PATCH(
   if (body.full_name !== undefined) updates.full_name = body.full_name.trim() || null;
   if (body.short_name !== undefined) updates.short_name = body.short_name.trim() || null;
   if (body.role !== undefined) {
-    if (!['admin', 'agent', 'manager', 'operator'].includes(body.role)) {
+    if (!['admin', 'operator', 'read_only', 'agent', 'member'].includes(body.role)) {
       return NextResponse.json({ error: 'Role không hợp lệ' }, { status: 400 });
     }
     updates.role = body.role;
   }
   if (body.status !== undefined) {
-    if (!['active', 'inactive'].includes(body.status)) {
+    if (!['active', 'inactive', 'pending'].includes(body.status)) {
       return NextResponse.json({ error: 'Status không hợp lệ' }, { status: 400 });
     }
     updates.status = body.status;

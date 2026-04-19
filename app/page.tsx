@@ -66,10 +66,15 @@ export default function Home() {
             try {
               const { data: agentData } = await supabase
                 .from('users')
-                .select('role')
+                .select('role, status')
                 .eq('supabase_uid', newSession.user.id)
                 .maybeSingle();
-              if (agentData?.role === 'admin') {
+              if (agentData?.status === 'pending') {
+                router.replace('/auth/pending');
+                return;
+              }
+              const adminRoles = ['admin', 'operator', 'read_only'];
+              if (agentData?.role && adminRoles.includes(agentData.role)) {
                 router.replace('/admin');
                 return;
               }
@@ -93,11 +98,17 @@ export default function Home() {
       try {
         const { data: agentData } = await supabase
           .from('users')
-          .select('role')
+          .select('role, status')
           .eq('supabase_uid', session.user.id)
           .maybeSingle();
         if (cancelled) return;
-        if (agentData?.role === 'admin') {
+        if (agentData?.status === 'pending') {
+          router.replace('/auth/pending');
+          setCheckingSession(false);
+          return;
+        }
+        const adminRoles = ['admin', 'operator', 'read_only'];
+        if (agentData?.role && adminRoles.includes(agentData.role)) {
           router.replace('/admin');
           setCheckingSession(false);
           return;
@@ -303,40 +314,37 @@ export default function Home() {
       return;
     }
     try {
-      let email = username.trim();
-
-      // Nếu không phải email (không có @), tra cứu email qua username (short_name)
-      if (!email.includes('@')) {
-        const res = await fetch('/api/auth/lookup', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username: email }),
-        });
-        const data = await res.json() as { email?: string; error?: string };
-        if (!res.ok || !data.email) {
-          setError(data.error || 'Không tìm thấy tài khoản');
-          setLoading(false);
-          return;
-        }
-        email = data.email;
-      }
+      const email = username.trim().toLowerCase();
 
       const { data, error: authError } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
       if (authError) {
-        setError(`Đăng nhập thất bại: ${authError.message}`);
+        setError('Email hoặc mật khẩu không đúng');
         setLoading(false);
         return;
       }
       if (data?.user) {
         const { data: agentData } = await supabase
           .from('users')
-          .select('role')
+          .select('role, status')
           .eq('supabase_uid', data.user.id)
           .maybeSingle();
-        if (agentData?.role === 'admin') {
+
+        if (agentData?.status === 'pending') {
+          await supabase.auth.signOut();
+          router.replace('/auth/pending');
+          return;
+        }
+        if (agentData?.status === 'inactive') {
+          await supabase.auth.signOut();
+          setError('Tài khoản đã bị vô hiệu hóa. Liên hệ admin để được hỗ trợ.');
+          setLoading(false);
+          return;
+        }
+        const adminRoles = ['admin', 'operator', 'read_only'];
+        if (agentData?.role && adminRoles.includes(agentData.role)) {
           router.replace('/admin');
           return;
         }
@@ -432,12 +440,20 @@ export default function Home() {
               <p className="text-xs text-blue-600 font-medium">Hi, {agentName}</p>
             </div>
           </div>
-          <button
-            onClick={handleLogout}
-            className="text-xs text-red-500 hover:text-red-700 px-3 py-2 rounded-lg hover:bg-red-50 min-h-[44px] min-w-[44px] flex items-center"
-          >
-            Sign out
-          </button>
+          <div className="flex items-center gap-2">
+            <a
+              href="/team"
+              className="text-xs text-blue-600 hover:text-blue-800 px-3 py-2 rounded-lg hover:bg-blue-50 min-h-[44px] flex items-center gap-1"
+            >
+              👥 Team
+            </a>
+            <button
+              onClick={handleLogout}
+              className="text-xs text-red-500 hover:text-red-700 px-3 py-2 rounded-lg hover:bg-red-50 min-h-[44px] min-w-[44px] flex items-center"
+            >
+              Đăng xuất
+            </button>
+          </div>
         </div>
       </header>
 

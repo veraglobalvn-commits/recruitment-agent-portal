@@ -7,6 +7,7 @@ import type { Company, CompanyOrderStat, DocLink } from '@/lib/types';
 import { compressImage } from '@/lib/imageUtils';
 import Link from 'next/link';
 import ConfirmDeleteModal from '@/components/admin/ConfirmDeleteModal';
+import { useAdminContext } from '@/lib/admin-context';
 
 // ── Helpers ─────────────────────────────────────────────
 function fmtVnd(val: number | null | undefined) {
@@ -113,6 +114,7 @@ function QuickAddOrderModal({ companyId, companyName, companyShortName, onClose,
 
 // ── Main page ─────────────────────────────────────────────
 export default function CompanyDetailPage() {
+  const { role } = useAdminContext();
   const params = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -453,14 +455,16 @@ export default function CompanyDetailPage() {
         >
           {saving ? '...' : dirty ? 'Lưu *' : 'Đã lưu'}
         </button>
-        <button
-          onClick={() => setDeleteTarget('company')}
-          disabled={deleting}
-          className="px-3 py-2 rounded-xl text-sm font-semibold min-h-[44px] text-red-600 hover:bg-red-50 disabled:opacity-50 transition-colors"
-          title="Xoá công ty"
-        >
-          {deleting ? '...' : '🗑️'}
-        </button>
+        {role === 'admin' && (
+          <button
+            onClick={() => setDeleteTarget('company')}
+            disabled={deleting}
+            className="px-3 py-2 rounded-xl text-sm font-semibold min-h-[44px] text-red-600 hover:bg-red-50 disabled:opacity-50 transition-colors"
+            title="Xoá công ty"
+          >
+            {deleting ? '...' : '🗑️'}
+          </button>
+        )}
       </div>
 
       <div className="p-4 space-y-4">

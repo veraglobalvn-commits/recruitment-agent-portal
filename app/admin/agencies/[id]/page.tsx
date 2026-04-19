@@ -218,7 +218,7 @@ export default function AgencyDetailPage() {
     return (
       <div className="p-8 text-center">
         <p className="text-gray-500">{loadError || 'Không tìm thấy agency'}</p>
-        <Link href="/admin/agents" className="text-blue-600 text-sm mt-2 inline-block">← Quay lại</Link>
+        <Link href="/admin/agencies" className="text-blue-600 text-sm mt-2 inline-block">← Quay lại</Link>
       </div>
     );
   }
@@ -317,7 +317,7 @@ export default function AgencyDetailPage() {
           ) : (
             <div className="divide-y divide-gray-50">
               {members.map((m) => (
-                <Link key={m.id} href={`/admin/agents/${m.id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors">
+                <Link key={m.id} href={`/admin/users/${m.id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors">
                   <div className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0 ${m.status === 'inactive' ? 'bg-red-100 text-red-400' : 'bg-blue-100 text-blue-700'}`}>
                     {(m.short_name || m.full_name || '?')[0].toUpperCase()}
                   </div>

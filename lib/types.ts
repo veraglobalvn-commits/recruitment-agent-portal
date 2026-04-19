@@ -226,7 +226,7 @@ export interface User {
   full_name: string | null;
   short_name: string | null;
   role: string | null;
-  status?: string | null;
+  status?: string | null; // 'active' | 'inactive' | 'pending'
   agency_id?: string | null;
   permissions?: string[] | null;
   avatar_url: string | null;

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { ROLE_PERMISSIONS } from '@/lib/permissions';
+import { randomBytes } from 'crypto';
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -8,6 +9,15 @@ const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
 function getAdminClient() {
   return createClient(url, serviceKey);
+}
+
+function generateTempPassword(): string {
+  return 'Tmp_' + randomBytes(6).toString('hex');
+}
+
+function generateUserId(email: string): string {
+  const localPart = email.split('@')[0].replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+  return localPart.slice(0, 20);
 }
 
 async function getAdminFromRequest(req: NextRequest): Promise<ReturnType<typeof getAdminClient> | null> {
@@ -32,11 +42,6 @@ async function getAdminFromRequest(req: NextRequest): Promise<ReturnType<typeof 
   return getAdminClient();
 }
 
-function generateUserId(email: string): string {
-  const localPart = email.split('@')[0].replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-  return localPart.slice(0, 20);
-}
-
 export async function POST(req: NextRequest) {
   try {
     const adminClient = await getAdminFromRequest(req);
@@ -59,12 +64,12 @@ export async function POST(req: NextRequest) {
     }
 
     const assignedRole = role || 'agent';
-    if (!['admin', 'agent', 'manager', 'operator'].includes(assignedRole)) {
+    if (!['admin', 'operator', 'read_only', 'agent', 'member'].includes(assignedRole)) {
       return NextResponse.json({ error: 'Role không hợp lệ' }, { status: 400 });
     }
 
-    if ((assignedRole === 'manager' || assignedRole === 'operator') && !agency_id) {
-      return NextResponse.json({ error: 'Agency là bắt buộc cho manager/operator' }, { status: 400 });
+    if (assignedRole === 'member' && !agency_id) {
+      return NextResponse.json({ error: 'Agency là bắt buộc cho member' }, { status: 400 });
     }
 
     const normalizedAgentId = (body.agent_id?.trim() || generateUserId(email)).toUpperCase();
@@ -78,18 +83,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: `User "${normalizedAgentId}" đã tồn tại` }, { status: 409 });
     }
 
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || url;
-    const { data: authData, error: authErr } = await adminClient.auth.admin.inviteUserByEmail(
-      email.trim().toLowerCase(),
-      { redirectTo: `${baseUrl}/auth/callback` },
-    );
+    const tempPassword = generateTempPassword();
+
+    const { data: authData, error: authErr } = await adminClient.auth.admin.createUser({
+      email: email.trim().toLowerCase(),
+      password: tempPassword,
+      email_confirm: true,
+    });
 
     if (authErr) {
       const msg = authErr.message.toLowerCase();
       if (msg.includes('already registered') || msg.includes('already exists') || msg.includes('duplicate')) {
         return NextResponse.json({ error: 'Email đã được đăng ký bởi tài khoản khác' }, { status: 409 });
       }
-      return NextResponse.json({ error: `Gửi lời mời thất bại: ${authErr.message}` }, { status: 400 });
+      return NextResponse.json({ error: `Tạo tài khoản thất bại: ${authErr.message}` }, { status: 400 });
     }
 
     const uid = authData.user.id;
@@ -105,10 +112,9 @@ export async function POST(req: NextRequest) {
       status: 'active',
     };
 
-    if (assignedRole === 'agent' && agency_id) {
-      insertData.agency_id = agency_id;
-    } else if (assignedRole === 'agent' && !agency_id) {
-      insertData.agency_id = normalizedAgentId;
+    if (assignedRole === 'agent') {
+      // Agent is their own agency; agency_id defaults to their own ID
+      insertData.agency_id = agency_id || normalizedAgentId;
     } else if (agency_id) {
       insertData.agency_id = agency_id;
     }
@@ -128,7 +134,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: `Tạo user thất bại: ${dbErr.message}` }, { status: 500 });
     }
 
-    return NextResponse.json({ agent: agentData, status: 'invite_sent' });
+    return NextResponse.json({
+      agent: agentData,
+      status: 'created',
+      credentials: {
+        email: email.trim().toLowerCase(),
+        password: tempPassword,
+      },
+    });
   } catch (err) {
     console.error('[agents/create] Error:', err);
     return NextResponse.json(

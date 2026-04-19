@@ -7,6 +7,7 @@ import type { Candidate, AdminOrder, AgentOption, OrderHandover, OrderPayment, O
 import { fetchActiveAgents } from '@/lib/query-helpers';
 import CandidateCard from '@/components/CandidateCard';
 import Link from 'next/link';
+import { useAdminContext } from '@/lib/admin-context';
 
 
 const MEAL_OPTIONS = [
@@ -63,6 +64,7 @@ function VideoPlayer({ url, onClose }: { url: string; onClose: () => void }) {
 }
 
 export default function OrderDetailPage() {
+  const { role } = useAdminContext();
   const params = useParams();
   const router = useRouter();
   const id = decodeURIComponent(params.id as string);
@@ -1125,7 +1127,7 @@ setOrder(o);
                           <td className="py-1.5 pr-3 text-gray-500">{p.payment_date ?? '—'}</td>
                           <td className="py-1.5 pr-3 text-gray-500 max-w-[150px] truncate">{p.note || '—'}</td>
                           <td className="py-1.5">
-                            <button onClick={() => deletePayment(p.id)} className="text-gray-300 hover:text-red-500 min-w-[24px] min-h-[24px] flex items-center justify-center">🗑</button>
+                            {role === 'admin' && <button onClick={() => deletePayment(p.id)} className="text-gray-300 hover:text-red-500 min-w-[24px] min-h-[24px] flex items-center justify-center">🗑</button>}
                           </td>
                         </tr>
                       ))}
@@ -1243,7 +1245,7 @@ setOrder(o);
                               <td className="py-1.5 pr-3 text-gray-500">{p.payment_date ?? '—'}</td>
                               <td className="py-1.5 pr-3 text-gray-500 max-w-[150px] truncate">{p.note || '—'}</td>
                               <td className="py-1.5">
-                                <button onClick={() => deletePayment(p.id)} className="text-gray-300 hover:text-red-500 min-w-[24px] min-h-[24px] flex items-center justify-center">🗑</button>
+                                {role === 'admin' && <button onClick={() => deletePayment(p.id)} className="text-gray-300 hover:text-red-500 min-w-[24px] min-h-[24px] flex items-center justify-center">🗑</button>}
                               </td>
                             </tr>
                           );
@@ -1393,7 +1395,7 @@ setOrder(o);
                               className="text-xs border border-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400" />
                           </td>
                           <td className="px-3 py-2">
-                            <button onClick={() => deleteHandover(h.id)} className="text-gray-300 hover:text-red-500 min-w-[28px] min-h-[28px] flex items-center justify-center">🗑</button>
+                            {role === 'admin' && <button onClick={() => deleteHandover(h.id)} className="text-gray-300 hover:text-red-500 min-w-[28px] min-h-[28px] flex items-center justify-center">🗑</button>}
                           </td>
                         </tr>
                         {isExpanded && (

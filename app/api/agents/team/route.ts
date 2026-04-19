@@ -1,12 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { getAuthenticatedUser, unauthorizedResponse } from '@/lib/auth-helpers';
+import { ROLE_PERMISSIONS } from '@/lib/permissions';
+import { randomBytes } from 'crypto';
 
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) throw new Error('Missing Supabase env vars');
   return createClient(url, key);
+}
+
+function generateTempPassword(): string {
+  return 'Tmp_' + randomBytes(6).toString('hex');
 }
 
 export async function GET(req: NextRequest) {
@@ -34,7 +40,8 @@ export async function GET(req: NextRequest) {
     .from('users')
     .select('id, full_name, short_name, role, status, agency_id, permissions, avatar_url')
     .eq('agency_id', targetAgencyId)
-    .order('role');
+    .neq('id', currentUser.id)
+    .order('created_at', { ascending: false });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ members: data || [] });
@@ -61,9 +68,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json() as {
     email?: string;
     full_name?: string;
-    short_name?: string;
     agent_id?: string;
-    role?: string;
   };
 
   if (!body.email?.trim()) {
@@ -76,15 +81,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'ID là bắt buộc' }, { status: 400 });
   }
 
-  const memberRole = body.role || 'operator';
-  if (!['manager', 'operator'].includes(memberRole)) {
-    return NextResponse.json({ error: 'Role phải là manager hoặc operator' }, { status: 400 });
-  }
-
+  const normalizedId = body.agent_id.trim().toUpperCase();
   const targetAgencyId = currentUser.agency_id || currentUser.id;
   const adminClient = getAdminClient();
 
-  const normalizedId = body.agent_id.trim().toUpperCase();
   const { data: existing } = await adminClient
     .from('users')
     .select('id')
@@ -94,22 +94,23 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `ID "${normalizedId}" đã tồn tại` }, { status: 409 });
   }
 
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const { data: authData, error: authErr } = await adminClient.auth.admin.inviteUserByEmail(
-    body.email.trim().toLowerCase(),
-    { redirectTo: `${baseUrl}/auth/callback` },
-  );
+  const tempPassword = generateTempPassword();
+
+  const { data: authData, error: authErr } = await adminClient.auth.admin.createUser({
+    email: body.email.trim().toLowerCase(),
+    password: tempPassword,
+    email_confirm: true,
+  });
 
   if (authErr) {
     const msg = authErr.message.toLowerCase();
-    if (msg.includes('already registered') || msg.includes('already exists')) {
-      return NextResponse.json({ error: 'Email đã được đăng ký' }, { status: 409 });
+    if (msg.includes('already registered') || msg.includes('already exists') || msg.includes('duplicate')) {
+      return NextResponse.json({ error: 'Email đã được đăng ký bởi tài khoản khác' }, { status: 409 });
     }
-    return NextResponse.json({ error: `Gửi lời mời thất bại: ${authErr.message}` }, { status: 400 });
+    return NextResponse.json({ error: `Tạo tài khoản thất bại: ${authErr.message}` }, { status: 400 });
   }
 
-  const { ROLE_PERMISSIONS } = await import('@/lib/permissions');
-  const defaultPerms = ROLE_PERMISSIONS[memberRole] || [];
+  const defaultPerms = ROLE_PERMISSIONS['member'] || [];
 
   const { data: userData, error: dbErr } = await adminClient
     .from('users')
@@ -118,7 +119,7 @@ export async function POST(req: NextRequest) {
       supabase_uid: authData.user.id,
       full_name: body.full_name.trim(),
       short_name: normalizedId,
-      role: memberRole,
+      role: 'member',
       agency_id: targetAgencyId,
       permissions: defaultPerms,
       status: 'active',
@@ -131,5 +132,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `Tạo user thất bại: ${dbErr.message}` }, { status: 500 });
   }
 
-  return NextResponse.json({ user: userData, status: 'invite_sent' });
+  return NextResponse.json({
+    user: userData,
+    status: 'created',
+    credentials: {
+      email: body.email.trim().toLowerCase(),
+      password: tempPassword,
+    },
+  });
 }

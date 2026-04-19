@@ -55,11 +55,20 @@ export async function middleware(request: NextRequest) {
       .eq('supabase_uid', user.id)
       .maybeSingle()
 
-    if (!agent || agent.status !== 'active') {
+    if (!agent) {
       return NextResponse.redirect(new URL('/', request.url))
     }
 
-    if (pathname.startsWith('/admin') && agent.role !== 'admin') {
+    if (agent.status === 'pending') {
+      return NextResponse.redirect(new URL('/auth/pending', request.url))
+    }
+
+    if (agent.status !== 'active') {
+      return NextResponse.redirect(new URL('/', request.url))
+    }
+
+    const adminRoles = ['admin', 'operator', 'read_only']
+    if (pathname.startsWith('/admin') && !adminRoles.includes(agent.role)) {
       return NextResponse.redirect(new URL('/', request.url))
     }
   }

@@ -20,14 +20,14 @@ export default function AddAgentModal({ onClose, onSaved, showRoleSelector, show
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
   const [agencies, setAgencies] = useState<Agency[]>([]);
+  const [credentials, setCredentials] = useState<{ email: string; password: string } | null>(null);
 
   const set = (k: keyof typeof form, v: string) =>
     setForm((f) => ({ ...f, [k]: v }));
 
   useEffect(() => {
-    if (showAgencySelector || form.role === 'manager' || form.role === 'operator') {
+    if (showAgencySelector || form.role === 'member') {
       const loadAgencies = async () => {
         const { data: { session } } = await supabase.auth.getSession();
         const headers: Record<string, string> = {};
@@ -46,8 +46,8 @@ export default function AddAgentModal({ onClose, onSaved, showRoleSelector, show
     if (!form.email.trim()) { setError('Email là bắt buộc'); return; }
 
     const role = showRoleSelector ? form.role : 'agent';
-    if ((role === 'manager' || role === 'operator') && !form.agency_id) {
-      setError('Agency là bắt buộc cho manager/operator');
+    if (role === 'member' && !form.agency_id) {
+      setError('Agency là bắt buộc cho member');
       return;
     }
 
@@ -87,7 +87,9 @@ export default function AddAgentModal({ onClose, onSaved, showRoleSelector, show
         throw new Error(data.error || 'Tạo tài khoản thất bại');
       }
 
-      setSuccess(true);
+      if (data.credentials) {
+        setCredentials(data.credentials);
+      }
       onSaved(data.agent as Agent);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -96,7 +98,13 @@ export default function AddAgentModal({ onClose, onSaved, showRoleSelector, show
     }
   };
 
-  const showAgencyField = showAgencySelector || form.role === 'manager' || form.role === 'operator';
+  const showAgencyField = showAgencySelector || form.role === 'member';
+
+  const handleCopy = () => {
+    if (!credentials) return;
+    const text = `Email: ${credentials.email}\nMật khẩu: ${credentials.password}\nĐăng nhập tại: ${window.location.origin}`;
+    navigator.clipboard.writeText(text).catch(() => {});
+  };
 
   return (
     <div
@@ -114,20 +122,40 @@ export default function AddAgentModal({ onClose, onSaved, showRoleSelector, show
           <button onClick={onClose} className="min-h-[44px] min-w-[44px] flex items-center justify-center text-gray-400 hover:text-gray-700 text-xl">✕</button>
         </div>
 
-        {success ? (
-          <div className="px-5 py-8 text-center">
-            <div className="text-3xl mb-3">📧</div>
-            <h3 className="font-bold text-gray-800 mb-1">Đã gửi lời mời</h3>
-            <p className="text-sm text-gray-500 mb-4">
-              Email đã được gửi đến <strong>{form.email}</strong>.<br />
-              Người dùng sẽ tự điền thông tin khi chấp nhận lời mời.
+        {credentials ? (
+          <div className="px-5 py-6">
+            <div className="text-center mb-4">
+              <div className="text-3xl mb-2">✅</div>
+              <h3 className="font-bold text-gray-800 mb-1">Tài khoản đã tạo</h3>
+              <p className="text-sm text-gray-500">Chia sẻ thông tin đăng nhập cho người dùng</p>
+            </div>
+            <div className="bg-gray-50 rounded-xl p-4 space-y-2 mb-4">
+              <div className="flex justify-between items-center">
+                <span className="text-xs text-gray-500">Email</span>
+                <span className="text-sm font-mono font-medium text-gray-800">{credentials.email}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-xs text-gray-500">Mật khẩu</span>
+                <span className="text-sm font-mono font-medium text-gray-800">{credentials.password}</span>
+              </div>
+            </div>
+            <p className="text-xs text-amber-600 bg-amber-50 p-3 rounded-lg mb-4">
+              ⚠️ Người dùng nên đổi mật khẩu sau khi đăng nhập lần đầu.
             </p>
-            <button
-              onClick={onClose}
-              className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-3 rounded-xl text-sm min-h-[44px]"
-            >
-              Xong
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={handleCopy}
+                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 rounded-xl text-sm min-h-[44px]"
+              >
+                📋 Sao chép
+              </button>
+              <button
+                onClick={onClose}
+                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl text-sm min-h-[44px]"
+              >
+                Xong
+              </button>
+            </div>
           </div>
         ) : (
           <>
@@ -145,7 +173,6 @@ export default function AddAgentModal({ onClose, onSaved, showRoleSelector, show
                   placeholder="agent@example.com"
                   className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[44px]"
                 />
-                <p className="text-xs text-gray-400 mt-1">Lời mời sẽ được gửi qua email này</p>
               </div>
 
               {showRoleSelector && (
@@ -157,9 +184,10 @@ export default function AddAgentModal({ onClose, onSaved, showRoleSelector, show
                     className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[44px] bg-white"
                   >
                     <option value="admin">Admin</option>
+                    <option value="operator">Operator (Admin)</option>
+                    <option value="read_only">Read Only (Admin)</option>
                     <option value="agent">Agent (Owner)</option>
-                    <option value="manager">Manager</option>
-                    <option value="operator">Operator</option>
+                    <option value="member">Member (Agent)</option>
                   </select>
                 </div>
               )}
@@ -193,7 +221,7 @@ export default function AddAgentModal({ onClose, onSaved, showRoleSelector, show
                 disabled={saving}
                 className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl text-sm disabled:opacity-50 min-h-[44px]"
               >
-                {saving ? 'Đang gửi...' : 'Gửi lời mời'}
+                {saving ? 'Đang tạo...' : 'Tạo tài khoản'}
               </button>
             </div>
           </>
