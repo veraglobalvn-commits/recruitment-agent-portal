@@ -322,7 +322,7 @@ export default function OrderDetailPage() {
 
     const probationMonths = form.probation !== 'Không' ? parseInt(form.probation) : null;
 
-    const { error } = await supabase.from('orders').update({
+    const updates = {
       job_type: form.job_type.trim() || null,
       job_type_en: form.job_type_en.trim() || null,
       total_labor: form.total_labor ? parseInt(form.total_labor) : null,
@@ -335,7 +335,6 @@ export default function OrderDetailPage() {
         const candCount = candidates?.length ?? 0;
         if (totalLabor > 0 && passedCount >= totalLabor) return 'Finished';
         if (candCount > 0) return 'On-going';
-        // Không downgrade từ On-going → Not Started (tránh race condition khi agent vừa add LĐ)
         if (form.status === 'On-going') return 'On-going';
         return 'Not Started';
       })(),
@@ -353,16 +352,28 @@ export default function OrderDetailPage() {
       probation_salary_pct: form.probation !== 'Không' && form.probation_salary_pct ? parseInt(form.probation_salary_pct) : null,
       service_fee_bd_per_person: form.service_fee_bd_per_person ? parseFloat(form.service_fee_bd_per_person) : null,
       total_fee_bd: form.total_fee_bd ? parseFloat(form.total_fee_bd) : null,
-    }).eq('id', id);
+    };
 
-    setSaving(false);
-    if (error) { setSaveMsg(`❌ ${error.message}`); return; }
-    setSaveMsg('✅ Đã lưu');
-    setDirty(false);
-    setTimeout(() => setSaveMsg(null), 3000);
-
-    if (andTranslate) handleTranslateSilent();
-  }, [id, order, form, handleTranslateSilent]);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) { setSaveMsg('❌ Chưa đăng nhập'); setSaving(false); return; }
+      const res = await fetch(`/api/admin/orders/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify(updates),
+      });
+      const json = await res.json();
+      setSaving(false);
+      if (!res.ok) { setSaveMsg(`❌ ${json.error || 'Lỗi lưu'}`); return; }
+      setSaveMsg('✅ Đã lưu');
+      setDirty(false);
+      setTimeout(() => setSaveMsg(null), 3000);
+      if (andTranslate) handleTranslateSilent();
+    } catch (err: any) {
+      setSaving(false);
+      setSaveMsg(`❌ ${err?.message || 'Lỗi kết nối'}`);
+    }
+  }, [id, order, form, candidates, handleTranslateSilent]);
 
   useEffect(() => {
     if (!dirty) return;
@@ -442,8 +453,16 @@ export default function OrderDetailPage() {
   };
 
   const handleSetStatus = async (newStatus: 'Finished' | 'Cancelled') => {
-    await supabase.from('orders').update({ status: newStatus }).eq('id', id);
-    setForm((f) => ({ ...f, status: newStatus }));
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) return;
+      await fetch(`/api/admin/orders/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      setForm((f) => ({ ...f, status: newStatus }));
+    } catch { }
   };
 
   const handleCreateYctd = async (agentId: string) => {
