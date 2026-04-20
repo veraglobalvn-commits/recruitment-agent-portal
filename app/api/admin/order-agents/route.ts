@@ -26,8 +26,8 @@ export async function POST(req: NextRequest) {
         .single();
 
     if (error) {
-        console.error('[order_agents.upsert] Error:', error);
-        return NextResponse.json({ error: error.message, details: error }, { status: 500 });
+        console.error('[order_agents.upsert] Error:', JSON.stringify(error));
+        return NextResponse.json({ error: error.message || error.code || JSON.stringify(error) }, { status: 500 });
     }
 
     return NextResponse.json({ data });

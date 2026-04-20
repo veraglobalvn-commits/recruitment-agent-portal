@@ -404,7 +404,7 @@ export default function OrderDetailPage() {
       body: JSON.stringify({ order_id: id, agent_id: agentId, assigned_labor_number: laborNumber }),
     });
     const json = await res.json();
-    if (!res.ok) throw new Error(json.error || json.details || `Lỗi ${res.status}`);
+    if (!res.ok) throw new Error(typeof json.error === 'string' ? json.error : JSON.stringify(json.error) || `Lỗi ${res.status}`);
     return json.data;
   }, [id]);
 
