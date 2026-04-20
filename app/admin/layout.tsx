@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
@@ -50,11 +50,10 @@ function SidebarContent({
               key={href}
               href={href}
               onClick={onNavClick}
-              className={`flex items-center gap-2.5 px-3 py-2.5 rounded-md text-sm transition-colors min-h-[44px] ${
-                active
+              className={`flex items-center gap-2.5 px-3 py-2.5 rounded-md text-sm transition-colors min-h-[44px] ${active
                   ? 'bg-blue-600 text-white font-semibold'
                   : 'text-slate-300 hover:bg-slate-700 hover:text-white'
-              }`}
+                }`}
             >
               <span className="text-base">{icon}</span>
               <span>{label}</span>
@@ -79,7 +78,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const router = useRouter();
   const pathname = usePathname();
   const [admin, setAdmin] = useState<AdminUser | null>(null);
-  const [checking, setChecking] = useState(true);
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const signOut = async () => {
@@ -87,42 +85,32 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     router.replace('/');
   };
 
-  useEffect(() => {
-    const checkAdmin = async () => {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) { router.replace('/'); return; }
+  const loadAdmin = useCallback(async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { router.replace('/'); return; }
 
-        const { data: agentData, error: dbErr } = await supabase
-          .from('users')
-          .select('role, status, full_name')
-          .eq('supabase_uid', user.id)
-          .maybeSingle();
+      const { data: agentData, error: dbErr } = await supabase
+        .from('users')
+        .select('role, status, full_name')
+        .eq('supabase_uid', user.id)
+        .maybeSingle();
 
-        if (dbErr || !agentData || !ADMIN_ROLES.includes(agentData.role) || agentData.status !== 'active') {
-          router.replace('/');
-          return;
-        }
-
-        setAdmin({ uid: user.id, email: user.email ?? '', role: agentData.role });
-        setChecking(false);
-      } catch {
+      if (dbErr || !agentData || !ADMIN_ROLES.includes(agentData.role) || agentData.status !== 'active') {
         router.replace('/');
+        return;
       }
-    };
-    checkAdmin();
+
+      setAdmin({ uid: user.id, email: user.email ?? '', role: agentData.role });
+    } catch {
+      router.replace('/');
+    }
   }, [router]);
+
+  useEffect(() => { loadAdmin(); }, [loadAdmin]);
 
   // Close mobile nav on route change
   useEffect(() => { setMobileOpen(false); }, [pathname]);
-
-  if (checking) {
-    return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
-        <div className="text-white text-sm animate-pulse">Đang kiểm tra quyền truy cập...</div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-slate-50 flex">
@@ -140,9 +128,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         />
       )}
       <aside
-        className={`fixed top-0 left-0 h-full w-64 bg-slate-900 text-white z-50 transform transition-transform duration-300 md:hidden ${
-          mobileOpen ? 'translate-x-0' : '-translate-x-full'
-        }`}
+        className={`fixed top-0 left-0 h-full w-64 bg-slate-900 text-white z-50 transform transition-transform duration-300 md:hidden ${mobileOpen ? 'translate-x-0' : '-translate-x-full'
+          }`}
       >
         <button
           onClick={() => setMobileOpen(false)}

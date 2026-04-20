@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import type { Candidate, AgentOption } from '@/lib/types';
 import { fetchActiveAgents } from '@/lib/query-helpers';
@@ -99,8 +99,8 @@ export default function CandidatesPage() {
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [agents, setAgents] = useState<AgentOption[]>([]);
   const [orders, setOrders] = useState<OrderBrief[]>([]);
-  const [filtered, setFiltered] = useState<Candidate[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [agentFilter, setAgentFilter] = useState<string>('all');
@@ -117,24 +117,28 @@ export default function CandidatesPage() {
 
   const videoInputRef = useRef<HTMLInputElement>(null);
 
-  const agentMap = new Map(agents.map((a) => [a.id, a]));
-  const orderMap = new Map(orders.map((o) => [o.id, o]));
+  // Debounce search input
+  useEffect(() => {
+    const t = setTimeout(() => setSearch(searchInput), 300);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
+  const agentMap = useMemo(() => new Map(agents.map((a) => [a.id, a])), [agents]);
+  const orderMap = useMemo(() => new Map(orders.map((o) => [o.id, o])), [orders]);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const [candRes, activeAgents, ordRes] = await Promise.all([
-        supabase.from('candidates').select('*'),
+        supabase
+          .from('candidates')
+          .select('id_ld, order_id, agent_id, full_name, pp_no, dob, pp_doi, pp_doe, pob, address, phone, height_ft, weight_kg, visa_status, passport_link, video_link, photo_link, pcc_link, health_cert_link, interview_status, created_at')
+          .order('created_at', { ascending: false })
+          .limit(300),
         fetchActiveAgents(),
         supabase.from('orders').select('id, company_name, job_type'),
       ]);
-      const candidates = (candRes.data ?? []) as Candidate[];
-      candidates.sort((a, b) => {
-        const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
-        const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
-        return dateB - dateA;
-      });
-      setCandidates(candidates);
+      setCandidates((candRes.data ?? []) as Candidate[]);
       setAgents(activeAgents);
       setOrders((ordRes.data ?? []) as OrderBrief[]);
     } catch {
@@ -153,9 +157,11 @@ export default function CandidatesPage() {
     }
   }, [newVideoCandidates]);
 
-  useEffect(() => {
+  const newVideoSet = useMemo(() => new Set(newVideoCandidates), [newVideoCandidates]);
+
+  const filtered = useMemo(() => {
     const q = search.toLowerCase();
-    const filtered = candidates
+    return candidates
       .filter((c) => {
         const matchSearch =
           (c.full_name ?? '').toLowerCase().includes(q) ||
@@ -170,25 +176,23 @@ export default function CandidatesPage() {
         return matchSearch && matchStatus && matchAgent && matchOrder;
       })
       .sort((a, b) => {
-        const aIsNewVideo = newVideoCandidates.includes(a.id_ld);
-        const bIsNewVideo = newVideoCandidates.includes(b.id_ld);
-        
+        const aIsNewVideo = newVideoSet.has(a.id_ld);
+        const bIsNewVideo = newVideoSet.has(b.id_ld);
+
         // Ưu tiên 1: Ứng viên mới gửi video lên đầu
         if (aIsNewVideo && !bIsNewVideo) return -1;
         if (!aIsNewVideo && bIsNewVideo) return 1;
-        
+
         // Ưu tiên 2: Ứng viên có video lên trước
         if (a.video_link && !b.video_link) return -1;
         if (!a.video_link && b.video_link) return 1;
-        
+
         // Ưu tiên 3: Sắp xếp theo ngày tạo mới nhất
         const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
         const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
         return dateB - dateA;
       });
-
-    setFiltered(filtered);
-  }, [search, statusFilter, agentFilter, orderFilter, candidates, newVideoCandidates]);
+  }, [search, statusFilter, agentFilter, orderFilter, candidates, newVideoSet]);
 
   const handleStatusChange = useCallback(async (candidateId: string, status: 'Passed' | 'Failed') => {
     setCandidates((prev) => prev.map((c) => c.id_ld === candidateId ? { ...c, interview_status: status } : c));
@@ -237,7 +241,7 @@ export default function CandidatesPage() {
             order_id: candidate?.order_id ?? '',
             video_link: urlData.publicUrl,
           }),
-        }).catch(() => {});
+        }).catch(() => { });
       }
     } catch (err) {
       console.error('Upload error:', err);
@@ -277,8 +281,8 @@ export default function CandidatesPage() {
         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔍</span>
         <input
           type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
           placeholder="Tìm theo tên, passport, ID..."
           className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[44px]"
         />
@@ -289,9 +293,8 @@ export default function CandidatesPage() {
           <button
             key={f.key}
             onClick={() => setStatusFilter(f.key)}
-            className={`text-xs px-3 py-1.5 rounded-full font-medium whitespace-nowrap transition-colors min-h-[36px] ${
-              statusFilter === f.key ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-            }`}
+            className={`text-xs px-3 py-1.5 rounded-full font-medium whitespace-nowrap transition-colors min-h-[36px] ${statusFilter === f.key ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
           >
             {f.label}
           </button>
@@ -320,7 +323,7 @@ export default function CandidatesPage() {
       ) : filtered.length === 0 ? (
         <div className="text-center py-12">
           <p className="text-gray-300 text-4xl mb-3">🧑‍💼</p>
-          <p className="text-gray-500 text-sm">{search || statusFilter !== 'all' || agentFilter !== 'all' || orderFilter !== 'all' ? 'Không tìm thấy kết quả' : 'Chưa có ứng viên nào'}</p>
+          <p className="text-gray-500 text-sm">{searchInput || statusFilter !== 'all' || agentFilter !== 'all' || orderFilter !== 'all' ? 'Không tìm thấy kết quả' : 'Chưa có ứng viên nào'}</p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -340,7 +343,7 @@ export default function CandidatesPage() {
                 useDropdown={true}
                 orderInfo={ord ? { id: ord.id, company_name: ord.company_name, job_type: ord.job_type } : undefined}
                 agentInfo={ag ? { short_name: ag.short_name, full_name: ag.full_name } : undefined}
-                isNewVideo={newVideoCandidates.includes(c.id_ld)}
+                isNewVideo={newVideoSet.has(c.id_ld)}
                 onVideoViewed={() => handleVideoViewed(c.id_ld)}
                 onVideoPlay={(url) => setPlayingVideo(url)}
               />

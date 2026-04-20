@@ -49,18 +49,10 @@ export default function OrdersPage() {
     setLoading(true);
     try {
       const [ordRes, activeAgents] = await Promise.all([
-        supabase.from('orders').select('*'),
+        supabase.from('orders').select('*').order('created_at', { ascending: false }).limit(200),
         fetchActiveAgents(),
       ]);
-      const orders = (ordRes.data ?? []) as AdminOrder[];
-      orders.sort((a, b) => {
-        const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
-        const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
-        const aValid = !isNaN(dateA) && dateA > 0 ? dateA : 0;
-        const bValid = !isNaN(dateB) && dateB > 0 ? dateB : 0;
-        return bValid - aValid;
-      });
-      setOrders(orders);
+      setOrders((ordRes.data ?? []) as AdminOrder[]);
       setAgents(activeAgents);
     } catch {
       // data stays empty
@@ -130,11 +122,10 @@ export default function OrdersPage() {
           <button
             key={f.key}
             onClick={() => setStatusFilter(f.key)}
-            className={`text-xs px-3 py-1.5 rounded-full font-medium whitespace-nowrap transition-colors min-h-[36px] ${
-              statusFilter === f.key
+            className={`text-xs px-3 py-1.5 rounded-full font-medium whitespace-nowrap transition-colors min-h-[36px] ${statusFilter === f.key
                 ? 'bg-blue-600 text-white'
                 : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-            }`}
+              }`}
           >
             {f.label}
           </button>
@@ -192,7 +183,7 @@ export default function OrdersPage() {
               <table className="w-full text-sm min-w-[800px]">
                 <thead className="bg-gray-50 border-b border-gray-100">
                   <tr>
-                    {['Mã đơn', 'Công ty', 'Vị trí', 'LĐ', 'Còn thiếu', 'Lương', 'Trạng thái', 'TT VN',  ''].map((h) => (
+                    {['Mã đơn', 'Công ty', 'Vị trí', 'LĐ', 'Còn thiếu', 'Lương', 'Trạng thái', 'TT VN', ''].map((h) => (
                       <th key={h} className="text-left px-4 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">
                         {h}
                       </th>

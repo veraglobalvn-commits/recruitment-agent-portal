@@ -66,11 +66,11 @@ export default function AgenciesPage() {
       });
 
       const rows: AgencyRow[] = agenciesRaw.map((ag: { id: string; company_name: string | null; legal_rep: string | null; labor_percentage: number | null; status: string | null }) => {
-        const memberIds = agencyUserIds[ag.id] || [];
-        const agCands = candidates.filter((c: { agent_id: string; interview_status: string | null }) => memberIds.includes(c.agent_id));
+        const memberIdSet = new Set(agencyUserIds[ag.id] || []);
+        const agCands = candidates.filter((c: { agent_id: string; interview_status: string | null }) => memberIdSet.has(c.agent_id));
         const passed = agCands.filter((c: { interview_status: string | null }) => c.interview_status === 'Passed').length;
         const agOrders = orders.filter((o: { agent_ids: string[] | null }) =>
-          (o.agent_ids || []).some((aid: string) => memberIds.includes(aid))
+          (o.agent_ids || []).some((aid: string) => memberIdSet.has(aid))
         );
         return {
           id: ag.id,
