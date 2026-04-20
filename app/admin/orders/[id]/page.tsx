@@ -125,21 +125,21 @@ export default function OrderDetailPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-    const [ordRes, candRes, activeAgents, agencyRes, handRes, payRes, policyRes, oaRes] = await Promise.all([
-      supabase.from('orders').select('*').eq('id', id).single(),
-      supabase.from('candidates').select('*').eq('order_id', id),
-      fetchActiveAgents('id, full_name, short_name, agency_id'),
-      supabase.from('agencies').select('id, labor_percentage').eq('status', 'active'),
-      supabase.from('order_handovers').select('*').eq('order_id', id).order('batch_no'),
-      supabase.from('order_payments').select('*').eq('order_id', id).order('created_at'),
-      supabase.from('policy_settings').select('key, value').in('key', ['default_fee_vnd', 'default_fee_usd']),
-      supabase.from('order_agents').select('*').eq('order_id', id),
-    ]);
-    const policyMap = Object.fromEntries(((policyRes.data ?? []) as { key: string; value: string }[]).map(r => [r.key, r.value]));
+      const [ordRes, candRes, activeAgents, agencyRes, handRes, payRes, policyRes, oaRes] = await Promise.all([
+        supabase.from('orders').select('*').eq('id', id).single(),
+        supabase.from('candidates').select('*').eq('order_id', id),
+        fetchActiveAgents('id, full_name, short_name, agency_id'),
+        supabase.from('agencies').select('id, labor_percentage').eq('status', 'active'),
+        supabase.from('order_handovers').select('*').eq('order_id', id).order('batch_no'),
+        supabase.from('order_payments').select('*').eq('order_id', id).order('created_at'),
+        supabase.from('policy_settings').select('key, value').in('key', ['default_fee_vnd', 'default_fee_usd']),
+        supabase.from('order_agents').select('*').eq('order_id', id),
+      ]);
+      const policyMap = Object.fromEntries(((policyRes.data ?? []) as { key: string; value: string }[]).map(r => [r.key, r.value]));
 
-    if (ordRes.data) {
-      const o = ordRes.data as AdminOrder;
-setOrder(o);
+      if (ordRes.data) {
+        const o = ordRes.data as AdminOrder;
+        setOrder(o);
         // Load English company name and industry if available
         if (o.company_id) {
           const { data: compData, error: compError } = await supabase.from('companies').select('en_company_name, en_industry, en_address, en_business_type, en_legal_rep, en_title').eq('id', o.company_id).single();
@@ -176,35 +176,35 @@ setOrder(o);
           probation_salary_pct: o.probation_salary_pct?.toString() ?? '',
           agent_order_status: o.agent_order_status ?? '',
         });
-    }
-    setCandidates((candRes.data ?? []) as Candidate[]);
-    const agentsData = activeAgents as any[];
-    const agencyMap = Object.fromEntries(
-      ((agencyRes.data ?? []) as { id: string; labor_percentage: number | null }[]).map(a => [a.id, a.labor_percentage])
-    );
-    const agentsWithPct = agentsData.map((ag: any) => ({
-      ...ag,
-      labor_percentage: agencyMap[ag.agency_id ?? ''] ?? null,
-    }));
-    setAgents(agentsWithPct);
-    const allocations: Record<string, string> = {};
-    const oaMap = Object.fromEntries(
-      ((oaRes.data ?? []) as { agent_id: string; assigned_labor_number: number }[]).map((oa) => [oa.agent_id, oa.assigned_labor_number])
-    );
-    agentsWithPct.forEach((ag: any) => {
-      if (oaMap[ag.id] !== undefined) {
-        allocations[ag.id] = oaMap[ag.id].toString();
-      } else {
-        const percentage = ag.labor_percentage ?? 0;
-        const tl = ordRes.data?.total_labor ?? 0;
-        const allocation = percentage > 0 ? Math.round((percentage / 100) * tl) : 0;
-        allocations[ag.id] = allocation.toString();
       }
-    });
-    setAgentLaborAllocations(allocations);
-    setHandovers((handRes.data ?? []) as OrderHandover[]);
-    setPayments((payRes.data ?? []) as OrderPayment[]);
-    setDirty(false);
+      setCandidates((candRes.data ?? []) as Candidate[]);
+      const agentsData = activeAgents as any[];
+      const agencyMap = Object.fromEntries(
+        ((agencyRes.data ?? []) as { id: string; labor_percentage: number | null }[]).map(a => [a.id, a.labor_percentage])
+      );
+      const agentsWithPct = agentsData.map((ag: any) => ({
+        ...ag,
+        labor_percentage: agencyMap[ag.agency_id ?? ''] ?? null,
+      }));
+      setAgents(agentsWithPct);
+      const allocations: Record<string, string> = {};
+      const oaMap = Object.fromEntries(
+        ((oaRes.data ?? []) as { agent_id: string; assigned_labor_number: number }[]).map((oa) => [oa.agent_id, oa.assigned_labor_number])
+      );
+      agentsWithPct.forEach((ag: any) => {
+        if (oaMap[ag.id] !== undefined) {
+          allocations[ag.id] = oaMap[ag.id].toString();
+        } else {
+          const percentage = ag.labor_percentage ?? 0;
+          const tl = ordRes.data?.total_labor ?? 0;
+          const allocation = percentage > 0 ? Math.round((percentage / 100) * tl) : 0;
+          allocations[ag.id] = allocation.toString();
+        }
+      });
+      setAgentLaborAllocations(allocations);
+      setHandovers((handRes.data ?? []) as OrderHandover[]);
+      setPayments((payRes.data ?? []) as OrderPayment[]);
+      setDirty(false);
     } catch {
       // data stays empty
     } finally {
@@ -271,7 +271,7 @@ setOrder(o);
 
             if (statusData.status === 'completed') {
               const tdata = statusData.translated_data || {};
-              
+
               if (statusData.entity_type === 'order') {
                 const updates: Record<string, string | null> = {};
                 const jobType = tdata.job_type_en || tdata.job_type;
@@ -283,7 +283,7 @@ setOrder(o);
                 if (meal) updates.meal_en = meal;
                 if (dorm) updates.dormitory_en = dorm;
                 if (probation) updates.probation_en = probation;
-                
+
                 if (Object.keys(updates).length > 0) {
                   await supabase.from('orders').update(updates).eq('id', id);
                   setForm((f) => ({
@@ -360,7 +360,7 @@ setOrder(o);
     setSaveMsg('✅ Đã lưu');
     setDirty(false);
     setTimeout(() => setSaveMsg(null), 3000);
-    
+
     if (andTranslate) handleTranslateSilent();
   }, [id, order, form, handleTranslateSilent]);
 
@@ -392,11 +392,10 @@ setOrder(o);
         order_id: id,
         agent_id: agentId,
         assigned_labor_number: numValue,
-        assigned_date: new Date().toISOString(),
       }, { onConflict: 'order_id,agent_id' });
-      if (error) throw error;
+      if (error) throw new Error(error.message || JSON.stringify(error));
     } catch (err) {
-      alert(`Lỗi lưu: ${err instanceof Error ? err.message : String(err)}`);
+      alert(`Lỗi lưu: ${err instanceof Error ? err.message : JSON.stringify(err)}`);
     }
   }, [id]);
 
@@ -577,7 +576,7 @@ setOrder(o);
             order_id: id,
             video_link: urlData.publicUrl,
           }),
-        }).catch(() => {});
+        }).catch(() => { });
       }
     } catch (err) {
       alert(`Lỗi upload: ${err instanceof Error ? err.message : String(err)}`);
@@ -705,9 +704,8 @@ setOrder(o);
         <button
           onClick={() => handleSave(false)}
           disabled={saving}
-          className={`px-4 py-2 rounded-xl text-sm font-semibold min-h-[44px] transition-colors ${
-            dirty ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-100 text-gray-400 cursor-default'
-          }`}
+          className={`px-4 py-2 rounded-xl text-sm font-semibold min-h-[44px] transition-colors ${dirty ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-100 text-gray-400 cursor-default'
+            }`}
         >
           {saving ? '...' : dirty ? 'Lưu *' : 'Đã lưu'}
         </button>
@@ -891,7 +889,7 @@ setOrder(o);
                         setDirty(true);
                         setShowAgentDropdown(false);
                         await supabase.from('order_agents').upsert({
-                          order_id: id, agent_id: ag.id, assigned_labor_number: defaultAllocation, assigned_date: new Date().toISOString(),
+                          order_id: id, agent_id: ag.id, assigned_labor_number: defaultAllocation,
                         }, { onConflict: 'order_id,agent_id' });
                       }}
                         className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 first:rounded-t-lg last:rounded-b-lg">
@@ -1007,7 +1005,7 @@ setOrder(o);
 
         {/* Thông tin tiếng Anh */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-          <div 
+          <div
             className="px-4 py-3 border-b border-gray-50 flex items-center justify-between cursor-pointer hover:bg-gray-50 transition-colors"
             onClick={() => setIsEnOpen(!isEnOpen)}
           >
@@ -1021,18 +1019,17 @@ setOrder(o);
                 handleSave(true);
               }}
               disabled={translating}
-              className={`text-xs text-white px-3 py-1.5 rounded-lg disabled:opacity-50 min-h-[32px] flex items-center gap-1 transition-colors ${
-                translating ? 'bg-gray-400' : (
-                  [form.job_type_en, form.meal_en, form.dormitory_en, form.probation_en, enCompanyName, enIndustry, enAddress, enBusinessType, enLegalRep, enTitle].some(x => !x || x.trim() === '')
+              className={`text-xs text-white px-3 py-1.5 rounded-lg disabled:opacity-50 min-h-[32px] flex items-center gap-1 transition-colors ${translating ? 'bg-gray-400' : (
+                [form.job_type_en, form.meal_en, form.dormitory_en, form.probation_en, enCompanyName, enIndustry, enAddress, enBusinessType, enLegalRep, enTitle].some(x => !x || x.trim() === '')
                   ? 'bg-red-600 hover:bg-red-700'
                   : 'bg-green-600 hover:bg-green-700'
-                )
-              }`}
+              )
+                }`}
             >
               {translating ? '⏳ Đang dịch...' : '🌐 Dịch'}
             </button>
           </div>
-          
+
           {isEnOpen && (
             <div className="p-4 space-y-3">
               <div><label className="block text-xs text-gray-500 mb-1">Job Type (EN)</label><input type="text" value={form.job_type_en} onChange={(e) => setField('job_type_en', e.target.value)} className={inputClsBase} /></div>
@@ -1092,8 +1089,8 @@ setOrder(o);
                           <td className="py-1.5 pr-3">
                             {p.payment_type === 'dat_coc' ? 'Đặt cọc'
                               : p.payment_type === 'nghiem_thu_ld' ? 'Nghiệm thu LĐ'
-                              : p.payment_type === 'nghiem_thu_trc_wp' ? 'Nghiệm thu TRC/WP'
-                              : 'Khác'}
+                                : p.payment_type === 'nghiem_thu_trc_wp' ? 'Nghiệm thu TRC/WP'
+                                  : 'Khác'}
                           </td>
                           <td className="py-1.5 pr-3 text-gray-500">
                             {p.handover_id ? (handovers.find(h => h.id === p.handover_id)?.batch_no ?? '—') : '—'}
