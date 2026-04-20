@@ -5,7 +5,10 @@ import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import type { Candidate, AdminOrder, AgentOption, OrderHandover, OrderPayment, OrderDocLink } from '@/lib/types';
 import { fetchActiveAgents } from '@/lib/query-helpers';
-import CandidateCard from '@/components/CandidateCard';
+import CandidateCard from '@/components/agent/CandidateCard';
+import StatusPill from '@/components/ui/StatusPill';
+import ProgressBar from '@/components/ui/ProgressBar';
+import VideoPlayer from '@/components/ui/VideoPlayer';
 import Link from 'next/link';
 import { useAdminContext } from '@/lib/admin-context';
 
@@ -23,44 +26,11 @@ const PAYMENT_STATUS_OPTIONS: OrderHandover['payment_status'][] = ['Chưa TT', '
 
 import { fmtVND, fmtUSD } from '@/lib/formatters';
 
-function StatusPill({ label }: { label: string | null }) {
-  if (!label) return <span className="text-gray-400 text-xs">—</span>;
-  const c: Record<string, string> = {
-    'Not Started': 'bg-gray-100 text-gray-600',
-    'On-going': 'bg-amber-100 text-amber-700',
-    'Finished': 'bg-green-100 text-green-700',
-    'Cancelled': 'bg-red-100 text-red-600',
-    'Chưa TT': 'bg-red-100 text-red-600',
-    'Đã TT': 'bg-green-100 text-green-700',
-  };
-  return <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${c[label] ?? 'bg-gray-100 text-gray-600'}`}>{label}</span>;
-}
-
 function RecruitmentPill({ status, laborMissing }: { status: string; laborMissing: number | null }) {
   if (status === 'Cancelled') return <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-red-100 text-red-600">Đã huỷ</span>;
   if (status === 'Finished' || laborMissing === 0) return <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-green-100 text-green-700">Đã tuyển xong</span>;
   if (status === 'Not Started') return <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-gray-100 text-gray-600">Chưa tuyển</span>;
   return <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-amber-100 text-amber-700">Đang tuyển</span>;
-}
-
-function ProgressBar({ value, max }: { value: number; max: number }) {
-  const pct = max > 0 ? Math.min(100, (value / max) * 100) : 0;
-  return (
-    <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
-      <div className="bg-blue-500 h-2 rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
-    </div>
-  );
-}
-
-function VideoPlayer({ url, onClose }: { url: string; onClose: () => void }) {
-  return (
-    <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center" onClick={onClose}>
-      <div className="relative w-full max-w-lg mx-4" onClick={(e) => e.stopPropagation()}>
-        <button onClick={onClose} className="absolute -top-10 right-0 text-white text-2xl min-h-[44px] min-w-[44px] flex items-center justify-center">✕</button>
-        <video src={url} controls autoPlay className="w-full rounded-2xl bg-black" style={{ maxHeight: '70vh' }} />
-      </div>
-    </div>
-  );
 }
 
 export default function OrderDetailPage() {
@@ -763,7 +733,7 @@ setOrder(o);
                 <span className="text-gray-500">Tiến độ tuyển dụng</span>
                 <span className="font-semibold text-slate-700">{passedCount}/{totalLabor} · còn thiếu {Math.max(0, totalLabor - passedCount)}</span>
               </div>
-              <ProgressBar value={passedCount} max={totalLabor} />
+              <ProgressBar value={passedCount} max={totalLabor} height="h-2" />
             </div>
           )}
           {totalHandedOver > 0 && (

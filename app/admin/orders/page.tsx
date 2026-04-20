@@ -1,4 +1,5 @@
 'use client';
+import StatusPill from '@/components/ui/StatusPill';
 
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -9,25 +10,6 @@ import Link from 'next/link';
 import AddOrderModal from '@/components/admin/AddOrderModal';
 
 type StatusFilter = 'all' | 'Not Started' | 'On-going' | 'Finished' | 'Cancelled';
-
-function fmtVnd(val: number | null | undefined) {
-  if (!val) return '—';
-  if (val >= 1_000_000_000) return `${(val / 1_000_000_000).toFixed(1)}B ₫`;
-  if (val >= 1_000_000) return `${(val / 1_000_000).toFixed(0)}M ₫`;
-  return val.toLocaleString('vi-VN') + ' ₫';
-}
-
-function StatusPill({ label }: { label: string | null }) {
-  if (!label) return <span className="text-gray-400 text-xs">—</span>;
-  const c: Record<string, string> = {
-    'Chưa TT': 'bg-red-100 text-red-600',
-    'Đã TT': 'bg-green-100 text-green-700',
-    'TT lan 1': 'bg-blue-100 text-blue-700',
-    'TT lan 2': 'bg-indigo-100 text-indigo-700',
-    'TT lan 3': 'bg-purple-100 text-purple-700',
-  };
-  return <span className={`text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap ${c[label] ?? 'bg-gray-100 text-gray-600'}`}>{label}</span>;
-}
 
 function recruitStatusInfo(o: AdminOrder): { label: string; cls: string } {
   if (o.status === 'Cancelled') return { label: 'Cancelled', cls: 'bg-red-100 text-red-600' };

@@ -1,6 +1,9 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import StatusPill from '@/components/ui/StatusPill';
+import ProgressBar from '@/components/ui/ProgressBar';
+import { fmtVndShort } from '@/lib/formatters';
 import { supabase } from '@/lib/supabase';
 import { fetchActiveAgents } from '@/lib/query-helpers';
 import Link from 'next/link';
@@ -34,32 +37,6 @@ interface DashboardData {
   totalRevenue: number;
   totalLaborTarget: number;
   totalPassed: number;
-}
-
-// ── Helpers ──────────────────────────────────────────────
-function fmtVnd(val: number | null | undefined) {
-  if (!val) return '—';
-  if (val >= 1_000_000_000) return `${(val / 1_000_000_000).toFixed(1)}B ₫`;
-  if (val >= 1_000_000) return `${(val / 1_000_000).toFixed(0)}M ₫`;
-  return val.toLocaleString('vi-VN') + ' ₫';
-}
-
-function StatusPill({ label }: { label: string | null }) {
-  if (!label) return <span className="text-gray-400 text-xs">—</span>;
-  const colorMap: Record<string, string> = {
-    'Đang tuyển': 'bg-amber-100 text-amber-700',
-    'Đã tuyển đủ': 'bg-green-100 text-green-700',
-    'TT lan 1': 'bg-blue-100 text-blue-700',
-    'TT lan 2': 'bg-indigo-100 text-indigo-700',
-    'TT lan 3': 'bg-purple-100 text-purple-700',
-    'Chưa TT': 'bg-red-100 text-red-600',
-    'Đã TT': 'bg-green-100 text-green-700',
-  };
-  return (
-    <span className={`inline-block text-xs px-2 py-0.5 rounded-full font-medium ${colorMap[label] ?? 'bg-gray-100 text-gray-600'}`}>
-      {label}
-    </span>
-  );
 }
 
 // ── Quick-Add FAB Modal ──────────────────────────────────
@@ -119,15 +96,6 @@ function SectionHeader({ title, badge }: { title: string; badge?: string }) {
       {badge && (
         <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">{badge}</span>
       )}
-    </div>
-  );
-}
-
-function ProgressBar({ value, max, color = 'bg-green-500' }: { value: number; max: number; color?: string }) {
-  const pct = max > 0 ? Math.min(100, (value / max) * 100) : 0;
-  return (
-    <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
-      <div className={`${color} h-1.5 rounded-full transition-all duration-500`} style={{ width: `${pct}%` }} />
     </div>
   );
 }
@@ -220,7 +188,7 @@ export default function AdminDashboard() {
           { label: 'Chỉ tiêu lao động', value: data.totalLaborTarget, sub: `${data.orders.length} đơn hàng`, color: 'text-slate-800' },
           { label: 'Đã trúng tuyển', value: data.totalPassed, sub: 'qua phỏng vấn', color: 'text-green-600' },
           { label: 'Còn thiếu', value: totalMissing, sub: 'để hoàn thành', color: 'text-red-500' },
-          { label: 'Doanh thu', value: fmtVnd(data.totalRevenue), sub: 'phí dịch vụ VN', color: 'text-blue-600', isStr: true },
+          { label: 'Doanh thu', value: fmtVndShort(data.totalRevenue), sub: 'phí dịch vụ VN', color: 'text-blue-600', isStr: true },
         ].map(({ label, value, sub, color, isStr }) => (
           <div key={label} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
             <p className="text-xs text-gray-500 leading-tight">{label}</p>
@@ -260,7 +228,7 @@ export default function AdminDashboard() {
                         <p className="text-xs text-red-400">còn {o.labor_missing ?? 0}</p>
                       </div>
                     </div>
-                    <ProgressBar value={done} max={target} />
+                    <ProgressBar value={done} max={target} color="bg-green-500" />
                   </div>
                 );
               })}
@@ -330,7 +298,7 @@ export default function AdminDashboard() {
                 </div>
                 <div>
                   <p className="text-xs text-gray-400">Phí DV</p>
-                  <p className="text-sm font-bold text-slate-700">{fmtVnd(o.total_fee_vn)}</p>
+                  <p className="text-sm font-bold text-slate-700">{fmtVndShort(o.total_fee_vn)}</p>
                 </div>
                 <div>
                   <p className="text-xs text-gray-400">Thanh toán</p>
@@ -367,7 +335,7 @@ export default function AdminDashboard() {
                     <span className="font-semibold">{o.total_labor ?? '—'}</span>
                     {o.labor_missing ? <span className="text-red-400 ml-1">-{o.labor_missing}</span> : null}
                   </td>
-                  <td className="px-4 py-3 text-xs font-semibold text-gray-700 whitespace-nowrap">{fmtVnd(o.total_fee_vn)}</td>
+                  <td className="px-4 py-3 text-xs font-semibold text-gray-700 whitespace-nowrap">{fmtVndShort(o.total_fee_vn)}</td>
                   <td className="px-4 py-3"><StatusPill label={o.legal_status} /></td>
                   <td className="px-4 py-3"><StatusPill label={o.payment_status_vn} /></td>
                   <td className="px-4 py-3"><StatusPill label={o.status} /></td>

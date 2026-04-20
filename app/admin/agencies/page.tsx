@@ -1,4 +1,5 @@
 'use client';
+import ProgressBar from '@/components/ui/ProgressBar';
 
 import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
@@ -16,15 +17,6 @@ interface AgencyRow {
   totalOrders: number;
   totalCandidates: number;
   passed: number;
-}
-
-function ProgressBar({ value, max }: { value: number; max: number }) {
-  const pct = max > 0 ? Math.min(100, (value / max) * 100) : 0;
-  return (
-    <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
-      <div className="bg-blue-500 h-1.5 rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
-    </div>
-  );
 }
 
 export default function AgenciesPage() {
