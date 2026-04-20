@@ -27,6 +27,7 @@ export default function Home() {
   const [loadingData, setLoadingData] = useState(true);
   const [checkingSession, setCheckingSession] = useState(true);
   const avatarInputRef = useRef<HTMLInputElement>(null);
+  const preloadedAgentRef = useRef<{ id: string; full_name: string; short_name: string | null } | null>(null);
 
   const handleLogout = useCallback(async () => {
     try {
@@ -66,7 +67,7 @@ export default function Home() {
             try {
               const { data: agentData } = await supabase
                 .from('users')
-                .select('role, status')
+                .select('id, role, status, full_name, short_name')
                 .eq('supabase_uid', newSession.user.id)
                 .maybeSingle();
               if (agentData?.status === 'pending') {
@@ -77,6 +78,9 @@ export default function Home() {
               if (agentData?.role && adminRoles.includes(agentData.role)) {
                 router.replace('/admin');
                 return;
+              }
+              if (agentData) {
+                preloadedAgentRef.current = { id: agentData.id, full_name: agentData.full_name, short_name: agentData.short_name };
               }
               setUserId(newSession.user.id);
               setIsLoggedIn(true);
@@ -98,7 +102,7 @@ export default function Home() {
       try {
         const { data: agentData } = await supabase
           .from('users')
-          .select('role, status')
+          .select('id, role, status, full_name, short_name')
           .eq('supabase_uid', session.user.id)
           .maybeSingle();
         if (cancelled) return;
@@ -112,6 +116,9 @@ export default function Home() {
           router.replace('/admin');
           setCheckingSession(false);
           return;
+        }
+        if (agentData) {
+          preloadedAgentRef.current = { id: agentData.id, full_name: agentData.full_name, short_name: agentData.short_name };
         }
         setUserId(session.user.id);
         setIsLoggedIn(true);
@@ -157,39 +164,36 @@ export default function Home() {
           }
         }
 
-        // Read directly from Supabase (bypasses n8n, ~50ms)
-        let agentData, agentErr;
-        try {
+        // Use preloaded agent data from login to skip a round-trip
+        const preloaded = preloadedAgentRef.current;
+        preloadedAgentRef.current = null;
+
+        let agentData: { id: string; full_name: string; short_name: string | null } | null = preloaded;
+        if (!agentData) {
           const agentRes = await supabase
             .from('users')
             .select('id, full_name, short_name')
             .eq('supabase_uid', uid)
             .maybeSingle();
+          if (agentRes.error || !agentRes.data) {
+            setError('Agent not found. Please contact admin.');
+            setIsLoggedIn(false);
+            return;
+          }
           agentData = agentRes.data;
-          agentErr = agentRes.error;
-        } catch (err) {
-          agentErr = err as any;
-          agentData = null;
         }
 
-        if (agentErr || !agentData) {
-          setError('Agent not found. Please contact admin.');
-          setIsLoggedIn(false);
-          return;
-        }
+        // Fetch stats, orders, and order_agents in parallel
+        const agentIdEncoded = agentData.id.replace(/"/g, '\\"');
+        const [statsRes, ordersRes, oaRes] = await Promise.all([
+          supabase.from('recruitment_stats').select('*').eq('agent_id', agentData.id).maybeSingle(),
+          supabase.from('orders').select('*').filter('agent_ids', 'cs', `{"${agentIdEncoded}"}`),
+          supabase.from('order_agents').select('order_id, assigned_labor_number, assigned_date').eq('agent_id', agentData.id),
+        ]);
 
-        // Fetch recruitment stats separately
-        let statsData;
-        try {
-          const statsRes = await supabase
-            .from('recruitment_stats')
-            .select('*')
-            .eq('agent_id', agentData.id)
-            .maybeSingle();
-          statsData = statsRes.data;
-        } catch (statsErr) {
-          statsData = null;
-        }
+        const statsData = statsRes.data;
+        const ordersData = ordersRes.error ? [] : (ordersRes.data ?? []);
+        if (ordersRes.error) console.error('Orders query error:', ordersRes.error.message);
 
         const stats: DashboardStats | null = statsData ? {
           Tong_Lao_Dong: statsData.tong_lao_dong,
@@ -199,24 +203,6 @@ export default function Home() {
           Tong_Tien_Da_TT: statsData.tong_tien_da_tt,
           Tong_Tien_Chua_TT: statsData.tong_tien_chua_tt,
         } : null;
-
-        // Fetch orders separately
-        // Use .filter() with quoted array element to handle spaces in agent IDs (e.g. "GTA 2026")
-        let ordersData;
-        try {
-          const ordersRes = await supabase
-            .from('orders')
-            .select('*')
-            .filter('agent_ids', 'cs', `{"${agentData.id.replace(/"/g, '\\"')}"}`);
-          if (ordersRes.error) {
-            console.error('Orders query error:', ordersRes.error.message);
-            ordersData = [];
-          } else {
-            ordersData = ordersRes.data;
-          }
-        } catch (ordersErr) {
-          ordersData = [];
-        }
 
         const rawOrders: Order[] = (ordersData || []).map((o: any) => ({
           order_id: o.id,
@@ -244,17 +230,9 @@ export default function Home() {
           created_at: o.created_at,
         }));
 
-        let oaMap: Record<string, { labor: number, date: string | null }> = {};
-        try {
-          const oaRes = await supabase.from('order_agents')
-            .select('order_id, assigned_labor_number, assigned_date')
-            .eq('agent_id', agentData.id);
-          oaMap = Object.fromEntries(
-            (oaRes.data || []).map((oa: any) => [oa.order_id, { labor: oa.assigned_labor_number, date: oa.assigned_date }])
-          );
-        } catch (oaErr) {
-          // fallback: no allocated_labor
-        }
+        const oaMap: Record<string, { labor: number; date: string | null }> = Object.fromEntries(
+          (oaRes.data || []).map((oa: any) => [oa.order_id, { labor: oa.assigned_labor_number, date: oa.assigned_date }])
+        );
 
         const ordersWithAllocation: Order[] = rawOrders.map((o) => ({
           ...o,
@@ -328,7 +306,7 @@ export default function Home() {
       if (data?.user) {
         const { data: agentData } = await supabase
           .from('users')
-          .select('role, status')
+          .select('id, role, status, full_name, short_name')
           .eq('supabase_uid', data.user.id)
           .maybeSingle();
 
@@ -356,6 +334,8 @@ export default function Home() {
           router.replace('/admin');
           return;
         }
+        // Preload agent info so fetchDashboardData skips a redundant round-trip
+        preloadedAgentRef.current = { id: agentData.id, full_name: agentData.full_name, short_name: agentData.short_name };
         setUserId(data.user.id);
         setIsLoggedIn(true);
         setLoading(false);
