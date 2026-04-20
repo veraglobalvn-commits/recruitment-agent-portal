@@ -4,8 +4,8 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import type { Candidate, Order } from '@/lib/types';
-import CandidateCard from '@/components/CandidateCard';
-import LoadingSkeleton from '@/components/LoadingSkeleton';
+import CandidateCard from '@/components/agent/CandidateCard';
+import LoadingSkeleton from '@/components/ui/LoadingSkeleton';
 
 function VideoPlayer({ url, onClose }: { url: string; onClose: () => void }) {
   return (

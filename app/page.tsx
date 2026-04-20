@@ -4,10 +4,10 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { createSupabaseClient } from '@/lib/supabase';
 import type { DashboardStats, Order } from '@/lib/types';
-import LoginForm from '@/components/LoginForm';
-import DashboardStatsComponent from '@/components/DashboardStats';
-import OrdersList from '@/components/OrdersList';
-import LoadingSkeleton from '@/components/LoadingSkeleton';
+import LoginForm from '@/components/agent/LoginForm';
+import DashboardStatsComponent from '@/components/agent/DashboardStats';
+import OrdersList from '@/components/agent/OrdersList';
+import LoadingSkeleton from '@/components/ui/LoadingSkeleton';
 
 export default function Home() {
   const router = useRouter();
