@@ -33,8 +33,9 @@ export default function AgenciesPage() {
       const headers: Record<string, string> = {};
       if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
 
-      const [agRes, activeUsers, ordersRes, candidatesRes, oaRes] = await Promise.all([
+      const [agRes, allUsersRes, activeUsers, ordersRes, candidatesRes, oaRes] = await Promise.all([
         fetch('/api/admin/agencies', { headers }).then(r => r.json()),
+        supabase.from('users').select('id, agency_id').neq('role', 'admin'),
         fetchActiveAgents('id, agency_id'),
         supabase.from('orders').select('id, agent_ids, total_labor'),
         supabase.from('candidates').select('id_ld, agent_id, interview_status'),
@@ -42,7 +43,8 @@ export default function AgenciesPage() {
       ]);
 
       const agenciesRaw = agRes.agencies || [];
-      const users = activeUsers || [];
+      const allUsers = (allUsersRes.data || []) as { id: string; agency_id: string | null }[];
+      const activeUsersList = activeUsers || [];
       const orders = ordersRes.data || [];
       const candidates = candidatesRes.data || [];
 
@@ -51,13 +53,15 @@ export default function AgenciesPage() {
         oaTargetMap[oa.agent_id] = (oaTargetMap[oa.agent_id] || 0) + (oa.assigned_labor_number || 0);
       });
 
+      // Count ALL members (active + inactive) for accurate display
       const memberCountMap: Record<string, number> = {};
-      (users as unknown as { id: string; agency_id: string | null }[]).forEach((u) => {
+      allUsers.forEach((u) => {
         if (u.agency_id) memberCountMap[u.agency_id] = (memberCountMap[u.agency_id] || 0) + 1;
       });
 
+      // Use only active users for candidate/order mapping
       const agencyUserIds: Record<string, string[]> = {};
-      (users as unknown as { id: string; agency_id: string | null }[]).forEach((u) => {
+      (activeUsersList as unknown as { id: string; agency_id: string | null }[]).forEach((u) => {
         const aid = u.agency_id;
         if (aid) {
           if (!agencyUserIds[aid]) agencyUserIds[aid] = [];
@@ -78,7 +82,7 @@ export default function AgenciesPage() {
           legal_rep: ag.legal_rep,
           labor_percentage: ag.labor_percentage,
           status: ag.status,
-          memberCount: (memberCountMap[ag.id] || 0) + 1,
+          memberCount: memberCountMap[ag.id] || 0,
           totalOrders: agOrders.length,
           totalCandidates: agCands.length,
           passed,

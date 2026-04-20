@@ -760,7 +760,7 @@ export default function OrderDetailPage() {
           </div>
           <div className="p-4 space-y-3">
             {/* Job type VN */}
-            <div><label className="block text-xs text-gray-500 mb-1">Vị trí / Loại lao động</label><input type="text" value={form.job_type_en || form.job_type} onChange={(e) => setField('job_type', e.target.value)} className={inputCls(form.job_type_en || form.job_type)} /></div>
+            <div><label className="block text-xs text-gray-500 mb-1">Vị trí / Loại lao động</label><input type="text" value={form.job_type} onChange={(e) => setField('job_type', e.target.value)} className={inputCls(form.job_type)} /></div>
             {/* Numbers */}
             <div className="grid grid-cols-3 gap-3">
               <div><label className="block text-xs text-gray-500 mb-1">Số LĐ</label><input type="number" value={form.total_labor} onChange={(e) => setField('total_labor', e.target.value)} className={inputCls(form.total_labor)} /></div>
@@ -775,7 +775,7 @@ export default function OrderDetailPage() {
             {/* Meal */}
             <div>
               <label className="block text-xs text-gray-500 mb-1">Hỗ trợ bữa ăn</label>
-              <select value={form.meal_en || form.meal} onChange={(e) => setField('meal', e.target.value)} className={`${inputCls(form.meal_en || form.meal)} bg-white`}>
+              <select value={form.meal} onChange={(e) => setField('meal', e.target.value)} className={`${inputCls(form.meal)} bg-white`}>
                 {MEAL_OPTIONS.map((m) => <option key={m} value={m}>{m}</option>)}
               </select>
             </div>
@@ -783,7 +783,7 @@ export default function OrderDetailPage() {
             <div>
               <label className="block text-xs text-gray-500 mb-1">Hỗ trợ nhà ở</label>
               <div className="flex gap-2">
-                <select value={form.dormitory_en || form.dormitory} onChange={(e) => setField('dormitory', e.target.value)} className={`${inputCls(form.dormitory_en || form.dormitory)} bg-white flex-1`}>
+                <select value={form.dormitory} onChange={(e) => setField('dormitory', e.target.value)} className={`${inputCls(form.dormitory)} bg-white flex-1`}>
                   {DORMITORY_OPTIONS.map((d) => <option key={d} value={d}>{d}</option>)}
                 </select>
                 {form.dormitory === 'Có phí' && (
