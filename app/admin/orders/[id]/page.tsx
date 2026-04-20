@@ -384,26 +384,40 @@ export default function OrderDetailPage() {
     }
   }, []);
 
+  const upsertOrderAgent = useCallback(async (agentId: string, laborNumber: number) => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) throw new Error('Chưa đăng nhập');
+    const res = await fetch('/api/admin/order-agents', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ order_id: id, agent_id: agentId, assigned_labor_number: laborNumber }),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || json.details || `Lỗi ${res.status}`);
+    return json.data;
+  }, [id]);
+
+  const removeOrderAgent = useCallback(async (agentId: string) => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) throw new Error('Chưa đăng nhập');
+    const res = await fetch('/api/admin/order-agents', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ order_id: id, agent_id: agentId }),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || `Lỗi ${res.status}`);
+  }, [id]);
+
   const handleAgentAllocationChange = useCallback(async (agentId: string, value: string) => {
     const numValue = value ? parseInt(value, 10) : 0;
     setAgentLaborAllocations((prev: Record<string, string>) => ({ ...prev, [agentId]: value }));
     try {
-      const { data, error } = await supabase.from('order_agents').upsert({
-        order_id: id,
-        agent_id: agentId,
-        assigned_labor_number: numValue,
-      }, { onConflict: 'order_id,agent_id' });
-      if (error) {
-        console.error('[order_agents.upsert] Full error:', JSON.stringify(error, null, 2));
-        throw new Error(error.message || JSON.stringify(error));
-      }
-      console.log('[order_agents.upsert] OK:', data);
+      await upsertOrderAgent(agentId, numValue);
     } catch (err: any) {
-      console.error('[handleAgentAllocationChange] catch:', err);
-      const msg = err?.message || err?.toString() || JSON.stringify(err);
-      alert(`Lỗi lưu: ${msg}`);
+      alert(`Lỗi lưu: ${err?.message || err}`);
     }
-  }, [id]);
+  }, [upsertOrderAgent]);
 
   // Handover CRUD
   const createHandover = async () => {
@@ -894,9 +908,11 @@ export default function OrderDetailPage() {
                         setAgentLaborAllocations((prev) => ({ ...prev, [ag.id]: defaultAllocation.toString() }));
                         setDirty(true);
                         setShowAgentDropdown(false);
-                        await supabase.from('order_agents').upsert({
-                          order_id: id, agent_id: ag.id, assigned_labor_number: defaultAllocation,
-                        }, { onConflict: 'order_id,agent_id' });
+                        try {
+                          await upsertOrderAgent(ag.id, defaultAllocation);
+                        } catch (err: any) {
+                          alert(`Lỗi thêm agent: ${err?.message || err}`);
+                        }
                       }}
                         className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 first:rounded-t-lg last:rounded-b-lg">
                         {ag.short_name || ag.full_name}
@@ -937,7 +953,11 @@ export default function OrderDetailPage() {
                           return next;
                         });
                         setDirty(true);
-                        await supabase.from('order_agents').delete().eq('order_id', id).eq('agent_id', ag.id);
+                        try {
+                          await removeOrderAgent(ag.id);
+                        } catch (err: any) {
+                          alert(`Lỗi xoá agent: ${err?.message || err}`);
+                        }
                       }} className="rounded text-blue-600" />
                       <span className="text-sm text-gray-700 font-medium flex-1">{ag.short_name || ag.full_name}</span>
                     </div>
