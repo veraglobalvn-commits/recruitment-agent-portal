@@ -87,13 +87,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   const loadAdmin = useCallback(async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { router.replace('/'); return; }
+      // getSession() reads from localStorage — no server round-trip (middleware already verified JWT)
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) { router.replace('/'); return; }
 
       const { data: agentData, error: dbErr } = await supabase
         .from('users')
         .select('role, status, full_name')
-        .eq('supabase_uid', user.id)
+        .eq('supabase_uid', session.user.id)
         .maybeSingle();
 
       if (dbErr || !agentData || !ADMIN_ROLES.includes(agentData.role) || agentData.status !== 'active') {
@@ -101,7 +102,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         return;
       }
 
-      setAdmin({ uid: user.id, email: user.email ?? '', role: agentData.role });
+      setAdmin({ uid: session.user.id, email: session.user.email ?? '', role: agentData.role });
     } catch {
       router.replace('/');
     }

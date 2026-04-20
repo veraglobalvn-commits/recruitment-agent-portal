@@ -126,7 +126,7 @@ export default function OrderDetailPage() {
     setLoading(true);
     try {
       const [ordRes, candRes, activeAgents, agencyRes, handRes, payRes, policyRes, oaRes] = await Promise.all([
-        supabase.from('orders').select('*').eq('id', id).single(),
+        supabase.from('orders').select('*, companies!orders_company_id_fkey(en_company_name, en_industry, en_address, en_business_type, en_legal_rep, en_title)').eq('id', id).single(),
         supabase.from('candidates').select('*').eq('order_id', id),
         fetchActiveAgents('id, full_name, short_name, agency_id'),
         supabase.from('agencies').select('id, labor_percentage').eq('status', 'active'),
@@ -139,19 +139,14 @@ export default function OrderDetailPage() {
 
       if (ordRes.data) {
         const o = ordRes.data as AdminOrder;
+        const compData = (ordRes.data as any).companies as Record<string, string> | null;
         setOrder(o);
-        // Load English company name and industry if available
-        if (o.company_id) {
-          const { data: compData, error: compError } = await supabase.from('companies').select('en_company_name, en_industry, en_address, en_business_type, en_legal_rep, en_title').eq('id', o.company_id).single();
-          if (!compError) {
-            setEnCompanyName(compData?.en_company_name ?? '');
-            setEnIndustry(compData?.en_industry ?? '');
-            setEnAddress(compData?.en_address ?? '');
-            setEnBusinessType(compData?.en_business_type ?? '');
-            setEnLegalRep(compData?.en_legal_rep ?? '');
-            setEnTitle(compData?.en_title ?? '');
-          }
-        }
+        setEnCompanyName(compData?.en_company_name ?? '');
+        setEnIndustry(compData?.en_industry ?? '');
+        setEnAddress(compData?.en_address ?? '');
+        setEnBusinessType(compData?.en_business_type ?? '');
+        setEnLegalRep(compData?.en_legal_rep ?? '');
+        setEnTitle(compData?.en_title ?? '');
         setDocLinks((o.doc_links as OrderDocLink[]) ?? []);
         setForm({
           job_type: o.job_type ?? '',
