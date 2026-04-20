@@ -388,14 +388,20 @@ export default function OrderDetailPage() {
     const numValue = value ? parseInt(value, 10) : 0;
     setAgentLaborAllocations((prev: Record<string, string>) => ({ ...prev, [agentId]: value }));
     try {
-      const { error } = await supabase.from('order_agents').upsert({
+      const { data, error } = await supabase.from('order_agents').upsert({
         order_id: id,
         agent_id: agentId,
         assigned_labor_number: numValue,
       }, { onConflict: 'order_id,agent_id' });
-      if (error) throw new Error(error.message || JSON.stringify(error));
-    } catch (err) {
-      alert(`Lỗi lưu: ${err instanceof Error ? err.message : JSON.stringify(err)}`);
+      if (error) {
+        console.error('[order_agents.upsert] Full error:', JSON.stringify(error, null, 2));
+        throw new Error(error.message || JSON.stringify(error));
+      }
+      console.log('[order_agents.upsert] OK:', data);
+    } catch (err: any) {
+      console.error('[handleAgentAllocationChange] catch:', err);
+      const msg = err?.message || err?.toString() || JSON.stringify(err);
+      alert(`Lỗi lưu: ${msg}`);
     }
   }, [id]);
 
