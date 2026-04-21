@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { createSupabaseClient } from '@/lib/supabase';
 import type { DashboardStats, Order } from '@/lib/types';
@@ -20,14 +20,20 @@ export default function Home() {
   const [userId, setUserId] = useState<string | null>(null);
   const [agentId, setAgentId] = useState<string | null>(null);
   const [agentName, setAgentName] = useState<string | null>(null);
+  const [userRole, setUserRole] = useState<string | null>(null);
+  const [agencyId, setAgencyId] = useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [loadingData, setLoadingData] = useState(true);
   const [checkingSession, setCheckingSession] = useState(true);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
   const avatarInputRef = useRef<HTMLInputElement>(null);
-  const preloadedAgentRef = useRef<{ id: string; full_name: string; short_name: string | null } | null>(null);
+  const preloadedAgentRef = useRef<{ id: string; full_name: string; short_name: string | null; role: string | null; agency_id: string | null } | null>(null);
+
+  const isOwner = useMemo(() => userRole === 'agent', [userRole]);
 
   const handleLogout = useCallback(async () => {
     try {
@@ -39,9 +45,21 @@ export default function Home() {
     setIsLoggedIn(false);
     setUserId(null);
     setAgentName(null);
+    setUserRole(null);
+    setAgencyId(null);
     setStats(null);
     setOrders([]);
     localStorage.removeItem('agent_id');
+    localStorage.removeItem('user_role');
+    localStorage.removeItem('agency_id');
+  }, []);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
   }, []);
 
   useEffect(() => {
@@ -67,7 +85,7 @@ export default function Home() {
             try {
               const { data: agentData } = await supabase
                 .from('users')
-                .select('id, role, status, full_name, short_name')
+                .select('id, role, status, full_name, short_name, agency_id, avatar_url')
                 .eq('supabase_uid', newSession.user.id)
                 .maybeSingle();
               if (agentData?.status === 'pending') {
@@ -80,7 +98,7 @@ export default function Home() {
                 return;
               }
               if (agentData) {
-                preloadedAgentRef.current = { id: agentData.id, full_name: agentData.full_name, short_name: agentData.short_name };
+                preloadedAgentRef.current = { id: agentData.id, full_name: agentData.full_name, short_name: agentData.short_name, role: agentData.role ?? null, agency_id: agentData.agency_id ?? null };
               }
               setUserId(newSession.user.id);
               setIsLoggedIn(true);
@@ -102,7 +120,7 @@ export default function Home() {
       try {
         const { data: agentData } = await supabase
           .from('users')
-          .select('id, role, status, full_name, short_name')
+          .select('id, role, status, full_name, short_name, agency_id, avatar_url')
           .eq('supabase_uid', session.user.id)
           .maybeSingle();
         if (cancelled) return;
@@ -118,7 +136,7 @@ export default function Home() {
           return;
         }
         if (agentData) {
-          preloadedAgentRef.current = { id: agentData.id, full_name: agentData.full_name, short_name: agentData.short_name };
+          preloadedAgentRef.current = { id: agentData.id, full_name: agentData.full_name, short_name: agentData.short_name, role: agentData.role ?? null, agency_id: agentData.agency_id ?? null };
         }
         setUserId(session.user.id);
         setIsLoggedIn(true);
@@ -158,6 +176,9 @@ export default function Home() {
             setAgentName(result.agent_name);
             setStats(result.stats);
             setOrders(result.orders || []);
+            if (result.role) { setUserRole(result.role); localStorage.setItem('user_role', result.role); }
+            if (result.agency_id) { setAgencyId(result.agency_id); localStorage.setItem('agency_id', result.agency_id); }
+            if (result.avatar_url) setAvatarUrl(result.avatar_url);
             setLoadingData(false); // instant from cache
           } catch (e) {
             sessionStorage.removeItem(cacheKey);
@@ -168,11 +189,11 @@ export default function Home() {
         const preloaded = preloadedAgentRef.current;
         preloadedAgentRef.current = null;
 
-        let agentData: { id: string; full_name: string; short_name: string | null } | null = preloaded;
+        let agentData: { id: string; full_name: string; short_name: string | null; role: string | null; agency_id: string | null; avatar_url?: string | null } | null = preloaded;
         if (!agentData) {
           const agentRes = await supabase
             .from('users')
-            .select('id, full_name, short_name')
+            .select('id, full_name, short_name, role, agency_id, avatar_url')
             .eq('supabase_uid', uid)
             .maybeSingle();
           if (agentRes.error || !agentRes.data) {
@@ -183,12 +204,13 @@ export default function Home() {
           agentData = agentRes.data;
         }
 
-        // Fetch stats, orders, and order_agents in parallel
+        // Fetch stats, orders, order_agents, and candidate counts in parallel
         const agentIdEncoded = agentData.id.replace(/"/g, '\\"');
-        const [statsRes, ordersRes, oaRes] = await Promise.all([
+        const [statsRes, ordersRes, oaRes, candCountRes] = await Promise.all([
           supabase.from('recruitment_stats').select('*').eq('agent_id', agentData.id).maybeSingle(),
           supabase.from('orders').select('*').filter('agent_ids', 'cs', `{"${agentIdEncoded}"}`),
           supabase.from('order_agents').select('order_id, assigned_labor_number, assigned_date').eq('agent_id', agentData.id),
+          supabase.from('candidates').select('order_id').eq('agent_id', agentData.id),
         ]);
 
         const statsData = statsRes.data;
@@ -234,9 +256,15 @@ export default function Home() {
           (oaRes.data || []).map((oa: any) => [oa.order_id, { labor: oa.assigned_labor_number, date: oa.assigned_date }])
         );
 
+        const candCountMap: Record<string, number> = {};
+        for (const c of (candCountRes.data || [])) {
+          if (c.order_id) candCountMap[c.order_id] = (candCountMap[c.order_id] || 0) + 1;
+        }
+
         const ordersWithAllocation: Order[] = rawOrders.map((o) => ({
           ...o,
           allocated_labor: oaMap[o.order_id]?.labor ?? o.total_labor,
+          candidates_count: candCountMap[o.order_id] ?? 0,
         })).sort((a, b) => {
           const tA = oaMap[a.order_id]?.date || a.created_at;
           const tB = oaMap[b.order_id]?.date || b.created_at;
@@ -250,7 +278,9 @@ export default function Home() {
         const result = {
           agent_name: agentData.short_name || agentData.full_name,
           agent_id: agentData.id,
-          avatar_url: null,
+          avatar_url: agentData.avatar_url ?? null,
+          role: agentData.role ?? null,
+          agency_id: agentData.agency_id ?? null,
           stats,
           orders: ordersWithAllocation,
         };
@@ -258,9 +288,13 @@ export default function Home() {
         setAgentName(result.agent_name);
         setAgentId(result.agent_id);
         setAvatarUrl(result.avatar_url);
+        setUserRole(result.role);
+        setAgencyId(result.agency_id);
         setStats(result.stats);
         setOrders(result.orders);
         if (result.agent_id) localStorage.setItem('agent_id', result.agent_id);
+        if (result.role) localStorage.setItem('user_role', result.role);
+        if (result.agency_id) localStorage.setItem('agency_id', result.agency_id);
         sessionStorage.setItem(cacheKey, JSON.stringify(result));
 
       } catch (err) {
@@ -299,14 +333,14 @@ export default function Home() {
         password,
       });
       if (authError) {
-        setError('Email hoặc mật khẩu không đúng');
+        setError('Incorrect email or password.');
         setLoading(false);
         return;
       }
       if (data?.user) {
         const { data: agentData } = await supabase
           .from('users')
-          .select('id, role, status, full_name, short_name')
+          .select('id, role, status, full_name, short_name, agency_id, avatar_url')
           .eq('supabase_uid', data.user.id)
           .maybeSingle();
 
@@ -318,13 +352,13 @@ export default function Home() {
         }
         if (!agentData) {
           await supabase.auth.signOut();
-          setError('Tài khoản chưa được thiết lập. Liên hệ admin để được hỗ trợ.');
+          setError('Account not set up. Please contact admin.');
           setLoading(false);
           return;
         }
         if (agentData.status === 'inactive') {
           await supabase.auth.signOut();
-          setError('Tài khoản đã bị vô hiệu hóa. Liên hệ admin để được hỗ trợ.');
+          setError('Account has been deactivated. Please contact admin.');
           setLoading(false);
           return;
         }
@@ -335,7 +369,7 @@ export default function Home() {
           return;
         }
         // Preload agent info so fetchDashboardData skips a redundant round-trip
-        preloadedAgentRef.current = { id: agentData.id, full_name: agentData.full_name, short_name: agentData.short_name };
+        preloadedAgentRef.current = { id: agentData.id, full_name: agentData.full_name, short_name: agentData.short_name, role: agentData.role ?? null, agency_id: agentData.agency_id ?? null };
         setUserId(data.user.id);
         setIsLoggedIn(true);
         setLoading(false);
@@ -429,19 +463,39 @@ export default function Home() {
               <p className="text-xs text-blue-600 font-medium">Hi, {agentName}</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <a
-              href="/team"
-              className="text-xs text-blue-600 hover:text-blue-800 px-3 py-2 rounded-lg hover:bg-blue-50 min-h-[44px] flex items-center gap-1"
-            >
-              👥 Team
-            </a>
+          <div ref={menuRef} className="relative">
             <button
-              onClick={handleLogout}
-              className="text-xs text-red-500 hover:text-red-700 px-3 py-2 rounded-lg hover:bg-red-50 min-h-[44px] min-w-[44px] flex items-center"
+              onClick={() => setMenuOpen(!menuOpen)}
+              className="min-h-[44px] min-w-[44px] flex items-center justify-center text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors text-xl"
+              aria-label="Menu"
             >
-              Đăng xuất
+              ☰
             </button>
+            {menuOpen && (
+              <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-2xl shadow-lg z-50 min-w-[160px] py-1 overflow-hidden">
+                <a href="/profile" onClick={() => setMenuOpen(false)}
+                  className="flex items-center gap-2.5 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 min-h-[44px]">
+                  👤 Profile
+                </a>
+                {isOwner && (
+                  <>
+                    <a href="/agency" onClick={() => setMenuOpen(false)}
+                      className="flex items-center gap-2.5 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 min-h-[44px]">
+                      🏢 Agency
+                    </a>
+                    <a href="/team" onClick={() => setMenuOpen(false)}
+                      className="flex items-center gap-2.5 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 min-h-[44px]">
+                      👥 Team
+                    </a>
+                  </>
+                )}
+                <div className="border-t border-gray-100 mt-1" />
+                <button onClick={() => { setMenuOpen(false); handleLogout(); }}
+                  className="w-full flex items-center gap-2.5 px-4 py-3 text-sm text-red-600 hover:bg-red-50 min-h-[44px]">
+                  🚪 Sign Out
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </header>

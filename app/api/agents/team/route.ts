@@ -15,6 +15,28 @@ function generateTempPassword(): string {
   return 'Tmp_' + randomBytes(6).toString('hex');
 }
 
+function generateMemberId(fullName: string): string {
+  return fullName
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/gi, 'd')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_|_$/g, '')
+    .slice(0, 20);
+}
+
+async function findUniqueId(adminClient: ReturnType<typeof getAdminClient>, base: string): Promise<string> {
+  let candidate = base;
+  let suffix = 1;
+  while (true) {
+    const { data } = await adminClient.from('users').select('id').eq('id', candidate).maybeSingle();
+    if (!data) return candidate;
+    candidate = `${base.slice(0, 17)}_${suffix++}`;
+  }
+}
+
 export async function GET(req: NextRequest) {
   const result = await getAuthenticatedUser(req);
   if (!result) return unauthorizedResponse();
@@ -26,11 +48,11 @@ export async function GET(req: NextRequest) {
     .maybeSingle();
 
   if (!currentUser || currentUser.status !== 'active') {
-    return unauthorizedResponse('Tài khoản không hoạt động');
+    return unauthorizedResponse('Account inactive');
   }
 
   if (currentUser.role !== 'agent') {
-    return unauthorizedResponse('Chỉ agent owner mới được quản lý team');
+    return unauthorizedResponse('Only agent owner can manage team');
   }
 
   const targetAgencyId = currentUser.agency_id || currentUser.id;
@@ -58,41 +80,30 @@ export async function POST(req: NextRequest) {
     .maybeSingle();
 
   if (!currentUser || currentUser.status !== 'active') {
-    return unauthorizedResponse('Tài khoản không hoạt động');
+    return unauthorizedResponse('Account inactive');
   }
 
   if (currentUser.role !== 'agent') {
-    return unauthorizedResponse('Chỉ agent owner mới được tạo member');
+    return unauthorizedResponse('Only agent owner can create members');
   }
 
   const body = await req.json() as {
     email?: string;
     full_name?: string;
-    agent_id?: string;
   };
 
   if (!body.email?.trim()) {
-    return NextResponse.json({ error: 'Email là bắt buộc' }, { status: 400 });
+    return NextResponse.json({ error: 'Email is required' }, { status: 400 });
   }
   if (!body.full_name?.trim()) {
-    return NextResponse.json({ error: 'Họ tên là bắt buộc' }, { status: 400 });
-  }
-  if (!body.agent_id?.trim()) {
-    return NextResponse.json({ error: 'ID là bắt buộc' }, { status: 400 });
+    return NextResponse.json({ error: 'Full name is required' }, { status: 400 });
   }
 
-  const normalizedId = body.agent_id.trim().toUpperCase();
   const targetAgencyId = currentUser.agency_id || currentUser.id;
   const adminClient = getAdminClient();
 
-  const { data: existing } = await adminClient
-    .from('users')
-    .select('id')
-    .ilike('id', normalizedId)
-    .maybeSingle();
-  if (existing) {
-    return NextResponse.json({ error: `ID "${normalizedId}" đã tồn tại` }, { status: 409 });
-  }
+  const baseId = generateMemberId(body.full_name.trim());
+  const normalizedId = await findUniqueId(adminClient, baseId);
 
   const tempPassword = generateTempPassword();
 
@@ -105,9 +116,9 @@ export async function POST(req: NextRequest) {
   if (authErr) {
     const msg = authErr.message.toLowerCase();
     if (msg.includes('already registered') || msg.includes('already exists') || msg.includes('duplicate')) {
-      return NextResponse.json({ error: 'Email đã được đăng ký bởi tài khoản khác' }, { status: 409 });
+      return NextResponse.json({ error: 'Email already registered by another account' }, { status: 409 });
     }
-    return NextResponse.json({ error: `Tạo tài khoản thất bại: ${authErr.message}` }, { status: 400 });
+    return NextResponse.json({ error: `Account creation failed: ${authErr.message}` }, { status: 400 });
   }
 
   const defaultPerms = ROLE_PERMISSIONS['member'] || [];
@@ -129,7 +140,7 @@ export async function POST(req: NextRequest) {
 
   if (dbErr) {
     await adminClient.auth.admin.deleteUser(authData.user.id);
-    return NextResponse.json({ error: `Tạo user thất bại: ${dbErr.message}` }, { status: 500 });
+    return NextResponse.json({ error: `User creation failed: ${dbErr.message}` }, { status: 500 });
   }
 
   return NextResponse.json({
@@ -140,4 +151,58 @@ export async function POST(req: NextRequest) {
       password: tempPassword,
     },
   });
+}
+
+export async function PATCH(req: NextRequest) {
+  const result = await getAuthenticatedUser(req);
+  if (!result) return unauthorizedResponse();
+
+  const { data: currentUser } = await result.supabase
+    .from('users')
+    .select('id, role, status, agency_id')
+    .eq('supabase_uid', result.user.id)
+    .maybeSingle();
+
+  if (!currentUser || currentUser.status !== 'active') {
+    return unauthorizedResponse('Account inactive');
+  }
+
+  if (currentUser.role !== 'agent') {
+    return unauthorizedResponse('Only agent owner can edit members');
+  }
+
+  const body = await req.json() as {
+    memberId?: string;
+    full_name?: string;
+    status?: string;
+  };
+
+  if (!body.memberId) {
+    return NextResponse.json({ error: 'memberId is required' }, { status: 400 });
+  }
+
+  const targetAgencyId = currentUser.agency_id || currentUser.id;
+  const adminClient = getAdminClient();
+
+  const { data: member } = await adminClient
+    .from('users')
+    .select('id, agency_id')
+    .eq('id', body.memberId)
+    .maybeSingle();
+
+  if (!member || member.agency_id !== targetAgencyId) {
+    return NextResponse.json({ error: 'Member not found in your team' }, { status: 404 });
+  }
+
+  const updates: Record<string, unknown> = {};
+  if (body.full_name !== undefined) updates.full_name = body.full_name.trim();
+  if (body.status !== undefined && ['active', 'inactive'].includes(body.status)) updates.status = body.status;
+
+  const { error } = await adminClient
+    .from('users')
+    .update(updates)
+    .eq('id', body.memberId);
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ success: true });
 }

@@ -14,8 +14,10 @@ interface CandidateCardProps {
   onStatusChange?: (id: string, status: 'Passed' | 'Failed') => void;
   currentStatus?: string | null;
   useDropdown?: boolean;
+  canSetStatus?: boolean;
   orderInfo?: { id: string; company_name: string | null; job_type: string | null };
   agentInfo?: { short_name: string | null; full_name: string | null };
+  addedBy?: string | null;
   isNewVideo?: boolean;
   onVideoViewed?: () => void;
   onVideoPlay?: (url: string) => void;
@@ -33,8 +35,10 @@ export default function CandidateCard({
   onStatusChange,
   currentStatus,
   useDropdown,
+  canSetStatus = true,
   orderInfo,
   agentInfo,
+  addedBy,
   isNewVideo,
   onVideoViewed,
   onVideoPlay,
@@ -122,7 +126,7 @@ export default function CandidateCard({
       onCandidateUpdate(candidate.id_ld, updates);
       setEditing(false);
     } catch (err) {
-      alert(`Lưu thất bại: ${err instanceof Error ? err.message : String(err)}`);
+      alert(`Save failed: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setSaving(false);
     }
@@ -164,7 +168,7 @@ export default function CandidateCard({
       onCandidateUpdate(candidate.id_ld, { [field]: publicUrl });
     } catch (err) {
       console.error('Upload failed:', err);
-      alert(`Lỗi upload: ${err instanceof Error ? err.message : String(err)}`);
+      alert(`Upload error: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setUploading(false);
     }
@@ -234,9 +238,8 @@ export default function CandidateCard({
         </div>
 
         <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between gap-1 mb-0.5">
+          <div className="flex items-start gap-1 mb-0.5">
             <h3 className="font-bold text-gray-800 text-sm leading-tight flex-1 min-w-0 truncate">{candidate.full_name || <span className="text-red-400">N/A</span>}</h3>
-            <span className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded flex-shrink-0 max-w-[120px] truncate">{candidate.id_ld}</span>
           </div>
           {candidate.interview_status && !onStatusChange && (
             <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
@@ -300,7 +303,7 @@ export default function CandidateCard({
                   ✏️ Edit
                 </button>
                 {canDelete && onCandidateDelete && (
-                  <button onClick={() => { if (confirm('Xoá ứng viên này?')) onCandidateDelete(candidate.id_ld); }}
+                  <button onClick={() => { if (confirm('Delete this candidate?')) onCandidateDelete(candidate.id_ld); }}
                     className="text-xs text-red-500 hover:text-red-700 px-2 py-1 rounded hover:bg-red-50 min-h-[36px] flex items-center gap-1">
                     🗑 Delete
                   </button>
@@ -326,6 +329,12 @@ export default function CandidateCard({
           <>
             {orderInfo && <span className="text-gray-400">·</span>}
             <span className="bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded-full">{agentInfo.short_name || agentInfo.full_name}</span>
+          </>
+        )}
+        {addedBy && (
+          <>
+            <span className="text-gray-400">·</span>
+            <span className="bg-purple-50 text-purple-600 px-1.5 py-0.5 rounded-full text-xs">Added by: {addedBy}</span>
           </>
         )}
       </div>
@@ -385,7 +394,7 @@ export default function CandidateCard({
             onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadFile(f, 'healthcert', 'health_cert_link', setHealthCertUploading); e.target.value = ''; }} />
         </div>
 
-        {onStatusChange && (
+        {onStatusChange && canSetStatus && (
           <div className="flex items-center gap-2">
             {useDropdown ? (
               <div ref={dropdownRef} className="relative">

@@ -41,9 +41,11 @@ export default function OrderDetail() {
     : null;
 
   const [candidates, setCandidates] = useState<Candidate[]>([]);
+  const [memberNameMap, setMemberNameMap] = useState<Record<string, string>>({});
   const [orderData, setOrderData] = useState<Order | null>(null);
   const [companyVideos, setCompanyVideos] = useState<CompanyVideos | null>(null);
   const [currentAgentId, setCurrentAgentId] = useState<string | null>(null);
+  const [currentUserRole, setCurrentUserRole] = useState<string | null>(null);
   const [allocatedLabor, setAllocatedLabor] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
@@ -80,7 +82,9 @@ export default function OrderDetail() {
   const fetchCandidates = useCallback(async () => {
     try {
       const agentId = localStorage.getItem('agent_id');
+      const role = localStorage.getItem('user_role');
       setCurrentAgentId(agentId);
+      setCurrentUserRole(role);
 
       const cacheKey = `c_url_${orderId}`;
       const cached = sessionStorage.getItem(cacheKey);
@@ -183,6 +187,15 @@ export default function OrderDetail() {
 
       setCandidates(newCandidates);
       sessionStorage.setItem(cacheKey, JSON.stringify(newCandidates));
+
+      // Fetch names for members who added candidates (for agent-owner "added by" display)
+      const uniqueAgentIds = Array.from(new Set(newCandidates.map(c => c.agent_id).filter((id): id is string => !!id && id !== agentId)));
+      if (uniqueAgentIds.length > 0) {
+        const { data: usersData } = await supabase.from('users').select('id, full_name, short_name').in('id', uniqueAgentIds);
+        const nameMap: Record<string, string> = {};
+        for (const u of (usersData || [])) nameMap[u.id] = u.short_name || u.full_name || u.id;
+        setMemberNameMap(nameMap);
+      }
 
       if (agentId && orderRes.data) {
         const oaRes = await supabase
@@ -671,9 +684,13 @@ export default function OrderDetail() {
         {orderData && (
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
             <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">Recruitment Productivity</h3>
-            <div className="flex items-center justify-between text-center">
+            <div className="grid grid-cols-4 gap-3 text-center">
               <div>
-                <p className="text-xs text-gray-400 mb-1">Total Workers</p>
+                <p className="text-xs text-gray-400 mb-1">Applied</p>
+                <p className="text-2xl font-bold text-blue-600">{candidates.length}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-400 mb-1">Target</p>
                 <p className="text-2xl font-bold text-slate-800">{allocated}</p>
               </div>
               <div>
@@ -724,6 +741,8 @@ export default function OrderDetail() {
                   onVideoPlay={(url) => setPlayingVideo(url)}
                   isSelected={selectedCandidates.includes(c.id_ld)}
                   onToggleSelect={handleToggleSelect}
+                  addedBy={c.agent_id && c.agent_id !== currentAgentId ? memberNameMap[c.agent_id] : undefined}
+                  canSetStatus={currentUserRole !== 'member'}
                 />
               ))}
             </div>

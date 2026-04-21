@@ -9,9 +9,9 @@ export default function OrdersList({ orders }: { orders: Order[] }) {
   return (
     <div className="space-y-3">
       {orders.map((order, idx) => {
-        const total = typeof order.total_labor === 'number' ? order.total_labor : parseInt(String(order.total_labor)) || 0;
         const missing = typeof order.missing === 'number' ? order.missing : parseInt(String(order.missing)) || 0;
-        const hired = total - missing;
+        const allocated = typeof order.allocated_labor === 'number' ? order.allocated_labor : (typeof order.total_labor === 'number' ? order.total_labor : parseInt(String(order.total_labor)) || 0);
+        const passed = allocated - missing;
         return (
         <Link
           href={`/order/${encodeURIComponent(order.order_id)}?dl=${encodeURIComponent(order.url_demand_letter || '')}`}
@@ -22,16 +22,20 @@ export default function OrdersList({ orders }: { orders: Order[] }) {
             <h3 className="font-bold text-gray-800 text-sm leading-tight flex-1">{order.order_id}</h3>
           </div>
 
-          <div className="grid grid-cols-3 gap-2 mb-3">
-            <div className="bg-gray-50 rounded-lg px-3 py-2">
+          <div className="grid grid-cols-4 gap-2 mb-3">
+            <div className="bg-blue-50 rounded-lg px-2 py-2">
+              <p className="text-xs text-gray-500">Applied</p>
+              <p className="font-bold text-blue-600">{order.candidates_count ?? '—'}</p>
+            </div>
+            <div className="bg-gray-50 rounded-lg px-2 py-2">
               <p className="text-xs text-gray-500">Target</p>
-              <p className="font-bold text-gray-800">{order.allocated_labor ?? order.total_labor ?? '—'}</p>
+              <p className="font-bold text-gray-800">{allocated}</p>
             </div>
-            <div className="bg-green-50 rounded-lg px-3 py-2">
-              <p className="text-xs text-gray-500">Hired</p>
-              <p className="font-bold text-green-600">{hired}</p>
+            <div className="bg-green-50 rounded-lg px-2 py-2">
+              <p className="text-xs text-gray-500">Passed</p>
+              <p className="font-bold text-green-600">{passed}</p>
             </div>
-            <div className="bg-red-50 rounded-lg px-3 py-2">
+            <div className="bg-red-50 rounded-lg px-2 py-2">
               <p className="text-xs text-gray-500">Missing</p>
               <p className="font-bold text-red-600">{order.missing ?? '—'}</p>
             </div>

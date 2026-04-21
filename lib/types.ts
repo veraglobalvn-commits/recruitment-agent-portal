@@ -33,6 +33,7 @@ export interface Order {
   probation_salary_pct: number | null;
   agent_order_status: string | null;
   allocated_labor?: number | null;
+  candidates_count?: number;
   created_at?: string | null;
 }
 
