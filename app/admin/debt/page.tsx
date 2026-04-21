@@ -33,11 +33,11 @@ function PctPill({ pct }: { pct: number }) {
   return <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-600 font-medium">Chưa TT</span>;
 }
 
-function StatCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
+function StatCard({ label, value, sub, valueColor }: { label: string; value: string; sub?: string; valueColor?: string }) {
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
       <p className="text-xs text-gray-500 mb-1">{label}</p>
-      <p className="text-base font-bold text-slate-800 truncate">{value}</p>
+      <p className={`text-base font-bold truncate ${valueColor ?? 'text-slate-800'}`}>{value}</p>
       {sub && <p className="text-xs text-gray-400 mt-0.5">{sub}</p>}
     </div>
   );
@@ -236,7 +236,7 @@ export default function DebtPage() {
     }
   };
 
-  const totalFeeVN = rows.reduce((s, r) => s + (r.total_fee_vn ?? 0), 0);
+  const totalFeeVN = rows.reduce((s, r) => s + (r.total_fee_vn ?? 0) * 1.08, 0);
   const totalPaidVN = rows.reduce((s, r) => s + r.total_paid_company, 0);
   const remainingVN = totalFeeVN - totalPaidVN;
 
@@ -246,7 +246,8 @@ export default function DebtPage() {
 
   const displayed = hideComplete
     ? rows.filter(r => {
-        const pct = r.total_fee_vn ? Math.round((r.total_paid_company / r.total_fee_vn) * 100) : 0;
+        const feeAfterVat = (r.total_fee_vn ?? 0) * 1.08;
+        const pct = feeAfterVat > 0 ? Math.round((r.total_paid_company / feeAfterVat) * 100) : 0;
         return pct < 100;
       })
     : rows;
@@ -270,11 +271,11 @@ export default function DebtPage() {
       {/* Summary */}
       {!loading && rows.length > 0 && (
         <div className="space-y-2">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Phí dịch vụ (VNĐ)</p>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Doanh thu dự kiến (sau VAT 8%)</p>
           <div className="grid grid-cols-3 gap-3">
-            <StatCard label="Tổng phí VN" value={fmtVND(totalFeeVN) + ' ₫'} />
-            <StatCard label="Đã thu" value={fmtVND(totalPaidVN) + ' ₫'} />
-            <StatCard label="Còn lại" value={fmtVND(remainingVN) + ' ₫'} sub={remainingVN > 0 ? 'Chưa thu đủ' : 'Đã thu đủ'} />
+            <StatCard label="Tổng phí (sau VAT)" value={fmtVND(totalFeeVN) + ' ₫'} />
+            <StatCard label="Đã thu" value={fmtVND(totalPaidVN) + ' ₫'} valueColor="text-green-600" />
+            <StatCard label="Còn phải thu" value={fmtVND(remainingVN) + ' ₫'} sub={remainingVN > 0 ? 'Chưa thu đủ' : 'Đã thu đủ'} valueColor={remainingVN > 0 ? 'text-red-600' : 'text-green-600'} />
           </div>
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mt-1">Phí Agent (USD)</p>
           <div className="grid grid-cols-3 gap-3">
@@ -304,8 +305,9 @@ export default function DebtPage() {
           {/* Mobile cards */}
           <div className="md:hidden space-y-3">
             {displayed.map(r => {
-              const companyPct = r.total_fee_vn ? Math.round((r.total_paid_company / r.total_fee_vn) * 100) : 0;
-              const remaining = r.total_fee_vn ? Math.max(0, r.total_fee_vn - r.total_paid_company) : null;
+              const feeAfterVat = (r.total_fee_vn ?? 0) * 1.08;
+              const companyPct = feeAfterVat > 0 ? Math.round((r.total_paid_company / feeAfterVat) * 100) : 0;
+              const remaining = feeAfterVat > 0 ? Math.max(0, feeAfterVat - r.total_paid_company) : null;
               return (
                 <div key={r.order_id} className="p-4 bg-white rounded-2xl border border-gray-100 shadow-sm">
                   <div className="flex justify-between items-start mb-1.5 gap-2">
@@ -315,8 +317,8 @@ export default function DebtPage() {
                   <p className="text-xs text-gray-600 mb-2">{r.company_name || '—'}</p>
                   <div className="text-xs text-gray-500 space-y-0.5 mb-3">
                     <div className="flex justify-between">
-                      <span>Tổng phí VN:</span>
-                      <span className="font-semibold text-slate-700">{r.total_fee_vn ? fmtVND(r.total_fee_vn) + ' ₫' : '—'}</span>
+                      <span>Phí VN (sau VAT 8%):</span>
+                      <span className="font-semibold text-slate-700">{feeAfterVat > 0 ? fmtVND(feeAfterVat) + ' ₫' : '—'}</span>
                     </div>
                     <div className="flex justify-between">
                       <span>Đã thu:</span>
@@ -346,24 +348,25 @@ export default function DebtPage() {
               <table className="w-full text-sm min-w-[900px]">
                 <thead className="bg-gray-50 border-b border-gray-100">
                   <tr>
-                    {['Mã đơn', 'Công ty', 'Tổng phí VN', 'Đã thu', 'Còn thiếu', 'TT %', 'Phí Agent (USD)', 'Đã trả Agent', ''].map(h => (
+                    {['Mã đơn', 'Công ty', 'Phí VN (sau VAT)', 'Đã thu', 'Còn phải thu', 'TT %', 'Phí Agent (USD)', 'Đã trả Agent', ''].map(h => (
                       <th key={h} className="text-left px-4 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
                   {displayed.map(r => {
-                    const companyPct = r.total_fee_vn ? Math.round((r.total_paid_company / r.total_fee_vn) * 100) : 0;
-                    const remaining = r.total_fee_vn ? Math.max(0, r.total_fee_vn - r.total_paid_company) : null;
+                    const feeAfterVat = (r.total_fee_vn ?? 0) * 1.08;
+                    const companyPct = feeAfterVat > 0 ? Math.round((r.total_paid_company / feeAfterVat) * 100) : 0;
+                    const remaining = feeAfterVat > 0 ? Math.max(0, feeAfterVat - r.total_paid_company) : null;
                     return (
                       <tr key={r.order_id} className="hover:bg-gray-50 transition-colors">
                         <td className="px-4 py-3">
                           <Link href={`/admin/orders/${encodeURIComponent(r.order_id)}`} className="font-medium text-blue-600 hover:underline text-xs whitespace-nowrap">{r.order_id}</Link>
                         </td>
                         <td className="px-4 py-3 text-xs text-gray-700">{r.company_name || '—'}</td>
-                        <td className="px-4 py-3 text-xs font-semibold text-slate-700">{r.total_fee_vn ? fmtVND(r.total_fee_vn) : '—'}</td>
+                        <td className="px-4 py-3 text-xs font-semibold text-slate-700">{feeAfterVat > 0 ? fmtVND(feeAfterVat) : '—'}</td>
                         <td className="px-4 py-3 text-xs font-semibold text-green-600">{fmtVND(r.total_paid_company)}</td>
-                        <td className="px-4 py-3 text-xs font-semibold text-red-600">{remaining !== null ? fmtVND(remaining) : '—'}</td>
+                        <td className="px-4 py-3 text-xs font-semibold text-red-600">{remaining !== null && remaining > 0 ? fmtVND(remaining) : <span className="text-green-600">Đủ</span>}</td>
                         <td className="px-4 py-3"><PctPill pct={companyPct} /></td>
                         <td className="px-4 py-3 text-xs text-gray-600">{r.total_fee_bd ? fmtUSD(r.total_fee_bd) : '—'}</td>
                         <td className="px-4 py-3 text-xs font-semibold text-blue-600">{fmtUSD(r.total_paid_agent)}</td>

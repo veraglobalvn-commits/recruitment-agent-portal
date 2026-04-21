@@ -133,7 +133,7 @@ export default function AdminDashboard() {
         return { id: ag.id, full_name: ag.full_name, short_name: ag.short_name, total_candidates: agCands.length, passed, target };
       });
 
-      const totalRevenue = orders.reduce((s, o) => s + (o.total_fee_vn || 0), 0);
+      const totalRevenue = orders.reduce((s, o) => s + (o.total_fee_vn || 0) * 1.08, 0);
       const totalLaborTarget = orders.reduce((s, o) => s + (o.total_labor || 0), 0);
       const totalPassed = candidates.filter((c: any) => c.interview_status === 'Passed').length;
 
@@ -188,7 +188,7 @@ export default function AdminDashboard() {
           { label: 'Chỉ tiêu lao động', value: data.totalLaborTarget, sub: `${data.orders.length} đơn hàng`, color: 'text-slate-800' },
           { label: 'Đã trúng tuyển', value: data.totalPassed, sub: 'qua phỏng vấn', color: 'text-green-600' },
           { label: 'Còn thiếu', value: totalMissing, sub: 'để hoàn thành', color: 'text-red-500' },
-          { label: 'Doanh thu', value: fmtVndShort(data.totalRevenue), sub: 'phí dịch vụ VN', color: 'text-blue-600', isStr: true },
+          { label: 'Doanh thu dự kiến', value: fmtVndShort(data.totalRevenue), sub: 'phí dịch vụ VN (sau VAT 8%)', color: 'text-blue-600', isStr: true },
         ].map(({ label, value, sub, color, isStr }) => (
           <div key={label} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
             <p className="text-xs text-gray-500 leading-tight">{label}</p>

@@ -1,5 +1,6 @@
 'use client';
 import StatusPill from '@/components/ui/StatusPill';
+import { fmtVndShort } from '@/lib/formatters';
 
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -165,6 +166,7 @@ export default function OrdersPage() {
                     <div className="text-xs text-gray-500 flex items-center gap-1">
                       <span className="font-semibold text-slate-700">{o.total_labor ?? 0} LĐ</span>
                       {missing > 0 && <span className="text-red-400">(-{missing})</span>}
+                      {o.total_fee_vn ? <span className="text-blue-600 font-semibold ml-1">{fmtVndShort((o.total_fee_vn as number) * 1.08)} ₫</span> : null}
                     </div>
                     <div className="flex items-center flex-wrap gap-1.5">
                       <StatusPill label={o.payment_status_vn} />
@@ -183,7 +185,7 @@ export default function OrdersPage() {
               <table className="w-full text-sm min-w-[800px]">
                 <thead className="bg-gray-50 border-b border-gray-100">
                   <tr>
-                    {['Mã đơn', 'Công ty', 'Vị trí', 'LĐ', 'Còn thiếu', 'Lương', 'Trạng thái', 'TT VN', ''].map((h) => (
+                    {['Mã đơn', 'Công ty', 'Vị trí', 'LĐ', 'Còn thiếu', 'Lương', 'Phí VN (sau VAT)', 'Trạng thái', 'TT VN', ''].map((h) => (
                       <th key={h} className="text-left px-4 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">
                         {h}
                       </th>
@@ -211,6 +213,7 @@ export default function OrdersPage() {
                         <td className="px-4 py-3 text-xs font-semibold text-slate-700">{o.total_labor ?? '—'}</td>
                         <td className="px-4 py-3 text-xs text-red-400">{o.labor_missing ?? '—'}</td>
                         <td className="px-4 py-3 text-xs text-gray-600">{o.salary_usd ? `$${o.salary_usd}` : '—'}</td>
+                        <td className="px-4 py-3 text-xs font-semibold text-blue-600 whitespace-nowrap">{o.total_fee_vn ? fmtVndShort((o.total_fee_vn as number) * 1.08) + ' ₫' : '—'}</td>
                         <td className="px-4 py-3">{(() => { const r = recruitStatusInfo(o); return <span className={`text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap ${r.cls}`}>{r.label}</span>; })()}</td>
                         <td className="px-4 py-3"><StatusPill label={o.payment_status_vn} /></td>
                         <td className="px-4 py-3">
