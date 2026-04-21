@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
-import { fmtVND, fmtVndShort, fmtUSD } from '@/lib/formatters';
+import { fmtVND, fmtVndShort, fmtUSD, fmtUsdShort } from '@/lib/formatters';
 import type { OrderPayment } from '@/lib/types';
 
 interface DebtRow {
@@ -279,9 +279,9 @@ export default function DebtPage() {
           </div>
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mt-1">Công nợ Agent</p>
           <div className="grid grid-cols-3 gap-3">
-            <StatCard label="Tổng phí Agent" value={'$' + fmtUSD(totalFeeBD)} />
-            <StatCard label="Đã trả" value={'$' + fmtUSD(totalPaidBD)} />
-            <StatCard label="Còn lại" value={'$' + fmtUSD(remainingBD)} sub={remainingBD > 0 ? 'Chưa trả đủ' : 'Đã trả đủ'} />
+            <StatCard label="Tổng phí Agent" value={'$' + fmtUsdShort(totalFeeBD)} />
+            <StatCard label="Đã trả" value={'$' + fmtUsdShort(totalPaidBD)} valueColor="text-green-600" />
+            <StatCard label="Còn lại" value={'$' + fmtUsdShort(remainingBD)} sub={remainingBD > 0 ? 'Chưa trả đủ' : 'Đã trả đủ'} valueColor={remainingBD > 0 ? 'text-red-600' : 'text-green-600'} />
           </div>
         </div>
       )}

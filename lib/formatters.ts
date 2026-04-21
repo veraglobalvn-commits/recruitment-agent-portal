@@ -20,3 +20,13 @@ export const fmtVndShort = (val: number | null | undefined): string => {
   if (abs >= 1_000_000) return `${sign}${(abs / 1_000_000).toFixed(1).replace('.', ',')} tr`;
   return val.toLocaleString('vi-VN');
 }
+
+// Compact USD: $12,5K | $1,2M | $850. No $ prefix — add by caller.
+export const fmtUsdShort = (val: number | null | undefined): string => {
+  if (val == null || isNaN(val)) return '—';
+  const abs = Math.abs(val);
+  const sign = val < 0 ? '-' : '';
+  if (abs >= 1_000_000) return `${sign}${(abs / 1_000_000).toFixed(1).replace('.', ',')}M`;
+  if (abs >= 1_000) return `${sign}${(abs / 1_000).toFixed(1).replace('.', ',')}K`;
+  return val.toLocaleString('en-US');
+}
