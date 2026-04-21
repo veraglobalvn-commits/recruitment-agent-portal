@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
-import { fmtVND, fmtUSD } from '@/lib/formatters';
+import { fmtVND, fmtVndShort, fmtUSD } from '@/lib/formatters';
 import type { OrderPayment } from '@/lib/types';
 
 interface DebtRow {
@@ -271,13 +271,13 @@ export default function DebtPage() {
       {/* Summary */}
       {!loading && rows.length > 0 && (
         <div className="space-y-2">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Doanh thu dự kiến (sau VAT 8%)</p>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Công nợ công ty VN</p>
           <div className="grid grid-cols-3 gap-3">
-            <StatCard label="Tổng phí (sau VAT)" value={fmtVND(totalFeeVN) + ' ₫'} />
-            <StatCard label="Đã thu" value={fmtVND(totalPaidVN) + ' ₫'} valueColor="text-green-600" />
-            <StatCard label="Còn phải thu" value={fmtVND(remainingVN) + ' ₫'} sub={remainingVN > 0 ? 'Chưa thu đủ' : 'Đã thu đủ'} valueColor={remainingVN > 0 ? 'text-red-600' : 'text-green-600'} />
+            <StatCard label="Tổng phí (sau VAT)" value={fmtVndShort(totalFeeVN) + ' ₫'} />
+            <StatCard label="Đã thu" value={fmtVndShort(totalPaidVN) + ' ₫'} valueColor="text-green-600" />
+            <StatCard label="Còn phải thu" value={fmtVndShort(remainingVN) + ' ₫'} sub={remainingVN > 0 ? 'Chưa thu đủ' : 'Đã thu đủ'} valueColor={remainingVN > 0 ? 'text-red-600' : 'text-green-600'} />
           </div>
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mt-1">Phí Agent (USD)</p>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mt-1">Công nợ Agent</p>
           <div className="grid grid-cols-3 gap-3">
             <StatCard label="Tổng phí Agent" value={'$' + fmtUSD(totalFeeBD)} />
             <StatCard label="Đã trả" value={'$' + fmtUSD(totalPaidBD)} />

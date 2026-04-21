@@ -403,9 +403,9 @@ export default function CompanyDetailPage() {
             </div>
             <div className="grid grid-cols-3 gap-0 border-b border-gray-50">
               {[
-                { label: 'Tổng phí DV', value: fmtVndShort(totalFee), color: 'text-slate-800' },
-                { label: 'Đã thu', value: fmtVndShort(totalPaid), color: 'text-green-600' },
-                { label: 'Còn lại', value: fmtVndShort(totalFee - totalPaid), color: 'text-red-500' },
+                { label: 'Tổng phí DV', value: fmtVndShort(totalFee) + ' ₫', color: 'text-slate-800' },
+                { label: 'Đã thu', value: fmtVndShort(totalPaid) + ' ₫', color: 'text-green-600' },
+                { label: 'Còn lại', value: fmtVndShort(totalFee - totalPaid) + ' ₫', color: 'text-red-500' },
               ].map(({ label, value, color }) => (
                 <div key={label} className="px-4 py-3 text-center border-r border-gray-50 last:border-0">
                   <p className="text-xs text-gray-500">{label}</p>
@@ -420,7 +420,7 @@ export default function CompanyDetailPage() {
                     <p className="text-xs font-medium text-slate-700 truncate">{o.id}</p>
                     <p className="text-xs text-gray-400">{o.job_type || '—'}</p>
                   </div>
-                  <p className="text-xs font-semibold text-gray-700 flex-shrink-0">{fmtVndShort(o.total_fee_vn)}</p>
+                  <p className="text-xs font-semibold text-gray-700 flex-shrink-0">{fmtVndShort(o.total_fee_vn)} ₫</p>
                   <StatusPill label={o.payment_status_vn} />
                 </div>
               ))}

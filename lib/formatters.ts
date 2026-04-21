@@ -11,10 +11,12 @@ export const fmtUSD = (n: number | null | undefined): string => {
   return n.toLocaleString('en-US')
 }
 
-// Compact shorthand: 1.2B ₫, 500M ₫, or full VN format for smaller values
+// Compact shorthand: 1,9 tỷ | 394,6 tr | full VN format for smaller values. No ₫ suffix — add by caller.
 export const fmtVndShort = (val: number | null | undefined): string => {
-  if (!val) return '—';
-  if (val >= 1_000_000_000) return `${(val / 1_000_000_000).toFixed(1)}B ₫`;
-  if (val >= 1_000_000) return `${(val / 1_000_000).toFixed(0)}M ₫`;
-  return val.toLocaleString('vi-VN') + ' ₫';
+  if (val == null || isNaN(val)) return '—';
+  const abs = Math.abs(val);
+  const sign = val < 0 ? '-' : '';
+  if (abs >= 1_000_000_000) return `${sign}${(abs / 1_000_000_000).toFixed(1).replace('.', ',')} tỷ`;
+  if (abs >= 1_000_000) return `${sign}${(abs / 1_000_000).toFixed(1).replace('.', ',')} tr`;
+  return val.toLocaleString('vi-VN');
 }

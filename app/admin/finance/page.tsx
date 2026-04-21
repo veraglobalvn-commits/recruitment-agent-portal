@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
-import { fmtVND } from '@/lib/formatters';
+import { fmtVND, fmtVndShort } from '@/lib/formatters';
 import type { FinanceCategory, FinanceTransaction } from '@/lib/types';
 
 interface AdminUser { id: string; name: string }
@@ -227,9 +227,9 @@ export default function FinancePage() {
 
       {/* Summary */}
       <div className="grid grid-cols-3 gap-3">
-        <StatCard label="Tổng thu" value={fmtVND(totalIncome) + ' ₫'} color="green" />
-        <StatCard label="Tổng chi" value={fmtVND(totalExpense) + ' ₫'} color="red" />
-        <StatCard label="Số dư" value={fmtVND(balance) + ' ₫'} color={balance >= 0 ? 'blue' : 'orange'} />
+        <StatCard label="Tổng thu" value={fmtVndShort(totalIncome) + ' ₫'} color="green" />
+        <StatCard label="Tổng chi" value={fmtVndShort(totalExpense) + ' ₫'} color="red" />
+        <StatCard label="Số dư" value={fmtVndShort(balance) + ' ₫'} color={balance >= 0 ? 'blue' : 'orange'} />
       </div>
 
       {/* Filters */}
