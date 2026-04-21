@@ -260,6 +260,29 @@ export interface RecruitmentRequest {
   completed_at?: string;
 }
 
+export interface FinanceCategory {
+  id: string;
+  name: string;
+  type: 'income' | 'expense';
+  created_at?: string;
+}
+
+export interface FinanceTransaction {
+  id: string;
+  type: 'income' | 'expense';
+  amount: number;
+  category_id: string | null;
+  category_name: string | null;
+  description: string | null;
+  date: string;
+  user_id: string | null;
+  user_name: string | null;
+  receipt_url: string | null;
+  order_payment_id: string | null;
+  note: string | null;
+  created_at: string;
+}
+
 export interface ContractRequest {
   id: string;
   order_id: string;
