@@ -280,8 +280,8 @@ export default function DebtPage() {
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mt-1">Công nợ Agent</p>
           <div className="grid grid-cols-3 gap-3">
             <StatCard label="Tổng phí Agent" value={'$' + fmtUsdShort(totalFeeBD)} />
-            <StatCard label="Đã trả" value={'$' + fmtUsdShort(totalPaidBD)} valueColor="text-green-600" />
-            <StatCard label="Còn lại" value={'$' + fmtUsdShort(remainingBD)} sub={remainingBD > 0 ? 'Chưa trả đủ' : 'Đã trả đủ'} valueColor={remainingBD > 0 ? 'text-red-600' : 'text-green-600'} />
+            <StatCard label="Đã thu" value={'$' + fmtUsdShort(totalPaidBD)} valueColor="text-green-600" />
+            <StatCard label="Còn phải thu" value={'$' + fmtUsdShort(remainingBD)} sub={remainingBD > 0 ? 'Chưa thu đủ' : 'Đã thu đủ'} valueColor={remainingBD > 0 ? 'text-red-600' : 'text-green-600'} />
           </div>
         </div>
       )}
@@ -348,7 +348,7 @@ export default function DebtPage() {
               <table className="w-full text-sm min-w-[900px]">
                 <thead className="bg-gray-50 border-b border-gray-100">
                   <tr>
-                    {['Mã đơn', 'Công ty', 'Phí VN (sau VAT)', 'Đã thu', 'Còn phải thu', 'TT %', 'Phí Agent (USD)', 'Đã trả Agent', ''].map(h => (
+                    {['Mã đơn', 'Công ty', 'Phí VN (sau VAT)', 'Đã thu', 'Còn phải thu', 'TT %', 'Phí Agent (USD)', 'Đã thu từ Agent', ''].map(h => (
                       <th key={h} className="text-left px-4 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
@@ -514,7 +514,7 @@ export default function DebtPage() {
               {/* Add form */}
               {addingParty === activeTab && (
                 <div className="bg-green-50 rounded-xl p-3 space-y-2">
-                  <p className="text-xs font-semibold text-green-700">Thêm khoản {activeTab === 'company' ? 'thu VN' : 'trả Agent'}</p>
+                  <p className="text-xs font-semibold text-green-700">Thêm khoản {activeTab === 'company' ? 'thu VN' : 'thu Agent'}</p>
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <label className="block text-xs text-gray-500 mb-1">Loại *</label>
@@ -593,7 +593,7 @@ export default function DebtPage() {
                   onClick={() => { setAddingParty(activeTab); setPaymentForm(activeTab === 'agent' ? { currency: 'USD' } : { currency: 'VND' }); setEditingPayment(null); }}
                   className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold py-3 rounded-xl min-h-[44px]"
                 >
-                  + Thêm khoản {activeTab === 'company' ? 'thu VN' : 'trả Agent BD'}
+                  + Thêm khoản {activeTab === 'company' ? 'thu VN' : 'thu Agent BD'}
                 </button>
               )}
             </div>
