@@ -15,7 +15,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       total_labor, salary_usd,
       meal, meal_en, dormitory, dormitory_en,
       probation, probation_en,
-      companies:company_id (company_media, avatar_url)
+      companies:company_id (company_media, avatar_url, en_company_name)
     `)
     .eq('id', params.id)
     .single();

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'next/navigation';
+import MediaViewer from '@/components/ui/MediaViewer';
 
 interface ShareOrder {
   id: string;
@@ -20,6 +21,7 @@ interface ShareOrder {
   companies: {
     company_media: string[] | null;
     avatar_url: string | null;
+    en_company_name: string | null;
   } | null;
 }
 
@@ -27,13 +29,11 @@ function isVideo(url: string) {
   return /\.(mp4|webm|mov)$/i.test(url);
 }
 
-function MediaGallery({ media }: { media: string[] }) {
+function MediaGallery({ media, onSelect }: { media: string[]; onSelect: (i: number) => void }) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const scroll = (dir: 'left' | 'right') => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollBy({ left: dir === 'left' ? -280 : 280, behavior: 'smooth' });
-    }
+    scrollRef.current?.scrollBy({ left: dir === 'left' ? -280 : 280, behavior: 'smooth' });
   };
 
   if (media.length === 0) return null;
@@ -56,13 +56,21 @@ function MediaGallery({ media }: { media: string[] }) {
           style={{ scrollbarWidth: 'none' }}
         >
           {media.map((url, i) => (
-            <div key={i} className="flex-shrink-0 w-[200px] h-[140px] rounded-2xl overflow-hidden bg-gray-100">
+            <div
+              key={i}
+              className="relative flex-shrink-0 w-[200px] h-[140px] rounded-2xl overflow-hidden bg-gray-100 cursor-pointer group"
+              onClick={() => onSelect(i)}
+            >
               {isVideo(url) ? (
-                <video src={url} className="w-full h-full object-cover" muted playsInline />
+                <div className="w-full h-full bg-gray-900 flex flex-col items-center justify-center">
+                  <span className="text-white text-3xl group-hover:scale-110 transition-transform">▶</span>
+                  <span className="text-gray-400 text-[10px] mt-1 font-medium">VIDEO</span>
+                </div>
               ) : (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={url} alt="" className="w-full h-full object-cover" />
+                <img src={url} alt="" className="w-full h-full object-cover group-hover:opacity-90 transition-opacity" />
               )}
+              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors rounded-2xl" />
             </div>
           ))}
         </div>
@@ -84,6 +92,7 @@ export default function SharePage() {
   const [order, setOrder] = useState<ShareOrder | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [viewerIndex, setViewerIndex] = useState<number | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -123,11 +132,12 @@ export default function SharePage() {
     );
   }
 
-  const media: string[] = order.companies?.company_media ?? [];
+  const rawMedia: string[] = order.companies?.company_media ?? [];
   const fallbackMedia = order.companies?.avatar_url ? [order.companies.avatar_url] : [];
-  const displayMedia = media.length > 0 ? media : fallbackMedia;
+  const displayMedia = rawMedia.length > 0 ? rawMedia : fallbackMedia;
 
-  const companyName = order.en_company_name || order.company_name || '—';
+  // Prefer EN company name from companies table, then from order, then VN fallback
+  const companyName = order.companies?.en_company_name || order.en_company_name || order.company_name || '—';
   const jobType = order.job_type_en || order.job_type || '—';
   const meal = order.meal_en || order.meal;
   const dormitory = order.dormitory_en || order.dormitory;
@@ -144,9 +154,20 @@ export default function SharePage() {
 
   return (
     <div className="min-h-screen bg-gray-50 p-4">
+      {viewerIndex !== null && (
+        <MediaViewer
+          media={displayMedia}
+          index={viewerIndex}
+          onClose={() => setViewerIndex(null)}
+          onNav={setViewerIndex}
+        />
+      )}
+
       <div className="max-w-lg mx-auto">
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-          {displayMedia.length > 0 && <MediaGallery media={displayMedia} />}
+          {displayMedia.length > 0 && (
+            <MediaGallery media={displayMedia} onSelect={setViewerIndex} />
+          )}
 
           <h1 className="text-lg font-bold text-green-800 mb-4">{companyName}</h1>
 

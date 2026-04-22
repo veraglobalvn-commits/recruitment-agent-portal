@@ -6,17 +6,7 @@ import { supabase } from '@/lib/supabase';
 import type { Candidate, Order } from '@/lib/types';
 import CandidateCard from '@/components/agent/CandidateCard';
 import LoadingSkeleton from '@/components/ui/LoadingSkeleton';
-
-function VideoPlayer({ url, onClose }: { url: string; onClose: () => void }) {
-  return (
-    <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center" onClick={onClose}>
-      <div className="relative w-full max-w-lg mx-4" onClick={(e) => e.stopPropagation()}>
-        <button onClick={onClose} className="absolute -top-10 right-0 text-white text-2xl min-h-[44px] min-w-[44px] flex items-center justify-center">✕</button>
-        <video src={url} controls autoPlay className="w-full rounded-2xl bg-black" style={{ maxHeight: '70vh' }} />
-      </div>
-    </div>
-  );
-}
+import MediaViewer from '@/components/ui/MediaViewer';
 
 interface CompanyVideos {
   factory_video_url: string | null;
@@ -53,8 +43,8 @@ export default function OrderDetail() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mediaScrollRef = useRef<HTMLDivElement>(null);
   const [videoUploadingCandidate, setVideoUploadingCandidate] = useState<string | null>(null);
-  const [playingVideo, setPlayingVideo] = useState<string | null>(null);
-  const [playingImage, setPlayingImage] = useState<string | null>(null);
+  const [viewerIndex, setViewerIndex] = useState<number | null>(null);
+  const [candidateVideoUrl, setCandidateVideoUrl] = useState<string | null>(null);
   const [selectedCandidates, setSelectedCandidates] = useState<string[]>([]);
   const videoInputRef = useRef<HTMLInputElement>(null);
   const [dupWarning, setDupWarning] = useState<{
@@ -530,12 +520,21 @@ export default function OrderDetail() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {playingVideo && <VideoPlayer url={playingVideo} onClose={() => setPlayingVideo(null)} />}
-      {playingImage && (
-        <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4" onClick={() => setPlayingImage(null)}>
-          <button onClick={() => setPlayingImage(null)} className="absolute top-4 right-4 text-white text-3xl font-bold p-2 bg-black/30 rounded-full w-12 h-12 flex items-center justify-center hover:bg-black/50 transition-colors z-[60]">✕</button>
-          <img src={playingImage} alt="Preview" className="max-w-full max-h-[90vh] object-contain rounded-lg relative z-50" onClick={(e) => e.stopPropagation()} />
-        </div>
+      {viewerIndex !== null && companyVideos?.company_media && (
+        <MediaViewer
+          media={companyVideos.company_media}
+          index={viewerIndex}
+          onClose={() => setViewerIndex(null)}
+          onNav={setViewerIndex}
+        />
+      )}
+      {candidateVideoUrl && (
+        <MediaViewer
+          media={[candidateVideoUrl]}
+          index={0}
+          onClose={() => setCandidateVideoUrl(null)}
+          onNav={() => {}}
+        />
       )}
       {/* Hidden inputs */}
       <input type="file" accept="video/*" ref={videoInputRef} onChange={handleVideoChange} className="hidden" />
@@ -602,7 +601,7 @@ export default function OrderDetail() {
                     {companyVideos.company_media.map((url, i) => {
                       const isVideo = url.match(/\.(mp4|webm|mov)$/i);
                       return (
-                        <div key={i} className="relative flex-shrink-0 cursor-pointer group" onClick={() => isVideo ? setPlayingVideo(url) : setPlayingImage(url)}>
+                        <div key={i} className="relative flex-shrink-0 cursor-pointer group" onClick={() => setViewerIndex(i)}>
                            {isVideo ? (
                              <div className="h-24 w-32 bg-gray-900 rounded-lg border border-gray-200 flex flex-col items-center justify-center">
                                <span className="text-white text-2xl group-hover:scale-110 transition-transform mb-1">▶</span>
@@ -738,7 +737,7 @@ export default function OrderDetail() {
                   onCandidateUpdate={handleCandidateUpdate}
                   onCandidateDelete={handleCandidateDelete}
                   isVideoUploading={videoUploadingCandidate === c.id_ld}
-                  onVideoPlay={(url) => setPlayingVideo(url)}
+                  onVideoPlay={(url) => setCandidateVideoUrl(url)}
                   isSelected={selectedCandidates.includes(c.id_ld)}
                   onToggleSelect={handleToggleSelect}
                   addedBy={c.agent_id && c.agent_id !== currentAgentId ? memberNameMap[c.agent_id] : undefined}
