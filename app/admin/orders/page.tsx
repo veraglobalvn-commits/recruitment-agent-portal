@@ -183,11 +183,15 @@ export default function OrdersPage() {
                     </div>
                   </Link>
                   <div className="mt-2 pt-2 border-t border-gray-50 flex items-center gap-3">
-                    <a href={`/share/${encodeURIComponent(o.id)}`} target="_blank" rel="noopener noreferrer" className="text-xs text-gray-500 hover:text-blue-600 font-medium">
+                    <a href={`/share/${encodeURIComponent(o.id)}`} target="_blank" rel="noopener noreferrer" className="text-xs text-gray-500 hover:text-blue-600 font-medium flex items-center gap-1">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor"><path d="M10 12a2 2 0 100-4 2 2 0 000 4z"/><path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd"/></svg>
                       Xem
                     </a>
-                    <button onClick={() => copyShareLink(o.id)} className="text-xs text-gray-400 hover:text-blue-600 transition-colors">
-                      {copiedId === o.id ? <span className="text-green-600 font-medium">✓ Đã copy</span> : 'Share'}
+                    <button onClick={() => copyShareLink(o.id)} className="text-xs text-gray-400 hover:text-blue-600 transition-colors flex items-center gap-1">
+                      {copiedId === o.id
+                        ? <span className="text-green-600 font-medium flex items-center gap-1"><svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/></svg>Đã copy</span>
+                        : <><svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor"><path d="M15 8a3 3 0 10-2.977-2.63l-4.94 2.47a3 3 0 100 4.319l4.94 2.47a3 3 0 10.895-1.789l-4.94-2.47a3.027 3.027 0 000-.74l4.94-2.47C13.456 7.68 14.19 8 15 8z"/></svg>Share</>
+                      }
                     </button>
                   </div>
                 </div>
@@ -236,11 +240,15 @@ export default function OrdersPage() {
                             <Link href={`/admin/orders/${encodeURIComponent(o.id)}`} className="text-xs text-blue-600 hover:underline font-medium">
                               Xem →
                             </Link>
-                            <a href={`/share/${encodeURIComponent(o.id)}`} target="_blank" rel="noopener noreferrer" className="text-xs text-gray-500 hover:text-blue-600 font-medium">
-                              Xem
+                            <a href={`/share/${encodeURIComponent(o.id)}`} target="_blank" rel="noopener noreferrer" className="text-xs text-gray-500 hover:text-blue-600 flex items-center gap-0.5" title="Xem trang share">
+                              <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor"><path d="M10 12a2 2 0 100-4 2 2 0 000 4z"/><path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd"/></svg>
+                              <span className="text-xs">Xem</span>
                             </a>
-                            <button onClick={() => copyShareLink(o.id)} className="text-xs text-gray-400 hover:text-blue-600 transition-colors">
-                              {copiedId === o.id ? <span className="text-green-600 font-medium">✓</span> : 'Share'}
+                            <button onClick={() => copyShareLink(o.id)} className="text-xs text-gray-400 hover:text-blue-600 transition-colors flex items-center gap-0.5" title="Copy link share">
+                              {copiedId === o.id
+                                ? <span className="text-green-600"><svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/></svg></span>
+                                : <><svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor"><path d="M15 8a3 3 0 10-2.977-2.63l-4.94 2.47a3 3 0 100 4.319l4.94 2.47a3 3 0 10.895-1.789l-4.94-2.47a3.027 3.027 0 000-.74l4.94-2.47C13.456 7.68 14.19 8 15 8z"/></svg><span className="text-xs">Share</span></>
+                              }
                             </button>
                           </div>
                         </td>

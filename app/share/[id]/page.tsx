@@ -22,6 +22,8 @@ interface ShareOrder {
     company_media: string[] | null;
     avatar_url: string | null;
     en_company_name: string | null;
+    en_industry: string | null;
+    industry: string | null;
   } | null;
 }
 
@@ -143,9 +145,12 @@ export default function SharePage() {
   const dormitory = order.dormitory_en || order.dormitory;
   const probation = order.probation_en || order.probation;
 
+  const industry = order.companies?.en_industry || order.companies?.industry;
+
   const infoItems = [
     { label: 'Total worker', value: order.total_labor != null ? String(order.total_labor) : null },
     { label: 'Job Type', value: jobType },
+    { label: 'Industry', value: industry },
     { label: 'Salary', value: order.salary_usd ? `${order.salary_usd} USD` : null },
     { label: 'Meal', value: meal },
     { label: 'Dormitory', value: dormitory },

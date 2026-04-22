@@ -12,6 +12,8 @@ interface CompanyVideos {
   factory_video_url: string | null;
   job_video_url: string | null;
   company_media: string[];
+  en_industry: string | null;
+  industry: string | null;
 }
 
 function getAgentOrderStatus(order: Order, candidateCount: number): { label: string; cls: string } {
@@ -642,6 +644,12 @@ export default function OrderDetail() {
                   <span className="text-gray-400 mr-2 mt-0.5">•</span>
                   <div><strong className="text-gray-800">Job Type:</strong> {orderData.job_type_en || orderData.job_type || 'N/A'}</div>
                 </li>
+                {(companyVideos?.en_industry || companyVideos?.industry) && (
+                  <li className="flex items-start">
+                    <span className="text-gray-400 mr-2 mt-0.5">•</span>
+                    <div><strong className="text-gray-800">Industry:</strong> {companyVideos.en_industry || companyVideos.industry}</div>
+                  </li>
+                )}
                 <li className="flex items-start">
                   <span className="text-gray-400 mr-2 mt-0.5">•</span>
                   <div><strong className="text-gray-800">Salary:</strong> {orderData.salary_usd ? `${orderData.salary_usd.toLocaleString()} USD` : 'N/A'}</div>

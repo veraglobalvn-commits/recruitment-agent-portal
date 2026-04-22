@@ -13,7 +13,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
   
   const { data, error } = await supabaseAdmin
     .from('companies')
-    .select('en_company_name, factory_video_url, job_video_url, company_media')
+    .select('en_company_name, factory_video_url, job_video_url, company_media, en_industry, industry')
     .eq('id', params.id)
     .single();
 
