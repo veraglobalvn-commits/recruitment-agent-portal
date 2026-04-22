@@ -348,7 +348,7 @@ export default function CompanyDetailPage() {
       <div className="sticky top-0 z-20 bg-white border-b border-gray-100 px-4 py-3 flex items-center gap-3">
         <button onClick={() => router.back()} className="min-h-[44px] min-w-[44px] flex items-center justify-center text-gray-500 hover:text-gray-800 text-xl">←</button>
         <div className="flex-1 min-w-0">
-          <p className={`text-sm font-bold truncate ${isMissingInfo ? 'text-red-600' : 'text-slate-800'}`}>{company.company_name}</p>
+          <p className={`text-sm font-bold truncate uppercase ${isMissingInfo ? 'text-red-600' : 'text-slate-800'}`}>{company.company_name}</p>
           {company.tax_code && <p className="text-xs text-gray-400">MST: {company.tax_code}</p>}
         </div>
         {saveMsg && <span className="text-xs text-green-600 font-medium">{saveMsg}</span>}
@@ -386,7 +386,7 @@ export default function CompanyDetailPage() {
             )}
           </div>
           <div className="flex-1 min-w-0">
-            <p className={`font-bold ${isMissingInfo ? 'text-red-600' : 'text-slate-800'}`}>{company.company_name}</p>
+            <p className={`font-bold uppercase ${isMissingInfo ? 'text-red-600' : 'text-slate-800'}`}>{company.company_name}</p>
             {company.short_name && <p className="text-xs text-gray-400">{company.short_name}</p>}
             <p className="text-xs text-gray-500 mt-1">
               {orders.length} đơn hàng &nbsp;·&nbsp;
@@ -417,7 +417,7 @@ export default function CompanyDetailPage() {
               {orders.map((o) => (
                 <div key={o.id} className="flex items-center px-4 py-2.5 gap-3">
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium text-slate-700 truncate">{o.id}</p>
+                    <p className="text-xs font-medium text-slate-700 truncate uppercase">{o.id}</p>
                     <p className="text-xs text-gray-400">{o.job_type || '—'}</p>
                   </div>
                   <p className="text-xs font-semibold text-gray-700 flex-shrink-0">{fmtVndShort(o.total_fee_vn)} ₫</p>
@@ -450,7 +450,7 @@ export default function CompanyDetailPage() {
                     className="block px-4 py-3 hover:bg-gray-50 transition-colors">
                     <div className="flex justify-between items-start mb-1.5 gap-2">
                       <div className="min-w-0">
-                        <p className="text-sm font-semibold text-blue-600 truncate">{o.id}</p>
+                        <p className="text-sm font-semibold text-blue-600 truncate uppercase">{o.id}</p>
                         <p className="text-xs text-gray-500">{o.job_type || '—'}</p>
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">

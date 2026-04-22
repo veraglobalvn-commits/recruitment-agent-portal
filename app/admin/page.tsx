@@ -217,11 +217,11 @@ export default function AdminDashboard() {
                       <div className="min-w-0">
                         <Link
                           href={`/admin/orders/${encodeURIComponent(o.id)}`}
-                          className="font-semibold text-sm text-slate-800 hover:text-blue-600 block truncate"
+                          className="font-semibold text-sm text-slate-800 hover:text-blue-600 block truncate uppercase"
                         >
                           {o.id}
                         </Link>
-                        <p className="text-xs text-gray-400 truncate">{o.company_name} · {o.job_type || '—'}</p>
+                        <p className="text-xs text-gray-400 truncate uppercase">{o.company_name} · {o.job_type || '—'}</p>
                       </div>
                       <div className="text-right flex-shrink-0">
                         <span className="text-sm font-bold text-slate-700">{done}/{target}</span>
@@ -284,10 +284,10 @@ export default function AdminDashboard() {
               className="block px-4 py-3 hover:bg-gray-50 active:bg-gray-100"
             >
               <div className="flex justify-between items-start mb-1 gap-2">
-                <span className="font-semibold text-sm text-blue-600 truncate flex-1">{o.id}</span>
+                <span className="font-semibold text-sm text-blue-600 truncate flex-1 uppercase">{o.id}</span>
                 <StatusPill label={o.status} />
               </div>
-              <p className="text-xs text-gray-500 mb-2">{o.company_name || '—'} · {o.job_type || '—'}</p>
+              <p className="text-xs text-gray-500 mb-2 uppercase">{o.company_name || '—'} · {o.job_type || '—'}</p>
               <div className="grid grid-cols-3 gap-2">
                 <div>
                   <p className="text-xs text-gray-400">Lao động</p>
@@ -325,11 +325,11 @@ export default function AdminDashboard() {
               {data.orders.map((o) => (
                 <tr key={o.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-4 py-3">
-                    <Link href={`/admin/orders/${encodeURIComponent(o.id)}`} className="font-medium text-blue-600 hover:underline text-xs whitespace-nowrap">
+                    <Link href={`/admin/orders/${encodeURIComponent(o.id)}`} className="font-medium text-blue-600 hover:underline text-xs whitespace-nowrap uppercase">
                       {o.id}
                     </Link>
                   </td>
-                  <td className="px-4 py-3 text-xs text-gray-700 whitespace-nowrap">{o.company_name || '—'}</td>
+                  <td className="px-4 py-3 text-xs text-gray-700 whitespace-nowrap uppercase">{o.company_name || '—'}</td>
                   <td className="px-4 py-3 text-xs text-gray-600">{o.job_type || '—'}</td>
                   <td className="px-4 py-3 text-xs">
                     <span className="font-semibold">{o.total_labor ?? '—'}</span>

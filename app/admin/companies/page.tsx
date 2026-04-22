@@ -18,7 +18,7 @@ function isMissingData(c: CompanyRow) {
 }
 
 function nameClass(c: CompanyRow) {
-  return isMissingData(c) ? 'font-semibold text-sm text-red-600 truncate' : 'font-semibold text-sm text-slate-800 truncate';
+  return isMissingData(c) ? 'font-semibold text-sm text-red-600 truncate uppercase' : 'font-semibold text-sm text-slate-800 truncate uppercase';
 }
 
 function Avatar({ c }: { c: CompanyRow }) {

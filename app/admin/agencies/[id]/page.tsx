@@ -230,7 +230,7 @@ export default function AgencyDetailPage() {
       <div className="sticky top-0 z-20 bg-white border-b border-gray-100 px-4 py-3 flex items-center gap-3">
         <button onClick={() => router.back()} className="min-h-[44px] min-w-[44px] flex items-center justify-center text-gray-500 hover:text-gray-800 text-xl">←</button>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-bold truncate text-slate-800">{agency.company_name || agency.id}</p>
+          <p className="text-sm font-bold truncate text-slate-800 uppercase">{agency.company_name || agency.id}</p>
         </div>
         {saveMsg && <span className="text-xs text-green-600 font-medium hidden sm:inline">{saveMsg}</span>}
         <button
@@ -250,7 +250,7 @@ export default function AgencyDetailPage() {
             {(agency.company_name || agency.id)[0].toUpperCase()}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="font-bold text-slate-800">{agency.company_name || agency.id}</p>
+            <p className="font-bold text-slate-800 uppercase">{agency.company_name || agency.id}</p>
             <div className="flex items-center gap-2 mt-1">
               <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${agency.status === 'inactive' ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-700'}`}>
                 {agency.status === 'inactive' ? 'Ngừng HD' : 'Hoạt động'}

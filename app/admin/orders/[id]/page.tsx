@@ -730,8 +730,8 @@ export default function OrderDetailPage() {
       <div className="sticky top-0 z-20 bg-white border-b border-gray-100 px-4 py-3 flex items-center gap-3">
         <button onClick={() => router.back()} className="min-h-[44px] min-w-[44px] flex items-center justify-center text-gray-500 hover:text-gray-800 text-xl">←</button>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-bold truncate text-slate-800">{order.id}</p>
-          {order.company_name && <p className="text-xs text-gray-400 truncate">{order.company_name}</p>}
+          <p className="text-sm font-bold truncate text-slate-800 uppercase">{order.id}</p>
+          {order.company_name && <p className="text-xs text-gray-400 truncate uppercase">{order.company_name}</p>}
         </div>
         <RecruitmentPill status={form.status} laborMissing={(() => { const total = parseInt(form.total_labor) || 0; const passed = (candidates?.filter(c => c.interview_status === 'Passed').length) || 0; return Math.max(0, total - passed); })()} />
         {saveMsg && <span className="text-xs text-green-600 font-medium hidden sm:inline">{saveMsg}</span>}
@@ -761,7 +761,7 @@ export default function OrderDetailPage() {
         {/* Progress card */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
           <div className="flex items-center justify-between mb-3">
-            <p className="text-sm font-semibold text-slate-800">{order.company_name || '—'}</p>
+            <p className="text-sm font-semibold text-slate-800 uppercase">{order.company_name || '—'}</p>
             {order.company_id && (
               <Link href={`/admin/companies/${order.company_id}`} className="text-xs text-blue-600 hover:underline">
                 Xem công ty →

@@ -163,10 +163,10 @@ export default function OrdersPage() {
                 <div key={o.id} className={`p-4 bg-white rounded-2xl border shadow-sm ${isMissingOrder(o) ? 'border-red-200 bg-red-50/30' : 'border-gray-100'}`}>
                   <Link href={`/admin/orders/${encodeURIComponent(o.id)}`} className="block">
                     <div className="flex justify-between items-start mb-1.5 gap-2">
-                      <span className="font-semibold text-sm text-blue-600 truncate">{o.id}</span>
+                      <span className="font-semibold text-sm text-blue-600 truncate uppercase">{o.id}</span>
                       {(() => { const r = recruitStatusInfo(o); return <span className={`text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap ${r.cls}`}>{r.label}</span>; })()}
                     </div>
-                    <p className="text-xs text-gray-700 font-medium truncate">{o.company_name || '—'}</p>
+                    <p className="text-xs text-gray-700 font-medium truncate uppercase">{o.company_name || '—'}</p>
                     <p className="text-xs text-gray-400 mt-0.5">{o.job_type || '—'} {o.salary_usd ? `· $${o.salary_usd}` : ''}</p>
                     <div className="flex flex-wrap items-center justify-between mt-2 gap-x-2 gap-y-1.5">
                       <div className="text-xs text-gray-500 flex items-center gap-1">
@@ -219,12 +219,12 @@ export default function OrdersPage() {
                     return (
                       <tr key={o.id} className={`transition-colors ${isMissingOrder(o) ? 'bg-red-50/30 hover:bg-red-50/50' : 'hover:bg-gray-50'}`}>
                         <td className="px-4 py-3">
-                          <Link href={`/admin/orders/${encodeURIComponent(o.id)}`} className="font-medium text-blue-600 hover:underline text-xs whitespace-nowrap">
+                          <Link href={`/admin/orders/${encodeURIComponent(o.id)}`} className="font-medium text-blue-600 hover:underline text-xs whitespace-nowrap uppercase">
                             {o.id}
                           </Link>
                         </td>
                         <td className="px-4 py-3">
-                          <Link href={o.company_id ? `/admin/companies/${o.company_id}` : '#'} className="text-xs text-gray-700 hover:text-blue-600 hover:underline">
+                          <Link href={o.company_id ? `/admin/companies/${o.company_id}` : '#'} className="text-xs text-gray-700 hover:text-blue-600 hover:underline uppercase">
                             {o.company_name || '—'}
                           </Link>
                         </td>

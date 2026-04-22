@@ -160,7 +160,7 @@ export default function AgenciesPage() {
                   {(ag.company_name || ag.id)[0].toUpperCase()}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-sm text-slate-800 truncate">{ag.company_name || ag.id}</p>
+                  <p className="font-semibold text-sm text-slate-800 truncate uppercase">{ag.company_name || ag.id}</p>
                   <p className="text-xs text-gray-400">{ag.memberCount} members · {ag.totalCandidates} ứng viên · {ag.passed} passed</p>
                 </div>
                 <div className="text-right flex-shrink-0">
@@ -189,7 +189,7 @@ export default function AgenciesPage() {
                           {(ag.company_name || ag.id)[0].toUpperCase()}
                         </div>
                         <div>
-                          <Link href={`/admin/agencies/${ag.id}`} className="font-medium text-slate-800 hover:text-blue-600 text-sm">
+                          <Link href={`/admin/agencies/${ag.id}`} className="font-medium text-slate-800 hover:text-blue-600 text-sm uppercase">
                             {ag.company_name || ag.id}
                           </Link>
                           <p className="text-xs text-gray-400">{ag.legal_rep || '—'}</p>
