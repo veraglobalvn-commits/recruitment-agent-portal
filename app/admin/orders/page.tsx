@@ -151,31 +151,34 @@ export default function OrdersPage() {
                 .filter((a): a is AgentOption => a !== undefined);
               const missing = o.labor_missing ?? 0;
               return (
-                <Link
-                  key={o.id}
-                  href={`/admin/orders/${encodeURIComponent(o.id)}`}
-                  className={`block p-4 bg-white rounded-2xl border shadow-sm hover:shadow-md transition-shadow active:scale-[0.99] ${isMissingOrder(o) ? 'border-red-200 bg-red-50/30' : 'border-gray-100'}`}
-                >
-                  <div className="flex justify-between items-start mb-1.5 gap-2">
-                    <span className="font-semibold text-sm text-blue-600 truncate">{o.id}</span>
-                    {(() => { const r = recruitStatusInfo(o); return <span className={`text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap ${r.cls}`}>{r.label}</span>; })()}
-                  </div>
-                  <p className="text-xs text-gray-700 font-medium truncate">{o.company_name || '—'}</p>
-                  <p className="text-xs text-gray-400 mt-0.5">{o.job_type || '—'} {o.salary_usd ? `· $${o.salary_usd}` : ''}</p>
-                  <div className="flex flex-wrap items-center justify-between mt-2 gap-x-2 gap-y-1.5">
-                    <div className="text-xs text-gray-500 flex items-center gap-1">
-                      <span className="font-semibold text-slate-700">{o.total_labor ?? 0} LĐ</span>
-                      {missing > 0 && <span className="text-red-400">(-{missing})</span>}
-                      {o.total_fee_vn ? <span className="text-blue-600 font-semibold ml-1">{fmtVndShort((o.total_fee_vn as number) * 1.08)} ₫</span> : null}
+                <div key={o.id} className={`p-4 bg-white rounded-2xl border shadow-sm ${isMissingOrder(o) ? 'border-red-200 bg-red-50/30' : 'border-gray-100'}`}>
+                  <Link href={`/admin/orders/${encodeURIComponent(o.id)}`} className="block">
+                    <div className="flex justify-between items-start mb-1.5 gap-2">
+                      <span className="font-semibold text-sm text-blue-600 truncate">{o.id}</span>
+                      {(() => { const r = recruitStatusInfo(o); return <span className={`text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap ${r.cls}`}>{r.label}</span>; })()}
                     </div>
-                    <div className="flex items-center flex-wrap gap-1.5">
-                      <StatusPill label={o.payment_status_vn} />
-                      {agentNames.map((ag) => (
-                        <span key={ag.id} className="text-xs bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded-full whitespace-nowrap">{ag.short_name || ag.full_name}</span>
-                      ))}
+                    <p className="text-xs text-gray-700 font-medium truncate">{o.company_name || '—'}</p>
+                    <p className="text-xs text-gray-400 mt-0.5">{o.job_type || '—'} {o.salary_usd ? `· $${o.salary_usd}` : ''}</p>
+                    <div className="flex flex-wrap items-center justify-between mt-2 gap-x-2 gap-y-1.5">
+                      <div className="text-xs text-gray-500 flex items-center gap-1">
+                        <span className="font-semibold text-slate-700">{o.total_labor ?? 0} LĐ</span>
+                        {missing > 0 && <span className="text-red-400">(-{missing})</span>}
+                        {o.total_fee_vn ? <span className="text-blue-600 font-semibold ml-1">{fmtVndShort((o.total_fee_vn as number) * 1.08)} ₫</span> : null}
+                      </div>
+                      <div className="flex items-center flex-wrap gap-1.5">
+                        <StatusPill label={o.payment_status_vn} />
+                        {agentNames.map((ag) => (
+                          <span key={ag.id} className="text-xs bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded-full whitespace-nowrap">{ag.short_name || ag.full_name}</span>
+                        ))}
+                      </div>
                     </div>
+                  </Link>
+                  <div className="mt-2 pt-2 border-t border-gray-50">
+                    <a href={`/share/${encodeURIComponent(o.id)}`} target="_blank" rel="noopener noreferrer" className="text-xs text-gray-400 hover:text-blue-600 flex items-center gap-1">
+                      👁 View trang share
+                    </a>
                   </div>
-                </Link>
+                </div>
               );
             })}
           </div>
@@ -217,9 +220,14 @@ export default function OrdersPage() {
                         <td className="px-4 py-3">{(() => { const r = recruitStatusInfo(o); return <span className={`text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap ${r.cls}`}>{r.label}</span>; })()}</td>
                         <td className="px-4 py-3"><StatusPill label={o.payment_status_vn} /></td>
                         <td className="px-4 py-3">
-                          <Link href={`/admin/orders/${encodeURIComponent(o.id)}`} className="text-xs text-blue-600 hover:underline font-medium">
-                            Xem →
-                          </Link>
+                          <div className="flex items-center gap-2">
+                            <Link href={`/admin/orders/${encodeURIComponent(o.id)}`} className="text-xs text-blue-600 hover:underline font-medium">
+                              Xem →
+                            </Link>
+                            <a href={`/share/${encodeURIComponent(o.id)}`} target="_blank" rel="noopener noreferrer" className="text-xs text-gray-400 hover:text-gray-600" title="Trang share">
+                              👁
+                            </a>
+                          </div>
                         </td>
                       </tr>
                     );

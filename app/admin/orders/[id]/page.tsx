@@ -735,6 +735,15 @@ export default function OrderDetailPage() {
         </div>
         <RecruitmentPill status={form.status} laborMissing={(() => { const total = parseInt(form.total_labor) || 0; const passed = (candidates?.filter(c => c.interview_status === 'Passed').length) || 0; return Math.max(0, total - passed); })()} />
         {saveMsg && <span className="text-xs text-green-600 font-medium hidden sm:inline">{saveMsg}</span>}
+        <a
+          href={`/share/${encodeURIComponent(id)}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="min-h-[44px] px-2 flex items-center justify-center text-gray-400 hover:text-blue-600 text-lg"
+          title="Xem trang share"
+        >
+          👁
+        </a>
         <button
           onClick={() => handleSave(false)}
           disabled={saving}
