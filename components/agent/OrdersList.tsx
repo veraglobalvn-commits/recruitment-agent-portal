@@ -20,6 +20,11 @@ export default function OrdersList({ orders }: { orders: Order[] }) {
         >
           <div className="flex justify-between items-start gap-2 mb-3">
             <h3 className="font-bold text-gray-800 text-sm leading-tight flex-1">{order.order_id}</h3>
+            {order.created_at && (
+              <span className="text-xs text-gray-400 whitespace-nowrap shrink-0">
+                {new Date(order.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+              </span>
+            )}
           </div>
 
           <div className="grid grid-cols-4 gap-2 mb-3">

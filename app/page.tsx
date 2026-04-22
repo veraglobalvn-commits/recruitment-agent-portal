@@ -266,10 +266,8 @@ export default function Home() {
           allocated_labor: oaMap[o.order_id]?.labor ?? o.total_labor,
           candidates_count: candCountMap[o.order_id] ?? 0,
         })).sort((a, b) => {
-          const tA = oaMap[a.order_id]?.date || a.created_at;
-          const tB = oaMap[b.order_id]?.date || b.created_at;
-          const dateA = tA ? new Date(tA).getTime() : 0;
-          const dateB = tB ? new Date(tB).getTime() : 0;
+          const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+          const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
           const aValid = !isNaN(dateA) && dateA > 0 ? dateA : 0;
           const bValid = !isNaN(dateB) && dateB > 0 ? dateB : 0;
           return bValid - aValid;
