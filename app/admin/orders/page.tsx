@@ -2,7 +2,7 @@
 import StatusPill from '@/components/ui/StatusPill';
 import { fmtVndShort } from '@/lib/formatters';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { fetchActiveAgents } from '@/lib/query-helpers';
@@ -43,6 +43,15 @@ export default function OrdersPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [showModal, setShowModal] = useState(false);
   const [prefillCompanyId, setPrefillCompanyId] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const copyShareLink = (orderId: string) => {
+    navigator.clipboard.writeText(`${window.location.origin}/share/${encodeURIComponent(orderId)}`);
+    if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+    setCopiedId(orderId);
+    copyTimerRef.current = setTimeout(() => setCopiedId(null), 2000);
+  };
 
   const agentMap = new Map(agents.map((a) => [a.id, a]));
 
@@ -173,10 +182,13 @@ export default function OrdersPage() {
                       </div>
                     </div>
                   </Link>
-                  <div className="mt-2 pt-2 border-t border-gray-50">
-                    <a href={`/share/${encodeURIComponent(o.id)}`} target="_blank" rel="noopener noreferrer" className="text-xs text-gray-400 hover:text-blue-600 flex items-center gap-1">
-                      👁 View trang share
+                  <div className="mt-2 pt-2 border-t border-gray-50 flex items-center gap-3">
+                    <a href={`/share/${encodeURIComponent(o.id)}`} target="_blank" rel="noopener noreferrer" className="text-xs text-gray-500 hover:text-blue-600 font-medium">
+                      Xem
                     </a>
+                    <button onClick={() => copyShareLink(o.id)} className="text-xs text-gray-400 hover:text-blue-600 transition-colors">
+                      {copiedId === o.id ? <span className="text-green-600 font-medium">✓ Đã copy</span> : 'Share'}
+                    </button>
                   </div>
                 </div>
               );
@@ -220,13 +232,16 @@ export default function OrdersPage() {
                         <td className="px-4 py-3">{(() => { const r = recruitStatusInfo(o); return <span className={`text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap ${r.cls}`}>{r.label}</span>; })()}</td>
                         <td className="px-4 py-3"><StatusPill label={o.payment_status_vn} /></td>
                         <td className="px-4 py-3">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 whitespace-nowrap">
                             <Link href={`/admin/orders/${encodeURIComponent(o.id)}`} className="text-xs text-blue-600 hover:underline font-medium">
                               Xem →
                             </Link>
-                            <a href={`/share/${encodeURIComponent(o.id)}`} target="_blank" rel="noopener noreferrer" className="text-xs text-gray-400 hover:text-gray-600" title="Trang share">
-                              👁
+                            <a href={`/share/${encodeURIComponent(o.id)}`} target="_blank" rel="noopener noreferrer" className="text-xs text-gray-500 hover:text-blue-600 font-medium">
+                              Xem
                             </a>
+                            <button onClick={() => copyShareLink(o.id)} className="text-xs text-gray-400 hover:text-blue-600 transition-colors">
+                              {copiedId === o.id ? <span className="text-green-600 font-medium">✓</span> : 'Share'}
+                            </button>
                           </div>
                         </td>
                       </tr>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
 function isVideo(url: string) {
   return /\.(mp4|webm|mov)$/i.test(url);
@@ -15,57 +15,56 @@ interface Props {
 
 export default function MediaViewer({ media, index, onClose, onNav }: Props) {
   const url = media[index];
-  const hasPrev = index > 0;
-  const hasNext = index < media.length - 1;
+  const touchStartX = useRef<number | null>(null);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
-      if (e.key === 'ArrowLeft' && hasPrev) onNav(index - 1);
-      if (e.key === 'ArrowRight' && hasNext) onNav(index + 1);
+      if (e.key === 'ArrowLeft' && index > 0) onNav(index - 1);
+      if (e.key === 'ArrowRight' && index < media.length - 1) onNav(index + 1);
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [index, hasPrev, hasNext, onClose, onNav]);
+  }, [index, media.length, onClose, onNav]);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartX.current === null) return;
+    const delta = touchStartX.current - e.changedTouches[0].clientX;
+    if (Math.abs(delta) < 50) return;
+    if (delta > 0 && index < media.length - 1) onNav(index + 1);
+    if (delta < 0 && index > 0) onNav(index - 1);
+    touchStartX.current = null;
+  };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 bg-black flex items-center justify-center"
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+      onClick={onClose}
+    >
       <button
         onClick={onClose}
-        className="absolute top-4 right-4 text-white text-2xl w-11 h-11 flex items-center justify-center bg-black/40 rounded-full hover:bg-black/70 z-10"
+        className="absolute top-4 right-4 text-white text-2xl w-11 h-11 flex items-center justify-center bg-black/50 rounded-full z-10"
       >
         ✕
       </button>
 
-      {hasPrev && (
-        <button
-          onClick={(e) => { e.stopPropagation(); onNav(index - 1); }}
-          className="absolute left-3 top-1/2 -translate-y-1/2 text-white text-3xl w-12 h-12 flex items-center justify-center bg-black/40 rounded-full hover:bg-black/70 z-10"
-        >
-          ‹
-        </button>
-      )}
-
-      <div className="max-w-4xl w-full mx-16 flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full h-full flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
         {isVideo(url) ? (
-          <video src={url} controls autoPlay className="max-h-[85vh] w-full rounded-lg" />
+          <video src={url} controls autoPlay className="w-full h-full object-contain" />
         ) : (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={url} alt="" className="max-h-[85vh] max-w-full object-contain rounded-lg" />
+          <img src={url} alt="" className="w-full h-full object-contain" />
         )}
       </div>
 
-      {hasNext && (
-        <button
-          onClick={(e) => { e.stopPropagation(); onNav(index + 1); }}
-          className="absolute right-3 top-1/2 -translate-y-1/2 text-white text-3xl w-12 h-12 flex items-center justify-center bg-black/40 rounded-full hover:bg-black/70 z-10"
-        >
-          ›
-        </button>
-      )}
-
       {media.length > 1 && (
-        <p className="absolute bottom-4 text-white text-xs opacity-50 select-none">
+        <p className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white text-xs bg-black/40 px-3 py-1 rounded-full select-none">
           {index + 1} / {media.length}
         </p>
       )}
