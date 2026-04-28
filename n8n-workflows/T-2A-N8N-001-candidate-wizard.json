@@ -372,7 +372,7 @@
         420
       ],
       "parameters": {
-        "jsCode": "\nconst se = $('Code: State Engine').item.json;\nconst crypto = require('crypto');\nconst secret = $env.TELEGRAM_BRIDGE_SECRET;\nconst payload = { action: 'list_orders', telegram_user_id: se.telegram_user_id };\nconst timestamp = Math.floor(Date.now() / 1000).toString();\nconst rawBody = JSON.stringify(payload);\nconst sig = crypto.createHmac('sha256', secret).update(timestamp + '.' + rawBody, 'utf8').digest('hex');\nreturn [{ json: { payload, timestamp, signature: sig, chat_id: se.chat_id, callback_query_id: se.callback_query_id } }];\n"
+        "jsCode": "\nconst se = $('Code: State Engine').item.json;\nconst crypto = require('crypto');\nconst secret = $env.TELEGRAM_BRIDGE_SECRET;\nconst payload = { action: 'list_orders', telegram_user_id: se.telegram_user_id };\nconst timestamp = Math.floor(Date.now() / 1000).toString();\nconst rawBody = JSON.stringify(payload);\nconst sig = crypto.createHmac('sha256', secret).update(timestamp + '.' + rawBody, 'utf8').digest('hex');\nreturn [{ json: { payload, rawBody, timestamp, signature: sig, chat_id: se.chat_id, callback_query_id: se.callback_query_id } }];\n"
       }
     },
     {
@@ -386,7 +386,7 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.APP_URL }}/api/telegram/candidate",
+        "url": "https://portal.veraglobal.vn/api/telegram/candidate",
         "authentication": "none",
         "sendHeaders": true,
         "headerParameters": {
@@ -397,11 +397,11 @@
             },
             {
               "name": "x-bridge-timestamp",
-              "value": "={ $('Code: Sign List Orders').item.json.timestamp }"
+              "value": "={{ $('Code: Sign List Orders').item.json.timestamp }}"
             },
             {
               "name": "x-bridge-signature",
-              "value": "={ $('Code: Sign List Orders').item.json.signature }"
+              "value": "={{ $('Code: Sign List Orders').item.json.signature }}"
             }
           ]
         },
@@ -415,7 +415,7 @@
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "application/json",
-        "body": "={ JSON.stringify($('Code: Sign List Orders').item.json.payload) }"
+        "body": "={{ $('Code: Sign List Orders').item.json.rawBody }}"
       }
     },
     {
@@ -557,7 +557,7 @@
         620
       ],
       "parameters": {
-        "jsCode": "\nconst se  = $('Code: State Engine').item.json;\nconst bin = $input.item.binary;\nconst base64Image = bin && bin.data ? bin.data.data : '';\nconst crypto = require('crypto');\nconst secret = $env.TELEGRAM_BRIDGE_SECRET;\nconst payload = {\n  action: 'create_passport',\n  telegram_user_id: se.telegram_user_id,\n  order_id: se.order_id || (se.session_data && se.session_data.order_id) || '',\n  chat_id: se.chat_id,\n  image_base64: base64Image,\n  force_update: false,\n};\nconst timestamp = Math.floor(Date.now() / 1000).toString();\nconst rawBody = JSON.stringify(payload);\nconst sig = crypto.createHmac('sha256', secret).update(timestamp + '.' + rawBody, 'utf8').digest('hex');\nreturn [{ json: { payload, timestamp, signature: sig, chat_id: se.chat_id, callback_query_id: se.callback_query_id } }];\n"
+        "jsCode": "\nconst se  = $('Code: State Engine').item.json;\nconst bin = $input.item.binary;\nconst base64Image = bin && bin.data ? bin.data.data : '';\nconst crypto = require('crypto');\nconst secret = $env.TELEGRAM_BRIDGE_SECRET;\nconst payload = {\n  action: 'create_passport',\n  telegram_user_id: se.telegram_user_id,\n  order_id: se.order_id || (se.session_data && se.session_data.order_id) || '',\n  chat_id: se.chat_id,\n  image_base64: base64Image,\n  force_update: false,\n};\nconst timestamp = Math.floor(Date.now() / 1000).toString();\nconst rawBody = JSON.stringify(payload);\nconst sig = crypto.createHmac('sha256', secret).update(timestamp + '.' + rawBody, 'utf8').digest('hex');\nreturn [{ json: { payload, rawBody, timestamp, signature: sig, chat_id: se.chat_id, callback_query_id: se.callback_query_id } }];\n"
       }
     },
     {
@@ -571,7 +571,7 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.APP_URL }}/api/telegram/candidate",
+        "url": "https://portal.veraglobal.vn/api/telegram/candidate",
         "authentication": "none",
         "sendHeaders": true,
         "headerParameters": {
@@ -582,11 +582,11 @@
             },
             {
               "name": "x-bridge-timestamp",
-              "value": "={ $('Code: Sign Passport').item.json.timestamp }"
+              "value": "={{ $('Code: Sign Passport').item.json.timestamp }}"
             },
             {
               "name": "x-bridge-signature",
-              "value": "={ $('Code: Sign Passport').item.json.signature }"
+              "value": "={{ $('Code: Sign Passport').item.json.signature }}"
             }
           ]
         },
@@ -600,7 +600,7 @@
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "application/json",
-        "body": "={ JSON.stringify($('Code: Sign Passport').item.json.payload) }"
+        "body": "={{ $('Code: Sign Passport').item.json.rawBody }}"
       }
     },
     {
@@ -729,7 +729,7 @@
         780
       ],
       "parameters": {
-        "jsCode": "\nconst se = $('Code: State Engine').item.json;\nconst crypto = require('crypto');\nconst secret = $env.TELEGRAM_BRIDGE_SECRET;\nconst payload = {\n  action: 'delete_candidate',\n  telegram_user_id: se.telegram_user_id,\n  candidate_id: se.candidate_id,\n};\nconst timestamp = Math.floor(Date.now() / 1000).toString();\nconst rawBody = JSON.stringify(payload);\nconst sig = crypto.createHmac('sha256', secret).update(timestamp + '.' + rawBody, 'utf8').digest('hex');\nreturn [{ json: { payload, timestamp, signature: sig } }];\n"
+        "jsCode": "\nconst se = $('Code: State Engine').item.json;\nconst crypto = require('crypto');\nconst secret = $env.TELEGRAM_BRIDGE_SECRET;\nconst payload = {\n  action: 'delete_candidate',\n  telegram_user_id: se.telegram_user_id,\n  candidate_id: se.candidate_id,\n};\nconst timestamp = Math.floor(Date.now() / 1000).toString();\nconst rawBody = JSON.stringify(payload);\nconst sig = crypto.createHmac('sha256', secret).update(timestamp + '.' + rawBody, 'utf8').digest('hex');\nreturn [{ json: { payload, rawBody, timestamp, signature: sig } }];\n"
       }
     },
     {
@@ -743,7 +743,7 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.APP_URL }}/api/telegram/candidate",
+        "url": "https://portal.veraglobal.vn/api/telegram/candidate",
         "authentication": "none",
         "sendHeaders": true,
         "headerParameters": {
@@ -754,11 +754,11 @@
             },
             {
               "name": "x-bridge-timestamp",
-              "value": "={ $('Code: Sign Delete').item.json.timestamp }"
+              "value": "={{ $('Code: Sign Delete').item.json.timestamp }}"
             },
             {
               "name": "x-bridge-signature",
-              "value": "={ $('Code: Sign Delete').item.json.signature }"
+              "value": "={{ $('Code: Sign Delete').item.json.signature }}"
             }
           ]
         },
@@ -772,7 +772,7 @@
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "application/json",
-        "body": "={ JSON.stringify($('Code: Sign Delete').item.json.payload) }"
+        "body": "={{ $('Code: Sign Delete').item.json.rawBody }}"
       }
     },
     {
@@ -985,7 +985,7 @@
         1240
       ],
       "parameters": {
-        "jsCode": "\nconst fileResp = $input.item.json;\nconst se       = $('Code: State Engine').item.json;\nconst sd       = se.session_data || {};\nconst filePath = fileResp.result && fileResp.result.file_path ? fileResp.result.file_path : '';\nconst videoUrl = 'https://api.telegram.org/file/bot' + $env.TELEGRAM_BOT_TOKEN + '/' + filePath;\n\nconst candidateConfirmed = {\n  q1_viewed_materials: sd.q1_viewed_materials !== undefined ? sd.q1_viewed_materials : false,\n  q2_agrees_terms:     sd.q2_agrees_terms     !== undefined ? sd.q2_agrees_terms     : false,\n  q3_agrees_overtime:  sd.q3_agrees_overtime  !== undefined ? sd.q3_agrees_overtime  : false,\n  q4_accepts_food:     sd.q4_accepts_food     !== undefined ? sd.q4_accepts_food     : false,\n  q5_agrees_prayer:    sd.q5_agrees_prayer    !== undefined ? sd.q5_agrees_prayer    : false,\n  q6_has_questions:    sd.q6_has_questions    !== undefined ? sd.q6_has_questions    : false,\n  q6_questions_text:   sd.q6_questions_text   || 'None',\n  q7_confirms_penalty: sd.q7_confirms_penalty !== undefined ? sd.q7_confirms_penalty : false,\n};\n\nconst crypto = require('crypto');\nconst secret = $env.TELEGRAM_BRIDGE_SECRET;\nconst payload = {\n  action: 'finalize',\n  telegram_user_id: se.telegram_user_id,\n  candidate_id: sd.candidate_id || '',\n  height_ft:    sd.height_ft    || 0,\n  weight_kg:    sd.weight_kg    || 0,\n  avatar_url:   sd.avatar_url   || '',\n  video_urls:   [videoUrl],\n  candidate_confirmed: candidateConfirmed,\n};\nconst timestamp = Math.floor(Date.now() / 1000).toString();\nconst rawBody = JSON.stringify(payload);\nconst sig = crypto.createHmac('sha256', secret).update(timestamp + '.' + rawBody, 'utf8').digest('hex');\nreturn [{ json: { payload, timestamp, signature: sig, chat_id: se.chat_id } }];\n"
+        "jsCode": "\nconst fileResp = $input.item.json;\nconst se       = $('Code: State Engine').item.json;\nconst sd       = se.session_data || {};\nconst filePath = fileResp.result && fileResp.result.file_path ? fileResp.result.file_path : '';\nconst videoUrl = 'https://api.telegram.org/file/bot' + $env.TELEGRAM_BOT_TOKEN + '/' + filePath;\n\nconst candidateConfirmed = {\n  q1_viewed_materials: sd.q1_viewed_materials !== undefined ? sd.q1_viewed_materials : false,\n  q2_agrees_terms:     sd.q2_agrees_terms     !== undefined ? sd.q2_agrees_terms     : false,\n  q3_agrees_overtime:  sd.q3_agrees_overtime  !== undefined ? sd.q3_agrees_overtime  : false,\n  q4_accepts_food:     sd.q4_accepts_food     !== undefined ? sd.q4_accepts_food     : false,\n  q5_agrees_prayer:    sd.q5_agrees_prayer    !== undefined ? sd.q5_agrees_prayer    : false,\n  q6_has_questions:    sd.q6_has_questions    !== undefined ? sd.q6_has_questions    : false,\n  q6_questions_text:   sd.q6_questions_text   || 'None',\n  q7_confirms_penalty: sd.q7_confirms_penalty !== undefined ? sd.q7_confirms_penalty : false,\n};\n\nconst crypto = require('crypto');\nconst secret = $env.TELEGRAM_BRIDGE_SECRET;\nconst payload = {\n  action: 'finalize',\n  telegram_user_id: se.telegram_user_id,\n  candidate_id: sd.candidate_id || '',\n  height_ft:    sd.height_ft    || 0,\n  weight_kg:    sd.weight_kg    || 0,\n  avatar_url:   sd.avatar_url   || '',\n  video_urls:   [videoUrl],\n  candidate_confirmed: candidateConfirmed,\n};\nconst timestamp = Math.floor(Date.now() / 1000).toString();\nconst rawBody = JSON.stringify(payload);\nconst sig = crypto.createHmac('sha256', secret).update(timestamp + '.' + rawBody, 'utf8').digest('hex');\nreturn [{ json: { payload, rawBody, timestamp, signature: sig, chat_id: se.chat_id } }];\n"
       }
     },
     {
@@ -999,7 +999,7 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.APP_URL }}/api/telegram/candidate",
+        "url": "https://portal.veraglobal.vn/api/telegram/candidate",
         "authentication": "none",
         "sendHeaders": true,
         "headerParameters": {
@@ -1010,11 +1010,11 @@
             },
             {
               "name": "x-bridge-timestamp",
-              "value": "={ $('Code: Sign Finalize').item.json.timestamp }"
+              "value": "={{ $('Code: Sign Finalize').item.json.timestamp }}"
             },
             {
               "name": "x-bridge-signature",
-              "value": "={ $('Code: Sign Finalize').item.json.signature }"
+              "value": "={{ $('Code: Sign Finalize').item.json.signature }}"
             }
           ]
         },
@@ -1028,7 +1028,7 @@
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "application/json",
-        "body": "={ JSON.stringify($('Code: Sign Finalize').item.json.payload) }"
+        "body": "={{ $('Code: Sign Finalize').item.json.rawBody }}"
       }
     },
     {
