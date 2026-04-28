@@ -43,6 +43,19 @@ export interface OrderAgent {
   assigned_labor_number: number;
 }
 
+export interface CandidateConfirmed {
+  q1_viewed_materials: boolean;
+  q2_agrees_terms: boolean;
+  q3_agrees_overtime: boolean;
+  q4_accepts_food: boolean;
+  q5_agrees_prayer: boolean;
+  q6_has_questions: boolean;
+  q6_questions_text: string | null;
+  q7_confirms_penalty: boolean;
+  captured_at: string;         // ISO timestamp
+  captured_via: 'telegram';
+}
+
 export interface Candidate {
   id_ld: string;
   order_id: string | null;
@@ -65,6 +78,8 @@ export interface Candidate {
   health_cert_link: string | null;
   interview_status: string | null;
   created_at?: string | null;
+  candidate_confirmed?: CandidateConfirmed | null;
+  video_links?: string[] | null;
 }
 
 export interface DashboardData {
