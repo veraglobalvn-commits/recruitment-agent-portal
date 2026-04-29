@@ -320,7 +320,7 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
+        "url": "={{ $env.TELEGRAM_BOT_API_BASE_URL || 'https://api.telegram.org' }}/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
         "authentication": "none",
         "sendHeaders": true,
         "headerParameters": {
@@ -390,7 +390,7 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
+        "url": "={{ $env.TELEGRAM_BOT_API_BASE_URL || 'https://api.telegram.org' }}/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
         "authentication": "none",
         "sendHeaders": true,
         "headerParameters": {
@@ -529,7 +529,7 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
+        "url": "={{ $env.TELEGRAM_BOT_API_BASE_URL || 'https://api.telegram.org' }}/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
         "authentication": "none",
         "sendHeaders": true,
         "headerParameters": {
@@ -558,7 +558,7 @@
       ],
       "parameters": {
         "method": "GET",
-        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/getFile?file_id={{ $('Code: State Engine').item.json.file_id }}",
+        "url": "={{ $env.TELEGRAM_BOT_API_BASE_URL || 'https://api.telegram.org' }}/bot{{ $env.TELEGRAM_BOT_TOKEN }}/getFile?file_id={{ $('Code: State Engine').item.json.file_id }}",
         "authentication": "none",
         "sendHeaders": true,
         "headerParameters": {
@@ -578,7 +578,7 @@
       ],
       "parameters": {
         "method": "GET",
-        "url": "=https://api.telegram.org/file/bot{{ $env.TELEGRAM_BOT_TOKEN }}/{{ $json.result.file_path }}",
+        "url": "={{ $env.TELEGRAM_BOT_API_BASE_URL || 'https://api.telegram.org' }}/file/bot{{ $env.TELEGRAM_BOT_TOKEN }}/{{ $json.result.file_path }}",
         "authentication": "none",
         "sendHeaders": false,
         "headerParameters": {
@@ -714,7 +714,7 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
+        "url": "={{ $env.TELEGRAM_BOT_API_BASE_URL || 'https://api.telegram.org' }}/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
         "authentication": "none",
         "sendHeaders": true,
         "headerParameters": {
@@ -865,7 +865,7 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
+        "url": "={{ $env.TELEGRAM_BOT_API_BASE_URL || 'https://api.telegram.org' }}/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
         "authentication": "none",
         "sendHeaders": true,
         "headerParameters": {
@@ -894,7 +894,7 @@
       ],
       "parameters": {
         "method": "GET",
-        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/getFile?file_id={{ $('Code: State Engine').item.json.file_id }}",
+        "url": "={{ $env.TELEGRAM_BOT_API_BASE_URL || 'https://api.telegram.org' }}/bot{{ $env.TELEGRAM_BOT_TOKEN }}/getFile?file_id={{ $('Code: State Engine').item.json.file_id }}",
         "authentication": "none",
         "sendHeaders": true,
         "headerParameters": {
@@ -913,7 +913,7 @@
         1040
       ],
       "parameters": {
-        "jsCode": "\nconst resp = $input.item.json;\nconst se   = $('Code: State Engine').item.json;\nconst filePath  = resp.result && resp.result.file_path ? resp.result.file_path : '';\nconst avatarUrl = 'https://api.telegram.org/file/bot' + $env.TELEGRAM_BOT_TOKEN + '/' + filePath;\nconst newData = Object.assign({}, se.session_data, { avatar_url: avatarUrl });\nreturn [{ json: {\n  chat_id: se.chat_id, callback_query_id: se.callback_query_id,\n  new_state: 'WAITING_VIDEO_UPLOAD', new_data: newData,\n  telegram_message: 'Please send the candidate\\'s video.',\n  telegram_reply_markup: null,\n  tg_body: JSON.stringify({chat_id:se.chat_id,text:'Please send the candidate\\'s video.',parse_mode:'HTML'}),\n} }];\n"
+        "jsCode": "\nconst resp = $input.item.json;\nconst se   = $('Code: State Engine').item.json;\nconst filePath  = resp.result && resp.result.file_path ? resp.result.file_path : '';\nconst avatarUrl = ($env.TELEGRAM_PUBLIC_FILE_BASE ? $env.TELEGRAM_PUBLIC_FILE_BASE + '/' + filePath : 'https://api.telegram.org/file/bot' + $env.TELEGRAM_BOT_TOKEN + '/' + filePath);\nconst newData = Object.assign({}, se.session_data, { avatar_url: avatarUrl });\nreturn [{ json: {\n  chat_id: se.chat_id, callback_query_id: se.callback_query_id,\n  new_state: 'WAITING_VIDEO_UPLOAD', new_data: newData,\n  telegram_message: 'Please send the candidate\\'s video.',\n  telegram_reply_markup: null,\n  tg_body: JSON.stringify({chat_id:se.chat_id,text:'Please send the candidate\\'s video.',parse_mode:'HTML'}),\n} }];\n"
       }
     },
     {
@@ -968,7 +968,7 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
+        "url": "={{ $env.TELEGRAM_BOT_API_BASE_URL || 'https://api.telegram.org' }}/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
         "authentication": "none",
         "sendHeaders": true,
         "headerParameters": {
@@ -997,7 +997,7 @@
       ],
       "parameters": {
         "method": "GET",
-        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/getFile?file_id={{ $('Code: State Engine').item.json.file_id }}",
+        "url": "={{ $env.TELEGRAM_BOT_API_BASE_URL || 'https://api.telegram.org' }}/bot{{ $env.TELEGRAM_BOT_TOKEN }}/getFile?file_id={{ $('Code: State Engine').item.json.file_id }}",
         "authentication": "none",
         "sendHeaders": true,
         "headerParameters": {
@@ -1022,7 +1022,7 @@
         1240
       ],
       "parameters": {
-        "jsCode": "\nconst fileResp = $input.item.json;\nconst se       = $('Code: State Engine').item.json;\n\n// Early-return if Telegram getFile failed or file_path is empty (e.g. video > 20MB)\nif (!fileResp || !fileResp.ok || !fileResp.result || !fileResp.result.file_path) {\n  return [{ json: {\n    error: true,\n    error_type: 'video_unavailable',\n    chat_id: se.chat_id,\n  }}];\n}\n\nconst sd       = se.session_data || {};\nconst filePath = fileResp.result.file_path;\nconst videoUrl = 'https://api.telegram.org/file/bot' + $env.TELEGRAM_BOT_TOKEN + '/' + filePath;\n\nconst flags = (sd.consent_flags && typeof sd.consent_flags === 'object')\n  ? sd.consent_flags\n  : { q1:false, q2:false, q3:false, q4:false, q5:false, q7:false };\n\nconst candidateConfirmed = {\n  q1_viewed_materials: !!flags.q1,\n  q2_agrees_terms:     !!flags.q2,\n  q3_agrees_overtime:  !!flags.q3,\n  q4_accepts_food:     !!flags.q4,\n  q5_agrees_prayer:    !!flags.q5,\n  q6_has_questions:    false,\n  q6_questions_text:   'None',\n  q7_confirms_penalty: !!flags.q7,\n};\n\nconst crypto = require('crypto');\nconst secret = $env.TELEGRAM_BRIDGE_SECRET;\nconst payload = {\n  action: 'finalize',\n  telegram_user_id: se.telegram_user_id,\n  candidate_id: sd.candidate_id || '',\n  height_ft:    sd.height_ft    || 0,\n  weight_kg:    sd.weight_kg    || 0,\n  avatar_url:   sd.avatar_url   || '',\n  video_urls:   [videoUrl],\n  candidate_confirmed: candidateConfirmed,\n};\nconst timestamp = Math.floor(Date.now() / 1000).toString();\nconst rawBody = JSON.stringify(payload);\nconst sig = crypto.createHmac('sha256', secret).update(timestamp + '.' + rawBody, 'utf8').digest('hex');\nreturn [{ json: { payload, rawBody, timestamp, signature: sig, chat_id: se.chat_id } }];\n"
+        "jsCode": "\nconst fileResp = $input.item.json;\nconst se       = $('Code: State Engine').item.json;\n\n// Early-return if Telegram getFile failed or file_path is empty (e.g. video > 20MB)\nif (!fileResp || !fileResp.ok || !fileResp.result || !fileResp.result.file_path) {\n  return [{ json: {\n    error: true,\n    error_type: 'video_unavailable',\n    chat_id: se.chat_id,\n  }}];\n}\n\nconst sd       = se.session_data || {};\nconst filePath = fileResp.result.file_path;\nconst videoUrl = ($env.TELEGRAM_PUBLIC_FILE_BASE ? $env.TELEGRAM_PUBLIC_FILE_BASE + '/' + filePath : 'https://api.telegram.org/file/bot' + $env.TELEGRAM_BOT_TOKEN + '/' + filePath);\n\nconst flags = (sd.consent_flags && typeof sd.consent_flags === 'object')\n  ? sd.consent_flags\n  : { q1:false, q2:false, q3:false, q4:false, q5:false, q7:false };\n\nconst candidateConfirmed = {\n  q1_viewed_materials: !!flags.q1,\n  q2_agrees_terms:     !!flags.q2,\n  q3_agrees_overtime:  !!flags.q3,\n  q4_accepts_food:     !!flags.q4,\n  q5_agrees_prayer:    !!flags.q5,\n  q6_has_questions:    false,\n  q6_questions_text:   'None',\n  q7_confirms_penalty: !!flags.q7,\n};\n\nconst crypto = require('crypto');\nconst secret = $env.TELEGRAM_BRIDGE_SECRET;\nconst payload = {\n  action: 'finalize',\n  telegram_user_id: se.telegram_user_id,\n  candidate_id: sd.candidate_id || '',\n  height_ft:    sd.height_ft    || 0,\n  weight_kg:    sd.weight_kg    || 0,\n  avatar_url:   sd.avatar_url   || '',\n  video_urls:   [videoUrl],\n  candidate_confirmed: candidateConfirmed,\n};\nconst timestamp = Math.floor(Date.now() / 1000).toString();\nconst rawBody = JSON.stringify(payload);\nconst sig = crypto.createHmac('sha256', secret).update(timestamp + '.' + rawBody, 'utf8').digest('hex');\nreturn [{ json: { payload, rawBody, timestamp, signature: sig, chat_id: se.chat_id } }];\n"
       }
     },
     {
@@ -1125,7 +1125,7 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
+        "url": "={{ $env.TELEGRAM_BOT_API_BASE_URL || 'https://api.telegram.org' }}/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
         "authentication": "none",
         "sendHeaders": true,
         "headerParameters": {
@@ -1187,7 +1187,7 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
+        "url": "={{ $env.TELEGRAM_BOT_API_BASE_URL || 'https://api.telegram.org' }}/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
         "authentication": "none",
         "sendHeaders": true,
         "headerParameters": {
@@ -1222,7 +1222,7 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
+        "url": "={{ $env.TELEGRAM_BOT_API_BASE_URL || 'https://api.telegram.org' }}/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
         "authentication": "none",
         "sendHeaders": true,
         "headerParameters": {
@@ -1298,7 +1298,7 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/editMessageReplyMarkup",
+        "url": "={{ $env.TELEGRAM_BOT_API_BASE_URL || 'https://api.telegram.org' }}/bot{{ $env.TELEGRAM_BOT_TOKEN }}/editMessageReplyMarkup",
         "authentication": "none",
         "sendHeaders": true,
         "headerParameters": {
@@ -1374,7 +1374,7 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/answerCallbackQuery",
+        "url": "={{ $env.TELEGRAM_BOT_API_BASE_URL || 'https://api.telegram.org' }}/bot{{ $env.TELEGRAM_BOT_TOKEN }}/answerCallbackQuery",
         "authentication": "none",
         "sendHeaders": true,
         "headerParameters": {
