@@ -81,7 +81,7 @@
         300
       ],
       "parameters": {
-        "jsCode": "\nconst update = $('Code: Parse Update').item.json;\nconst raw    = $input.item.json;\n\n// Supabase returns array for row queries\nconst session     = Array.isArray(raw) ? (raw[0] || null) : (raw && raw.chat_id ? raw : null);\nconst state       = session && session.current_step ? session.current_step : 'IDLE';\nconst sessionData = session && session.draft  ? session.draft  : {};\n\nconst chat_id           = update.chat_id;\nconst telegram_user_id  = update.from_id;\nconst update_type       = update.update_type;\nconst text              = update.text || '';\nconst callback_data     = update.callback_data || '';\nconst callback_query_id = update.callback_query_id || '';\nconst has_photo         = update.has_photo || false;\nconst has_video         = update.has_video || false;\nconst file_id           = update.file_id || '';\n\nfunction ynKb(prefix) {\n  return { inline_keyboard: [[\n    { text: 'Yes', callback_data: prefix + '_yes' },\n    { text: 'No',  callback_data: prefix + '_no'  },\n  ]] };\n}\n\nlet out = {\n  action_type: 'message_only',\n  chat_id, telegram_user_id, callback_query_id, state,\n  session_data: sessionData,\n  telegram_message: '',\n  telegram_reply_markup: null,\n  need_delete: false,\n  candidate_id: sessionData.candidate_id || null,\n  order_id: sessionData.order_id || null,\n  file_id: null, file_type: null,\n  new_state: null, new_data: null,\n};\n\n// Global /cancel\nif (text === '/cancel') {\n  out.action_type     = 'delete_end';\n  out.need_delete     = !!(sessionData.candidate_id);\n  out.candidate_id    = sessionData.candidate_id || null;\n  out.telegram_message = 'Cancelled.';\n  \nout.tg_body = JSON.stringify(Object.assign({chat_id:out.chat_id,text:out.telegram_message,parse_mode:'HTML'}, out.telegram_reply_markup ? {reply_markup:out.telegram_reply_markup} : {}));\nreturn [{ json: out }];\n}\n\nswitch (state) {\n  case 'IDLE':\n    if (text === '/add') {\n      out.action_type = 'list_orders';\n    } else {\n      out.telegram_message = 'Type /add to start adding a candidate.';\n    }\n    break;\n\n  case 'WAITING_ORDER_SELECTION':\n    if (update_type === 'callback_query' && callback_data.startsWith('order_')) {\n      const order_id = callback_data.substring(6);\n      out.action_type = 'session_and_message';\n      out.order_id    = order_id;\n      out.new_state   = 'WAITING_PASSPORT_UPLOAD';\n      out.new_data    = Object.assign({}, sessionData, { order_id });\n      out.telegram_message = \"Please upload the candidate's passport photo.\";\n    } else {\n      out.telegram_message = 'Please select an order from the list, or type /cancel to exit.';\n    }\n    break;\n\n  case 'WAITING_PASSPORT_UPLOAD':\n    if (has_photo) {\n      out.action_type = 'passport';\n      out.file_id     = file_id;\n      out.file_type   = 'photo';\n    } else {\n      out.telegram_message = 'Please send a photo of the passport.';\n    }\n    break;\n\n  case 'WAITING_PASSPORT_CONFIRM':\n    if (update_type === 'callback_query') {\n      if (callback_data === 'passport_confirm_yes') {\n        out.action_type = 'session_and_message';\n        out.new_state   = 'Q1';\n        out.new_data    = sessionData;\n        out.telegram_message   = 'Q1: Has the candidate reviewed all job materials and working conditions?';\n        out.telegram_reply_markup = ynKb('q1');\n      } else if (callback_data === 'passport_confirm_no') {\n        // Orphan the old candidate, go back to re-upload\n        out.action_type = 'session_and_message';\n        out.new_state   = 'WAITING_PASSPORT_UPLOAD';\n        out.new_data    = { order_id: sessionData.order_id };\n        out.telegram_message = 'Please re-upload the passport photo.';\n      }\n    } else {\n      out.telegram_message = 'Please use the Yes/No buttons to confirm the name.';\n    }\n    break;\n\n  case 'Q1':\n    if (update_type === 'callback_query' && (callback_data === 'q1_yes' || callback_data === 'q1_no')) {\n      out.action_type = 'session_and_message';\n      out.new_state   = 'Q2';\n      out.new_data    = Object.assign({}, sessionData, { q1_viewed_materials: callback_data === 'q1_yes' });\n      out.telegram_message      = 'Q2: Does the candidate agree to all contract terms and salary?';\n      out.telegram_reply_markup = ynKb('q2');\n    } else { out.telegram_message = 'Please use the Yes/No buttons.'; }\n    break;\n\n  case 'Q2':\n    if (update_type === 'callback_query' && (callback_data === 'q2_yes' || callback_data === 'q2_no')) {\n      out.action_type = 'session_and_message';\n      out.new_state   = 'Q3';\n      out.new_data    = Object.assign({}, sessionData, { q2_agrees_terms: callback_data === 'q2_yes' });\n      out.telegram_message      = 'Q3: Does the candidate agree to overtime work when required?';\n      out.telegram_reply_markup = ynKb('q3');\n    } else { out.telegram_message = 'Please use the Yes/No buttons.'; }\n    break;\n\n  case 'Q3':\n    if (update_type === 'callback_query' && (callback_data === 'q3_yes' || callback_data === 'q3_no')) {\n      out.action_type = 'session_and_message';\n      out.new_state   = 'Q4';\n      out.new_data    = Object.assign({}, sessionData, { q3_agrees_overtime: callback_data === 'q3_yes' });\n      out.telegram_message      = 'Q4: Does the candidate accept the provided food (may not meet dietary restrictions)?';\n      out.telegram_reply_markup = ynKb('q4');\n    } else { out.telegram_message = 'Please use the Yes/No buttons.'; }\n    break;\n\n  case 'Q4':\n    if (update_type === 'callback_query' && (callback_data === 'q4_yes' || callback_data === 'q4_no')) {\n      out.action_type = 'session_and_message';\n      out.new_state   = 'Q5';\n      out.new_data    = Object.assign({}, sessionData, { q4_accepts_food: callback_data === 'q4_yes' });\n      out.telegram_message      = 'Q5: Does the candidate agree to the prayer time arrangements at the workplace?';\n      out.telegram_reply_markup = ynKb('q5');\n    } else { out.telegram_message = 'Please use the Yes/No buttons.'; }\n    break;\n\n  case 'Q5':\n    if (update_type === 'callback_query' && (callback_data === 'q5_yes' || callback_data === 'q5_no')) {\n      out.action_type = 'session_and_message';\n      out.new_state   = 'Q6';\n      out.new_data    = Object.assign({}, sessionData, { q5_agrees_prayer: callback_data === 'q5_yes' });\n      out.telegram_message      = 'Q6: Does the candidate have any questions or concerns?';\n      out.telegram_reply_markup = ynKb('q6');\n    } else { out.telegram_message = 'Please use the Yes/No buttons.'; }\n    break;\n\n  case 'Q6':\n    if (update_type === 'callback_query') {\n      if (callback_data === 'q6_yes') {\n        out.action_type = 'session_and_message';\n        out.new_state   = 'WAITING_Q6_TEXT';\n        out.new_data    = Object.assign({}, sessionData, { q6_has_questions: true });\n        out.telegram_message = \"Please type the candidate's question(s):\";\n      } else if (callback_data === 'q6_no') {\n        out.action_type = 'session_and_message';\n        out.new_state   = 'Q7';\n        out.new_data    = Object.assign({}, sessionData, { q6_has_questions: false, q6_questions_text: 'None' });\n        out.telegram_message      = 'Q7: Does the candidate understand and accept the penalty clauses in the contract?';\n        out.telegram_reply_markup = ynKb('q7');\n      }\n    } else { out.telegram_message = 'Please use the Yes/No buttons.'; }\n    break;\n\n  case 'WAITING_Q6_TEXT':\n    if (update_type === 'message' && text && !text.startsWith('/')) {\n      out.action_type = 'session_and_message';\n      out.new_state   = 'Q7';\n      out.new_data    = Object.assign({}, sessionData, { q6_questions_text: text });\n      out.telegram_message      = 'Q7: Does the candidate understand and accept the penalty clauses in the contract?';\n      out.telegram_reply_markup = ynKb('q7');\n    } else { out.telegram_message = \"Please type the candidate's questions.\"; }\n    break;\n\n  case 'Q7':\n    if (update_type === 'callback_query') {\n      if (callback_data === 'q7_yes') {\n        out.action_type = 'session_and_message';\n        out.new_state   = 'WAITING_HEIGHT';\n        out.new_data    = Object.assign({}, sessionData, { q7_confirms_penalty: true });\n        out.telegram_message = 'Height (e.g. 5.5 for 5ft 5in):';\n      } else if (callback_data === 'q7_no') {\n        out.action_type  = 'delete_end';\n        out.need_delete  = true;\n        out.candidate_id = sessionData.candidate_id || null;\n        out.telegram_message = 'The candidate did not confirm the penalty clause. Process ended.';\n      }\n    } else { out.telegram_message = 'Please use the Yes/No buttons.'; }\n    break;\n\n  case 'WAITING_HEIGHT': {\n    const h = parseFloat(text);\n    if (update_type === 'message' && !isNaN(h) && h > 0) {\n      out.action_type = 'session_and_message';\n      out.new_state   = 'WAITING_WEIGHT';\n      out.new_data    = Object.assign({}, sessionData, { height_ft: h });\n      out.telegram_message = 'Weight in kg (e.g. 55):';\n    } else { out.telegram_message = 'Invalid input. Please enter a number for height (e.g. 5.5):'; }\n    break;\n  }\n\n  case 'WAITING_WEIGHT': {\n    const w = parseFloat(text);\n    if (update_type === 'message' && !isNaN(w) && w > 0) {\n      out.action_type = 'session_and_message';\n      out.new_state   = 'WAITING_AVATAR_UPLOAD';\n      out.new_data    = Object.assign({}, sessionData, { weight_kg: w });\n      out.telegram_message = \"Please upload the candidate's avatar photo.\";\n    } else { out.telegram_message = 'Invalid input. Please enter a number for weight (e.g. 55):'; }\n    break;\n  }\n\n  case 'WAITING_AVATAR_UPLOAD':\n    if (has_photo) {\n      out.action_type = 'avatar';\n      out.file_id     = file_id;\n      out.file_type   = 'photo';\n    } else { out.telegram_message = 'Please send a photo for the avatar.'; }\n    break;\n\n  case 'WAITING_VIDEO_UPLOAD':\n    if (has_video) {\n      out.action_type = 'finalize';\n      out.file_id     = file_id;\n      out.file_type   = 'video';\n    } else { out.telegram_message = 'Please send a video file.'; }\n    break;\n\n  default:\n    out.telegram_message = 'An error occurred. Type /cancel to restart.';\n    break;\n}\n\nout.tg_body = JSON.stringify(Object.assign({chat_id:out.chat_id,text:out.telegram_message,parse_mode:'HTML'}, out.telegram_reply_markup ? {reply_markup:out.telegram_reply_markup} : {}));\nreturn [{ json: out }];\n"
+        "jsCode": "\nconst update = $('Code: Parse Update').item.json;\nconst raw    = $input.item.json;\n\n// Supabase returns array for row queries\nconst session     = Array.isArray(raw) ? (raw[0] || null) : (raw && raw.chat_id ? raw : null);\nconst state       = session && session.current_step ? session.current_step : 'IDLE';\nconst sessionData = session && session.draft  ? session.draft  : {};\n\nconst chat_id           = update.chat_id;\nconst telegram_user_id  = update.from_id;\nconst update_type       = update.update_type;\nconst text              = update.text || '';\nconst callback_data     = update.callback_data || '';\nconst callback_query_id = update.callback_query_id || '';\nconst has_photo         = update.has_photo || false;\nconst has_video         = update.has_video || false;\nconst file_id           = update.file_id || '';\n\nfunction ynKb(prefix) {\n  return { inline_keyboard: [[\n    { text: 'Yes', callback_data: prefix + '_yes' },\n    { text: 'No',  callback_data: prefix + '_no'  },\n  ]] };\n}\n\n// ---------- Consent checklist helpers (v2) ----------\nfunction buildConsentKeyboard(flags) {\n  const items = [\n    [['q1', 'Job Description'], ['q2', 'Salary']],\n    [['q3', 'Overtime'],         ['q4', 'Food']],\n    [['q5', 'Prayer Policy'],    ['q7', 'Penalty Policy']],\n  ];\n  const rows = items.map(function (row) {\n    return row.map(function (pair) {\n      const key = pair[0], label = pair[1];\n      return {\n        text: (flags && flags[key] ? '\\u2705 ' : '\\u2610 ') + label,\n        callback_data: 'consent_toggle:' + key,\n      };\n    });\n  });\n  return { inline_keyboard: rows };\n}\n\nfunction allChecklistDone(flags) {\n  if (!flags) return false;\n  const keys = ['q1', 'q2', 'q3', 'q4', 'q5', 'q7'];\n  for (let i = 0; i < keys.length; i++) {\n    if (flags[keys[i]] !== true) return false;\n  }\n  return true;\n}\n\nlet out = {\n  action_type: 'message_only',\n  chat_id, telegram_user_id, callback_query_id, state,\n  session_data: sessionData,\n  telegram_message: '',\n  telegram_reply_markup: null,\n  need_delete: false,\n  candidate_id: sessionData.candidate_id || null,\n  order_id: sessionData.order_id || null,\n  file_id: null, file_type: null,\n  new_state: null, new_data: null,\n  consent_message_id: null,\n};\n\n// Global /cancel\nif (text === '/cancel') {\n  out.action_type     = 'delete_end';\n  out.need_delete     = !!(sessionData.candidate_id);\n  out.candidate_id    = sessionData.candidate_id || null;\n  out.telegram_message = 'Cancelled.';\n  \nout.tg_body = JSON.stringify(Object.assign({chat_id:out.chat_id,text:out.telegram_message,parse_mode:'HTML'}, out.telegram_reply_markup ? {reply_markup:out.telegram_reply_markup} : {}));\nreturn [{ json: out }];\n}\n\n// Global /reset (alias for /cancel, distinct message)\nif (text === '/reset') {\n  out.action_type     = 'delete_end';\n  out.need_delete     = !!(sessionData.candidate_id);\n  out.candidate_id    = sessionData.candidate_id || null;\n  out.telegram_message = 'Session reset. Type /add to start over.';\n  \nout.tg_body = JSON.stringify(Object.assign({chat_id:out.chat_id,text:out.telegram_message,parse_mode:'HTML'}, out.telegram_reply_markup ? {reply_markup:out.telegram_reply_markup} : {}));\nreturn [{ json: out }];\n}\n\n// Global /help — list available commands. Does NOT change state or clear session.\nif (text === '/help') {\n  out.action_type      = 'message_only';\n  out.telegram_message = '📋 Available commands:\\n\\n/add — Start adding a new candidate\\n/cancel — Cancel current action and clear session\\n/reset — Same as /cancel\\n/help — Show this menu';\n  \nout.tg_body = JSON.stringify(Object.assign({chat_id:out.chat_id,text:out.telegram_message,parse_mode:'HTML'}, out.telegram_reply_markup ? {reply_markup:out.telegram_reply_markup} : {}));\nreturn [{ json: out }];\n}\n\nswitch (state) {\n  case 'IDLE':\n    if (text === '/add') {\n      out.action_type = 'list_orders';\n    } else {\n      out.telegram_message = 'Type /add to start adding a candidate.';\n    }\n    break;\n\n  case 'WAITING_ORDER_SELECTION':\n    if (update_type === 'callback_query' && callback_data.startsWith('order_')) {\n      const order_id = callback_data.substring(6);\n      out.action_type = 'session_and_message';\n      out.order_id    = order_id;\n      out.new_state   = 'WAITING_PASSPORT_UPLOAD';\n      out.new_data    = Object.assign({}, sessionData, { order_id });\n      out.telegram_message = \"Please upload the candidate's passport photo.\";\n    } else {\n      out.telegram_message = 'Please select an order from the list, or type /cancel to exit.';\n    }\n    break;\n\n  case 'WAITING_PASSPORT_UPLOAD':\n    if (has_photo) {\n      out.action_type = 'passport';\n      out.file_id     = file_id;\n      out.file_type   = 'photo';\n    } else {\n      out.telegram_message = 'Please send a photo of the passport.';\n    }\n    break;\n\n  case 'WAITING_PASSPORT_CONFIRM':\n    if (update_type === 'callback_query') {\n      if (callback_data === 'passport_confirm_yes') {\n        // v2: enter consent checklist instead of Q1\n        const flagsInit = { q1: false, q2: false, q3: false, q4: false, q5: false, q7: false };\n        // Parse full_name from candidate_id (format: PPNO_CleanName) if not already present\n        let fullName = sessionData.full_name || '';\n        if (!fullName && sessionData.candidate_id) {\n          const parts = String(sessionData.candidate_id).split('_');\n          if (parts.length > 1) fullName = parts.slice(1).join(' ');\n        }\n        if (!fullName) fullName = '(unknown)';\n        const jobType   = sessionData.job_type_en    || '';\n        const companyEn = sessionData.company_name_en || '';\n        const newData = Object.assign({}, sessionData, {\n          consent_flags: flagsInit,\n          full_name: fullName,\n        });\n        out.action_type           = 'send_checklist';\n        out.new_state             = 'WAITING_CONSENT_CHECKLIST';\n        out.new_data              = newData;\n        out.telegram_message      = 'Candidate: ' + fullName + '\\n' +\n                                    'Order: ' + jobType + ' \\u2013 ' + companyEn + '\\n\\n' +\n                                    'Please confirm all items below:';\n        out.telegram_reply_markup = buildConsentKeyboard(flagsInit);\n      } else if (callback_data === 'passport_confirm_no') {\n        // Orphan the old candidate, go back to re-upload\n        out.action_type = 'session_and_message';\n        out.new_state   = 'WAITING_PASSPORT_UPLOAD';\n        out.new_data    = { order_id: sessionData.order_id };\n        out.telegram_message = 'Please re-upload the passport photo.';\n      }\n    } else {\n      out.telegram_message = 'Please use the Yes/No buttons to confirm the name.';\n    }\n    break;\n\n  case 'WAITING_CONSENT_CHECKLIST': {\n    // v2: single-screen checklist with toggle buttons\n    const baseFlags = { q1: false, q2: false, q3: false, q4: false, q5: false, q7: false };\n    const flags = (sessionData && sessionData.consent_flags && typeof sessionData.consent_flags === 'object')\n      ? Object.assign({}, baseFlags, sessionData.consent_flags)\n      : Object.assign({}, baseFlags);\n    const msgId = (sessionData && sessionData.consent_message_id) ? sessionData.consent_message_id : null;\n\n    if (update_type === 'callback_query' && callback_data && callback_data.indexOf('consent_toggle:') === 0) {\n      const qKey = callback_data.substring('consent_toggle:'.length);\n      const validKeys = ['q1', 'q2', 'q3', 'q4', 'q5', 'q7'];\n      if (validKeys.indexOf(qKey) === -1) {\n        out.action_type = 'message_only';\n        out.telegram_message = 'Invalid toggle.';\n        break;\n      }\n      flags[qKey] = !flags[qKey];\n      const newData = Object.assign({}, sessionData, { consent_flags: flags });\n      if (allChecklistDone(flags)) {\n        // All 6 ✅ → advance to WAITING_HEIGHT\n        out.action_type      = 'session_and_message';\n        out.new_state        = 'WAITING_HEIGHT';\n        out.new_data         = newData;\n        out.telegram_message = 'All confirmed! Height (e.g. 5.5 for 5ft 5in):';\n      } else {\n        // Just edit reply markup, don't send a new message\n        out.action_type           = 'consent_toggle';\n        out.new_state             = 'WAITING_CONSENT_CHECKLIST';\n        out.new_data              = newData;\n        out.telegram_reply_markup = buildConsentKeyboard(flags);\n        out.consent_message_id    = msgId;\n      }\n    } else {\n      out.action_type      = 'message_only';\n      out.telegram_message = 'Please use the buttons below to confirm each item.';\n    }\n    break;\n  }\n\n  case 'WAITING_HEIGHT': {\n    const h = parseFloat(text);\n    if (update_type === 'message' && !isNaN(h) && h > 0) {\n      out.action_type = 'session_and_message';\n      out.new_state   = 'WAITING_WEIGHT';\n      out.new_data    = Object.assign({}, sessionData, { height_ft: h });\n      out.telegram_message = 'Weight in kg (e.g. 55):';\n    } else { out.telegram_message = 'Invalid input. Please enter a number for height (e.g. 5.5):'; }\n    break;\n  }\n\n  case 'WAITING_WEIGHT': {\n    const w = parseFloat(text);\n    if (update_type === 'message' && !isNaN(w) && w > 0) {\n      out.action_type = 'session_and_message';\n      out.new_state   = 'WAITING_AVATAR_UPLOAD';\n      out.new_data    = Object.assign({}, sessionData, { weight_kg: w });\n      out.telegram_message = \"Please upload the candidate's avatar photo.\";\n    } else { out.telegram_message = 'Invalid input. Please enter a number for weight (e.g. 55):'; }\n    break;\n  }\n\n  case 'WAITING_AVATAR_UPLOAD':\n    if (has_photo) {\n      out.action_type = 'avatar';\n      out.file_id     = file_id;\n      out.file_type   = 'photo';\n    } else { out.telegram_message = 'Please send a photo for the avatar.'; }\n    break;\n\n  case 'WAITING_VIDEO_UPLOAD':\n    if (has_video) {\n      out.action_type = 'finalize';\n      out.file_id     = file_id;\n      out.file_type   = 'video';\n    } else { out.telegram_message = 'Please send a video file.'; }\n    break;\n\n  default:\n    out.telegram_message = 'An error occurred. Type /cancel to restart.';\n    break;\n}\n\nout.tg_body = JSON.stringify(Object.assign({chat_id:out.chat_id,text:out.telegram_message,parse_mode:'HTML'}, out.telegram_reply_markup ? {reply_markup:out.telegram_reply_markup} : {}));\nreturn [{ json: out }];\n"
       }
     },
     {
@@ -257,6 +257,52 @@
               },
               "renameOutput": true,
               "outputKey": "finalize"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "f06e50fb-c5cd-4f15-b199-61f5dc8f8841",
+                    "leftValue": "={{ $json.action_type }}",
+                    "rightValue": "send_checklist",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "send_checklist"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "5180d246-60bf-4e2b-a7ec-eec07598a990",
+                    "leftValue": "={{ $json.action_type }}",
+                    "rightValue": "consent_toggle",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "consent_toggle"
             }
           ]
         },
@@ -776,21 +822,6 @@
       }
     },
     {
-      "id": "aab66117-57c7-4292-b3e8-4acbebf77505",
-      "name": "Merge: Delete Paths",
-      "type": "n8n-nodes-base.merge",
-      "typeVersion": 3,
-      "position": [
-        2160,
-        840
-      ],
-      "parameters": {
-        "mode": "passThrough",
-        "output": "any",
-        "options": {}
-      }
-    },
-    {
       "id": "832c14b7-6b49-4b61-853c-4f74fcf427fe",
       "name": "HTTP: Delete Session 5",
       "type": "n8n-nodes-base.httpRequest",
@@ -972,7 +1003,13 @@
         "headerParameters": {
           "parameters": []
         },
-        "options": {}
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
       }
     },
     {
@@ -985,7 +1022,7 @@
         1240
       ],
       "parameters": {
-        "jsCode": "\nconst fileResp = $input.item.json;\nconst se       = $('Code: State Engine').item.json;\nconst sd       = se.session_data || {};\nconst filePath = fileResp.result && fileResp.result.file_path ? fileResp.result.file_path : '';\nconst videoUrl = 'https://api.telegram.org/file/bot' + $env.TELEGRAM_BOT_TOKEN + '/' + filePath;\n\nconst candidateConfirmed = {\n  q1_viewed_materials: sd.q1_viewed_materials !== undefined ? sd.q1_viewed_materials : false,\n  q2_agrees_terms:     sd.q2_agrees_terms     !== undefined ? sd.q2_agrees_terms     : false,\n  q3_agrees_overtime:  sd.q3_agrees_overtime  !== undefined ? sd.q3_agrees_overtime  : false,\n  q4_accepts_food:     sd.q4_accepts_food     !== undefined ? sd.q4_accepts_food     : false,\n  q5_agrees_prayer:    sd.q5_agrees_prayer    !== undefined ? sd.q5_agrees_prayer    : false,\n  q6_has_questions:    sd.q6_has_questions    !== undefined ? sd.q6_has_questions    : false,\n  q6_questions_text:   sd.q6_questions_text   || 'None',\n  q7_confirms_penalty: sd.q7_confirms_penalty !== undefined ? sd.q7_confirms_penalty : false,\n};\n\nconst crypto = require('crypto');\nconst secret = $env.TELEGRAM_BRIDGE_SECRET;\nconst payload = {\n  action: 'finalize',\n  telegram_user_id: se.telegram_user_id,\n  candidate_id: sd.candidate_id || '',\n  height_ft:    sd.height_ft    || 0,\n  weight_kg:    sd.weight_kg    || 0,\n  avatar_url:   sd.avatar_url   || '',\n  video_urls:   [videoUrl],\n  candidate_confirmed: candidateConfirmed,\n};\nconst timestamp = Math.floor(Date.now() / 1000).toString();\nconst rawBody = JSON.stringify(payload);\nconst sig = crypto.createHmac('sha256', secret).update(timestamp + '.' + rawBody, 'utf8').digest('hex');\nreturn [{ json: { payload, rawBody, timestamp, signature: sig, chat_id: se.chat_id } }];\n"
+        "jsCode": "\nconst fileResp = $input.item.json;\nconst se       = $('Code: State Engine').item.json;\n\n// Early-return if Telegram getFile failed or file_path is empty (e.g. video > 20MB)\nif (!fileResp || !fileResp.ok || !fileResp.result || !fileResp.result.file_path) {\n  return [{ json: {\n    error: true,\n    error_type: 'video_unavailable',\n    chat_id: se.chat_id,\n  }}];\n}\n\nconst sd       = se.session_data || {};\nconst filePath = fileResp.result.file_path;\nconst videoUrl = 'https://api.telegram.org/file/bot' + $env.TELEGRAM_BOT_TOKEN + '/' + filePath;\n\nconst flags = (sd.consent_flags && typeof sd.consent_flags === 'object')\n  ? sd.consent_flags\n  : { q1:false, q2:false, q3:false, q4:false, q5:false, q7:false };\n\nconst candidateConfirmed = {\n  q1_viewed_materials: !!flags.q1,\n  q2_agrees_terms:     !!flags.q2,\n  q3_agrees_overtime:  !!flags.q3,\n  q4_accepts_food:     !!flags.q4,\n  q5_agrees_prayer:    !!flags.q5,\n  q6_has_questions:    false,\n  q6_questions_text:   'None',\n  q7_confirms_penalty: !!flags.q7,\n};\n\nconst crypto = require('crypto');\nconst secret = $env.TELEGRAM_BRIDGE_SECRET;\nconst payload = {\n  action: 'finalize',\n  telegram_user_id: se.telegram_user_id,\n  candidate_id: sd.candidate_id || '',\n  height_ft:    sd.height_ft    || 0,\n  weight_kg:    sd.weight_kg    || 0,\n  avatar_url:   sd.avatar_url   || '',\n  video_urls:   [videoUrl],\n  candidate_confirmed: candidateConfirmed,\n};\nconst timestamp = Math.floor(Date.now() / 1000).toString();\nconst rawBody = JSON.stringify(payload);\nconst sig = crypto.createHmac('sha256', secret).update(timestamp + '.' + rawBody, 'utf8').digest('hex');\nreturn [{ json: { payload, rawBody, timestamp, signature: sig, chat_id: se.chat_id } }];\n"
       }
     },
     {
@@ -1105,6 +1142,261 @@
         "rawContentType": "application/json",
         "body": "={{ $('Code: Handle Finalize').item.json.tg_body }}"
       }
+    },
+    {
+      "id": "0d2439b6-7b5b-4483-9c42-f6c5df3802ee",
+      "name": "IF: Video File OK",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1840,
+        1340
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "f49d5e54-0214-41d8-997d-f87662069123",
+              "leftValue": "={{ $json.error }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "53d78b1e-5254-474d-8afc-d1bb16febcd5",
+      "name": "HTTP: Send Video Error",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2080,
+        1340
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({chat_id: $('Code: State Engine').item.json.chat_id,text: 'Video file unavailable or too large (max 20MB). Please send a smaller video.',parse_mode: 'HTML'}) }}"
+      }
+    },
+    {
+      "id": "53f2d722-336d-4d92-a0de-b584bd365a1a",
+      "name": "HTTP: Send Checklist",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1440,
+        1440
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({chat_id: $('Code: State Engine').item.json.chat_id,text: $('Code: State Engine').item.json.telegram_message,parse_mode: 'HTML',reply_markup: $('Code: State Engine').item.json.telegram_reply_markup}) }}"
+      }
+    },
+    {
+      "id": "9574c4ea-c4b4-4838-9d7d-e147f4f396e1",
+      "name": "HTTP: Save Checklist Session",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1680,
+        1440
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://fpesidoqwxyyutgvalsp.supabase.co/rest/v1/bot_sessions?on_conflict=chat_id",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_ANON_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "resolution=merge-duplicates,return=representation"
+            }
+          ]
+        },
+        "options": {},
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({chat_id: $('Code: State Engine').item.json.chat_id,telegram_user_id: $('Code: State Engine').item.json.telegram_user_id,current_step: 'WAITING_CONSENT_CHECKLIST',draft: Object.assign({}, $('Code: State Engine').item.json.new_data, { consent_message_id: ($json && $json.result && $json.result.message_id) || null }),last_activity_at: new Date().toISOString()}) }}"
+      }
+    },
+    {
+      "id": "6188cdd2-b64b-418e-868e-053c5c9603ed",
+      "name": "HTTP: Edit Reply Markup",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1440,
+        1640
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/editMessageReplyMarkup",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({chat_id: $('Code: State Engine').item.json.chat_id,message_id: $('Code: State Engine').item.json.consent_message_id,reply_markup: $('Code: State Engine').item.json.telegram_reply_markup}) }}"
+      }
+    },
+    {
+      "id": "9bdd7cc6-d4ae-4715-beaa-eadd42c33618",
+      "name": "HTTP: Upsert Session Flags",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1680,
+        1640
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://fpesidoqwxyyutgvalsp.supabase.co/rest/v1/bot_sessions?on_conflict=chat_id",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_ANON_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "resolution=merge-duplicates,return=representation"
+            }
+          ]
+        },
+        "options": {},
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({chat_id: $('Code: State Engine').item.json.chat_id,telegram_user_id: $('Code: State Engine').item.json.telegram_user_id,current_step: 'WAITING_CONSENT_CHECKLIST',draft: $('Code: State Engine').item.json.new_data,last_activity_at: new Date().toISOString()}) }}"
+      }
+    },
+    {
+      "id": "77fbc733-66aa-4823-9941-a2795d5b5b05",
+      "name": "HTTP: Answer Callback Query",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1920,
+        1640
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/answerCallbackQuery",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({callback_query_id: $('Code: State Engine').item.json.callback_query_id}) }}"
+      }
     }
   ],
   "connections": {
@@ -1199,6 +1491,20 @@
         [
           {
             "node": "HTTP: Get Video File Info",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HTTP: Send Checklist",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HTTP: Edit Reply Markup",
             "type": "main",
             "index": 0
           }
@@ -1337,7 +1643,7 @@
         ],
         [
           {
-            "node": "Merge: Delete Paths",
+            "node": "HTTP: Delete Session 5",
             "type": "main",
             "index": 0
           }
@@ -1356,17 +1662,6 @@
       ]
     },
     "HTTP: Call Delete Candidate": {
-      "main": [
-        [
-          {
-            "node": "Merge: Delete Paths",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Merge: Delete Paths": {
       "main": [
         [
           {
@@ -1436,7 +1731,7 @@
       "main": [
         [
           {
-            "node": "HTTP: Call Finalize",
+            "node": "IF: Video File OK",
             "type": "main",
             "index": 0
           }
@@ -1470,6 +1765,57 @@
         [
           {
             "node": "HTTP: Send TG 7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF: Video File OK": {
+      "main": [
+        [
+          {
+            "node": "HTTP: Send Video Error",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HTTP: Call Finalize",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP: Send Checklist": {
+      "main": [
+        [
+          {
+            "node": "HTTP: Save Checklist Session",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP: Edit Reply Markup": {
+      "main": [
+        [
+          {
+            "node": "HTTP: Upsert Session Flags",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP: Upsert Session Flags": {
+      "main": [
+        [
+          {
+            "node": "HTTP: Answer Callback Query",
             "type": "main",
             "index": 0
           }
