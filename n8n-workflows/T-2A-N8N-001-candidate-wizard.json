@@ -972,7 +972,13 @@
         "headerParameters": {
           "parameters": []
         },
-        "options": {}
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
       }
     },
     {
@@ -985,7 +991,7 @@
         1240
       ],
       "parameters": {
-        "jsCode": "\nconst fileResp = $input.item.json;\nconst se       = $('Code: State Engine').item.json;\nconst sd       = se.session_data || {};\nconst filePath = fileResp.result && fileResp.result.file_path ? fileResp.result.file_path : '';\nconst videoUrl = 'https://api.telegram.org/file/bot' + $env.TELEGRAM_BOT_TOKEN + '/' + filePath;\n\nconst candidateConfirmed = {\n  q1_viewed_materials: sd.q1_viewed_materials !== undefined ? sd.q1_viewed_materials : false,\n  q2_agrees_terms:     sd.q2_agrees_terms     !== undefined ? sd.q2_agrees_terms     : false,\n  q3_agrees_overtime:  sd.q3_agrees_overtime  !== undefined ? sd.q3_agrees_overtime  : false,\n  q4_accepts_food:     sd.q4_accepts_food     !== undefined ? sd.q4_accepts_food     : false,\n  q5_agrees_prayer:    sd.q5_agrees_prayer    !== undefined ? sd.q5_agrees_prayer    : false,\n  q6_has_questions:    sd.q6_has_questions    !== undefined ? sd.q6_has_questions    : false,\n  q6_questions_text:   sd.q6_questions_text   || 'None',\n  q7_confirms_penalty: sd.q7_confirms_penalty !== undefined ? sd.q7_confirms_penalty : false,\n};\n\nconst crypto = require('crypto');\nconst secret = $env.TELEGRAM_BRIDGE_SECRET;\nconst payload = {\n  action: 'finalize',\n  telegram_user_id: se.telegram_user_id,\n  candidate_id: sd.candidate_id || '',\n  height_ft:    sd.height_ft    || 0,\n  weight_kg:    sd.weight_kg    || 0,\n  avatar_url:   sd.avatar_url   || '',\n  video_urls:   [videoUrl],\n  candidate_confirmed: candidateConfirmed,\n};\nconst timestamp = Math.floor(Date.now() / 1000).toString();\nconst rawBody = JSON.stringify(payload);\nconst sig = crypto.createHmac('sha256', secret).update(timestamp + '.' + rawBody, 'utf8').digest('hex');\nreturn [{ json: { payload, rawBody, timestamp, signature: sig, chat_id: se.chat_id } }];\n"
+        "jsCode": "\nconst fileResp = $input.item.json;\nconst se       = $('Code: State Engine').item.json;\n\n// Early-return if Telegram getFile failed or file_path is empty (e.g. video > 20MB)\nif (!fileResp || !fileResp.ok || !fileResp.result || !fileResp.result.file_path) {\n  return [{ json: {\n    error: true,\n    error_type: 'video_unavailable',\n    chat_id: se.chat_id,\n  }}];\n}\n\nconst sd       = se.session_data || {};\nconst filePath = fileResp.result.file_path;\nconst videoUrl = 'https://api.telegram.org/file/bot' + $env.TELEGRAM_BOT_TOKEN + '/' + filePath;\n\nconst candidateConfirmed = {\n  q1_viewed_materials: sd.q1_viewed_materials !== undefined ? sd.q1_viewed_materials : false,\n  q2_agrees_terms:     sd.q2_agrees_terms     !== undefined ? sd.q2_agrees_terms     : false,\n  q3_agrees_overtime:  sd.q3_agrees_overtime  !== undefined ? sd.q3_agrees_overtime  : false,\n  q4_accepts_food:     sd.q4_accepts_food     !== undefined ? sd.q4_accepts_food     : false,\n  q5_agrees_prayer:    sd.q5_agrees_prayer    !== undefined ? sd.q5_agrees_prayer    : false,\n  q6_has_questions:    sd.q6_has_questions    !== undefined ? sd.q6_has_questions    : false,\n  q6_questions_text:   sd.q6_questions_text   || 'None',\n  q7_confirms_penalty: sd.q7_confirms_penalty !== undefined ? sd.q7_confirms_penalty : false,\n};\n\nconst crypto = require('crypto');\nconst secret = $env.TELEGRAM_BRIDGE_SECRET;\nconst payload = {\n  action: 'finalize',\n  telegram_user_id: se.telegram_user_id,\n  candidate_id: sd.candidate_id || '',\n  height_ft:    sd.height_ft    || 0,\n  weight_kg:    sd.weight_kg    || 0,\n  avatar_url:   sd.avatar_url   || '',\n  video_urls:   [videoUrl],\n  candidate_confirmed: candidateConfirmed,\n};\nconst timestamp = Math.floor(Date.now() / 1000).toString();\nconst rawBody = JSON.stringify(payload);\nconst sig = crypto.createHmac('sha256', secret).update(timestamp + '.' + rawBody, 'utf8').digest('hex');\nreturn [{ json: { payload, rawBody, timestamp, signature: sig, chat_id: se.chat_id } }];\n"
       }
     },
     {
@@ -1104,6 +1110,74 @@
         "contentType": "raw",
         "rawContentType": "application/json",
         "body": "={{ $('Code: Handle Finalize').item.json.tg_body }}"
+      }
+    },
+    {
+      "id": "0d2439b6-7b5b-4483-9c42-f6c5df3802ee",
+      "name": "IF: Video File OK",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1840,
+        1340
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "f49d5e54-0214-41d8-997d-f87662069123",
+              "leftValue": "={{ $json.error }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "53d78b1e-5254-474d-8afc-d1bb16febcd5",
+      "name": "HTTP: Send Video Error",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2080,
+        1340
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({chat_id: $('Code: State Engine').item.json.chat_id,text: 'Video file unavailable or too large (max 20MB). Please send a smaller video.',parse_mode: 'HTML'}) }}"
       }
     }
   ],
@@ -1436,7 +1510,7 @@
       "main": [
         [
           {
-            "node": "HTTP: Call Finalize",
+            "node": "IF: Video File OK",
             "type": "main",
             "index": 0
           }
@@ -1470,6 +1544,24 @@
         [
           {
             "node": "HTTP: Send TG 7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF: Video File OK": {
+      "main": [
+        [
+          {
+            "node": "HTTP: Send Video Error",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HTTP: Call Finalize",
             "type": "main",
             "index": 0
           }
