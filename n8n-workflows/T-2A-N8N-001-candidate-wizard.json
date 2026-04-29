@@ -257,6 +257,52 @@
               },
               "renameOutput": true,
               "outputKey": "finalize"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "f06e50fb-c5cd-4f15-b199-61f5dc8f8841",
+                    "leftValue": "={{ $json.action_type }}",
+                    "rightValue": "send_checklist",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "send_checklist"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "5180d246-60bf-4e2b-a7ec-eec07598a990",
+                    "leftValue": "={{ $json.action_type }}",
+                    "rightValue": "consent_toggle",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "consent_toggle"
             }
           ]
         },
@@ -1179,6 +1225,193 @@
         "rawContentType": "application/json",
         "body": "={{ JSON.stringify({chat_id: $('Code: State Engine').item.json.chat_id,text: 'Video file unavailable or too large (max 20MB). Please send a smaller video.',parse_mode: 'HTML'}) }}"
       }
+    },
+    {
+      "id": "53f2d722-336d-4d92-a0de-b584bd365a1a",
+      "name": "HTTP: Send Checklist",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1440,
+        1440
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({chat_id: $('Code: State Engine').item.json.chat_id,text: $('Code: State Engine').item.json.telegram_message,parse_mode: 'HTML',reply_markup: $('Code: State Engine').item.json.telegram_reply_markup}) }}"
+      }
+    },
+    {
+      "id": "9574c4ea-c4b4-4838-9d7d-e147f4f396e1",
+      "name": "HTTP: Save Checklist Session",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1680,
+        1440
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://fpesidoqwxyyutgvalsp.supabase.co/rest/v1/bot_sessions?on_conflict=chat_id",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_ANON_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "resolution=merge-duplicates,return=representation"
+            }
+          ]
+        },
+        "options": {},
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({chat_id: $('Code: State Engine').item.json.chat_id,telegram_user_id: $('Code: State Engine').item.json.telegram_user_id,current_step: 'WAITING_CONSENT_CHECKLIST',draft: Object.assign({}, $('Code: State Engine').item.json.new_data, { consent_message_id: ($json && $json.result && $json.result.message_id) || null }),last_activity_at: new Date().toISOString()}) }}"
+      }
+    },
+    {
+      "id": "6188cdd2-b64b-418e-868e-053c5c9603ed",
+      "name": "HTTP: Edit Reply Markup",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1440,
+        1640
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/editMessageReplyMarkup",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({chat_id: $('Code: State Engine').item.json.chat_id,message_id: $('Code: State Engine').item.json.consent_message_id,reply_markup: $('Code: State Engine').item.json.telegram_reply_markup}) }}"
+      }
+    },
+    {
+      "id": "9bdd7cc6-d4ae-4715-beaa-eadd42c33618",
+      "name": "HTTP: Upsert Session Flags",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1680,
+        1640
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://fpesidoqwxyyutgvalsp.supabase.co/rest/v1/bot_sessions?on_conflict=chat_id",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_ANON_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "resolution=merge-duplicates,return=representation"
+            }
+          ]
+        },
+        "options": {},
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({chat_id: $('Code: State Engine').item.json.chat_id,telegram_user_id: $('Code: State Engine').item.json.telegram_user_id,current_step: 'WAITING_CONSENT_CHECKLIST',draft: $('Code: State Engine').item.json.new_data,last_activity_at: new Date().toISOString()}) }}"
+      }
+    },
+    {
+      "id": "77fbc733-66aa-4823-9941-a2795d5b5b05",
+      "name": "HTTP: Answer Callback Query",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1920,
+        1640
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/answerCallbackQuery",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({callback_query_id: $('Code: State Engine').item.json.callback_query_id}) }}"
+      }
     }
   ],
   "connections": {
@@ -1273,6 +1506,20 @@
         [
           {
             "node": "HTTP: Get Video File Info",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HTTP: Send Checklist",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HTTP: Edit Reply Markup",
             "type": "main",
             "index": 0
           }
@@ -1562,6 +1809,39 @@
         [
           {
             "node": "HTTP: Call Finalize",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP: Send Checklist": {
+      "main": [
+        [
+          {
+            "node": "HTTP: Save Checklist Session",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP: Edit Reply Markup": {
+      "main": [
+        [
+          {
+            "node": "HTTP: Upsert Session Flags",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP: Upsert Session Flags": {
+      "main": [
+        [
+          {
+            "node": "HTTP: Answer Callback Query",
             "type": "main",
             "index": 0
           }
