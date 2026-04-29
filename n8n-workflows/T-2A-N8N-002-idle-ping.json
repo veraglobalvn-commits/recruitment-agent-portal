@@ -1,0 +1,316 @@
+{
+  "name": "T-2A-N8N-002 Wizard Idle Ping",
+  "nodes": [
+    {
+      "id": "6cbf7303-26ae-45f2-99af-6f0ba66be435",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 1
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "37256b3a-02b7-4c41-ad64-7e17c6c3840e",
+      "name": "Code: Compute Bounds",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        200,
+        0
+      ],
+      "parameters": {
+        "jsCode": "\nconst now = Date.now();\nreturn [{ json: {\n  now_iso:        new Date(now).toISOString(),\n  ten_min_ago:    new Date(now - 10 * 60 * 1000).toISOString(),\n  thirty_min_ago: new Date(now - 30 * 60 * 1000).toISOString(),\n}}];\n"
+      }
+    },
+    {
+      "id": "5f1400e6-e180-45eb-aadd-5e8cb0060832",
+      "name": "HTTP: Query Idle Sessions",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        400,
+        0
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "=https://fpesidoqwxyyutgvalsp.supabase.co/rest/v1/bot_sessions?current_step=neq.IDLE&last_activity_at=lt.{{ $json.ten_min_ago }}&select=chat_id,telegram_user_id,current_step,last_activity_at",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_ANON_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "990f03f0-8ae3-43b2-a456-e432a5cfc5aa",
+      "name": "Code: Categorize",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        600,
+        0
+      ],
+      "parameters": {
+        "jsCode": "\nconst items = $input.all();\n\n// PostgREST may return either:\n//  - 1 item whose .json IS the array of rows\n//  - multiple items, one per row (when previous node spread)\n// Handle both shapes defensively.\nlet sessions = [];\nif (items.length === 1 && Array.isArray(items[0].json)) {\n  sessions = items[0].json;\n} else if (items.length === 1 && items[0].json && Array.isArray(items[0].json.body)) {\n  sessions = items[0].json.body;\n} else {\n  sessions = items.map(i => i.json).filter(j => j && j.chat_id);\n}\n\nconst now = Date.now();\nconst THIRTY_MIN_MS = 30 * 60 * 1000;\n\nconst out = sessions.map(s => {\n  const last  = new Date(s.last_activity_at).getTime();\n  const ageMs = isNaN(last) ? 0 : (now - last);\n  const type  = ageMs > THIRTY_MIN_MS ? 'timeout' : 'ping';\n  return { json: {\n    chat_id:          s.chat_id,\n    telegram_user_id: s.telegram_user_id,\n    current_step:     s.current_step,\n    last_activity_at: s.last_activity_at,\n    type,\n  }};\n});\n\nreturn out;\n"
+      }
+    },
+    {
+      "id": "fe2a2039-0d49-48bc-b79a-fff84e757081",
+      "name": "IF: Is Timeout",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        800,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "8e674754-1c20-4516-ae44-3de7d553adeb",
+              "leftValue": "={{ $json.type }}",
+              "rightValue": "timeout",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "0b8653df-2cda-4fbe-9b11-717665360c04",
+      "name": "HTTP: Send TG Timeout",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1000,
+        -100
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({chat_id: $json.chat_id, text: 'Session expired due to inactivity. Type /add to start again.', parse_mode: 'HTML'}) }}"
+      }
+    },
+    {
+      "id": "92da6ffc-a059-4ffe-90cc-35bf1a555612",
+      "name": "HTTP: Delete Session",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1200,
+        -100
+      ],
+      "parameters": {
+        "method": "DELETE",
+        "url": "=https://fpesidoqwxyyutgvalsp.supabase.co/rest/v1/bot_sessions?chat_id=eq.{{ $('Code: Categorize').item.json.chat_id }}",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_ANON_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "4894591f-d344-49d9-9048-9ae45dae6b26",
+      "name": "HTTP: Send TG Ping",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1000,
+        100
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({chat_id: $json.chat_id, text: 'Still there? Type /cancel to exit or continue where you left off.', parse_mode: 'HTML'}) }}"
+      }
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Code: Compute Bounds",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: Compute Bounds": {
+      "main": [
+        [
+          {
+            "node": "HTTP: Query Idle Sessions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP: Query Idle Sessions": {
+      "main": [
+        [
+          {
+            "node": "Code: Categorize",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: Categorize": {
+      "main": [
+        [
+          {
+            "node": "IF: Is Timeout",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF: Is Timeout": {
+      "main": [
+        [
+          {
+            "node": "HTTP: Send TG Timeout",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HTTP: Send TG Ping",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP: Send TG Timeout": {
+      "main": [
+        [
+          {
+            "node": "HTTP: Delete Session",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "22b63083-89ac-439d-913c-748142be7a40",
+  "meta": {
+    "templateCreatedBy": "Devin"
+  },
+  "id": "T-2A-N8N-002",
+  "tags": []
+}
