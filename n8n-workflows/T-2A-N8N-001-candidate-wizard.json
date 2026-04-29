@@ -822,21 +822,6 @@
       }
     },
     {
-      "id": "aab66117-57c7-4292-b3e8-4acbebf77505",
-      "name": "Merge: Delete Paths",
-      "type": "n8n-nodes-base.merge",
-      "typeVersion": 3,
-      "position": [
-        2160,
-        840
-      ],
-      "parameters": {
-        "mode": "passThrough",
-        "output": "any",
-        "options": {}
-      }
-    },
-    {
       "id": "832c14b7-6b49-4b61-853c-4f74fcf427fe",
       "name": "HTTP: Delete Session 5",
       "type": "n8n-nodes-base.httpRequest",
@@ -1658,7 +1643,7 @@
         ],
         [
           {
-            "node": "Merge: Delete Paths",
+            "node": "HTTP: Delete Session 5",
             "type": "main",
             "index": 0
           }
@@ -1677,17 +1662,6 @@
       ]
     },
     "HTTP: Call Delete Candidate": {
-      "main": [
-        [
-          {
-            "node": "Merge: Delete Paths",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Merge: Delete Paths": {
       "main": [
         [
           {
