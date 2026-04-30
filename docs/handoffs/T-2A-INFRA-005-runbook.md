@@ -262,45 +262,65 @@ Nếu HTTP 200 + content-type đúng → nginx proxy OK!
 
 ---
 
-## Step 7: Update n8n environment
+## Step 7: Update n8n — join tg_net + thêm env vars
 
-n8n cần biết URL local để gọi bot API.
+n8n và telegram-bot-api cùng chạy Docker. Để n8n gọi được `telegram-bot-api` qua
+service name (`http://telegram-bot-api:8081`) thay vì IP gateway, cả 2 container phải
+join cùng Docker network `tg_net`.
 
-### Tìm n8n config
+Repo đã chuẩn sẵn compose mới và script tự động tại `deploy/n8n/`.
 
-```bash
-# Nếu n8n chạy Docker (phổ biến)
-docker ps | grep n8n
-docker inspect <n8n-container-name> | grep -A 20 Env
+### 7.1. Copy files lên VPS
 
-# Hoặc systemd
-systemctl status n8n
-cat /etc/systemd/system/n8n.service
-```
-
-### Thêm env vars
-
-Tùy theo n8n chạy Docker hay native, thêm 2 env vars:
-
-```
-TELEGRAM_BOT_API_BASE_URL=http://127.0.0.1:8081
-TELEGRAM_PUBLIC_FILE_BASE=https://portal.veraglobal.vn/tg-media
-```
-
-> ⚠️ Nếu n8n chạy trong Docker, `127.0.0.1` là localhost CỦA CONTAINER, không phải host. Có 2 cách:
-> - **A.** Dùng `host.docker.internal:8081` (cần thêm `--add-host=host.docker.internal:host-gateway` vào docker run)
-> - **B.** Cùng network với telegram-bot-api: sửa `docker-compose.yml` của telegram-bot-api thành `network_mode: "host"` thay vì port mapping → bind `0.0.0.0:8081` → n8n container gọi qua IP gateway (`172.17.0.1` thường)
-> - **C.** Đơn giản nhất: `network_mode: "host"` cho telegram-bot-api → n8n gọi `http://host_internal_ip:8081` hoặc `http://172.17.0.1:8081`
-
-### Restart n8n
+Trên **máy local**:
 
 ```bash
-# Docker
-docker restart <n8n-container>
-
-# Systemd
-systemctl restart n8n
+cd /Users/apple/Coding/recruitment-agent-portal
+scp -r deploy/n8n/ root@72.60.40.232:/opt/n8n-update/
 ```
+
+Trên **VPS**, verify:
+
+```bash
+ls /opt/n8n-update/
+# Phải thấy: docker-compose.yml  .env.example  env-snippet.txt  migrate.sh
+```
+
+### 7.2. Chạy migrate script
+
+```bash
+chmod +x /opt/n8n-update/migrate.sh
+bash /opt/n8n-update/migrate.sh
+```
+
+Script tự động:
+1. Tạo Docker network `tg_net` (nếu chưa có)
+2. Backup `/opt/n8n/docker-compose.yml` → `docker-compose.yml.bak-<timestamp>`
+3. Thay bằng compose mới (có `networks: tg_net`)
+4. Append 2 env vars vào `/opt/n8n/.env` (idempotent):
+   ```
+   TELEGRAM_BOT_API_BASE_URL=http://telegram-bot-api:8081
+   TELEGRAM_PUBLIC_FILE_BASE=https://portal.veraglobal.vn/tg-media
+   ```
+5. `docker compose down && docker compose up -d`
+6. Verify container running + healthz
+
+> **Nếu n8n không nằm ở `/opt/n8n/`**, chỉ định đường dẫn:
+> ```bash
+> N8N_DIR=/srv/n8n bash /opt/n8n-update/migrate.sh
+> ```
+
+### 7.3. Cập nhật Telegram Trigger credential trong n8n UI
+
+Sau khi migrate, Telegram Trigger node cần biết base URL của local server.
+Env vars trên chỉ cho HTTP Request nodes — Trigger node dùng credential riêng:
+
+1. n8n UI → **Credentials** → chọn credential kiểu **Telegram API** đang dùng
+2. Thêm / sửa trường **Base URL**: `http://telegram-bot-api:8081`
+3. Save credential
+
+> Nếu không sửa Trigger credential, webhook vẫn đăng ký với `api.telegram.org` (sẽ fail
+> vì bot đã logOut khỏi cloud ở Step 3).
 
 ---
 
