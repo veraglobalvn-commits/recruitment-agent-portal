@@ -231,7 +231,7 @@ async function handleListOrders(body: ListOrdersInput) {
         .from('candidates')
         .select('id_ld', { count: 'exact', head: true })
         .eq('order_id', row.order_id)
-        .is('deleted_at_at', null);
+        .is('deleted_at', null);
 
       return {
         order_id: row.order_id,
@@ -354,7 +354,7 @@ async function handleCreatePassport(body: CreatePassportInput) {
     passport_link: passportLink,
     // Revive previously soft-deleted fallback rows (especially NOID_*),
     // otherwise finalize query (deleted_at IS NULL) won't find the candidate.
-    deleted_at_at: null,
+    deleted_at: null,
   };
 
   if (ocrSuccess && parsed) {
@@ -419,7 +419,7 @@ async function handleFinalize(body: FinalizeInput) {
     .from('candidates')
     .select('agent_id, order_id')
     .eq('id_ld', body.candidate_id)
-    .is('deleted_at_at', null)
+    .is('deleted_at', null)
     .maybeSingle();
 
   if (!candidateOwner) {
@@ -500,7 +500,7 @@ async function handleDeleteCandidate(body: DeleteCandidateInput) {
     .from('candidates')
     .select('agent_id')
     .eq('id_ld', body.candidate_id)
-    .is('deleted_at_at', null)
+    .is('deleted_at', null)
     .maybeSingle();
 
   if (!candidateOwner) {
@@ -516,7 +516,7 @@ async function handleDeleteCandidate(body: DeleteCandidateInput) {
 
   const { error } = await supabase
     .from('candidates')
-    .update({ deleted_at_at: new Date().toISOString() })
+    .update({ deleted_at: new Date().toISOString() })
     .eq('id_ld', body.candidate_id);
 
   if (error) {
