@@ -3,10 +3,12 @@ services:
     image: aiogram/telegram-bot-api:latest
     container_name: telegram-bot-api
     restart: always
-    # Bind ONLY to 127.0.0.1 — không expose ra internet
-    # nginx + n8n trên cùng host gọi qua localhost:8081
+    # Bind cho nginx host gọi qua localhost:8081 (proxy /tg-media/)
     ports:
       - "127.0.0.1:8081:8081"
+    # Tham gia shared network để n8n container gọi qua tên `telegram-bot-api`
+    networks:
+      - tg_net
     environment:
       TELEGRAM_API_ID: ${TELEGRAM_API_ID}
       TELEGRAM_API_HASH: ${TELEGRAM_API_HASH}
@@ -28,3 +30,10 @@ services:
 volumes:
   tg-bot-api-data:
     driver: local
+
+networks:
+  tg_net:
+    name: tg_net
+    external: true
+    # Tạo network bằng: docker network create tg_net
+    # Cả n8n + telegram-bot-api compose phải khai báo cùng network này.
