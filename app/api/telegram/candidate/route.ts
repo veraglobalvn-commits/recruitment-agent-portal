@@ -352,6 +352,9 @@ async function handleCreatePassport(body: CreatePassportInput) {
     order_id: body.order_id,
     agent_id: agentId,
     passport_link: passportLink,
+    // Revive previously soft-deleted fallback rows (especially NOID_*),
+    // otherwise finalize query (deleted_at IS NULL) won't find the candidate.
+    deleted_at: null,
   };
 
   if (ocrSuccess && parsed) {
