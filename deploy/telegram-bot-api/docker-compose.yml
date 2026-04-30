@@ -3,12 +3,16 @@ services:
     image: aiogram/telegram-bot-api:latest
     container_name: telegram-bot-api
     restart: always
-    # Bind cho nginx host gọi qua localhost:8081 (proxy /tg-media/)
+    # Bind cho nginx host gọi qua localhost:8082 (proxy /tg-media/)
+    # Port 8081 bị chiếm bởi vikunja trên VPS này → dùng 8082
     ports:
-      - "127.0.0.1:8081:8081"
-    # Tham gia shared network để n8n container gọi qua tên `telegram-bot-api`
+      - "127.0.0.1:8082:8081"
+    # Tham gia n8n_default để n8n gọi qua service name + có internet access
     networks:
-      - tg_net
+      - n8n_default
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     environment:
       TELEGRAM_API_ID: ${TELEGRAM_API_ID}
       TELEGRAM_API_HASH: ${TELEGRAM_API_HASH}
@@ -32,8 +36,7 @@ volumes:
     driver: local
 
 networks:
-  tg_net:
-    name: tg_net
+  n8n_default:
     external: true
-    # Tạo network bằng: docker network create tg_net
-    # Cả n8n + telegram-bot-api compose phải khai báo cùng network này.
+    # Network được tạo tự động bởi n8n docker-compose (project name = n8n)
+    # Đảm bảo n8n đã chạy trước khi start telegram-bot-api
