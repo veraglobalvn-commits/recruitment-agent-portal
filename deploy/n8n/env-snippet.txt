@@ -1,0 +1,6 @@
+# 2 env vars cần APPEND (không thay) vào /opt/n8n/.env
+# Workflow JSON đọc 2 vars này để gọi self-hosted bot API server
+# (chỉ áp dụng cho HTTP request nodes; Telegram Trigger node dùng credential baseUrl trong UI)
+
+TELEGRAM_BOT_API_BASE_URL=http://telegram-bot-api:8081
+TELEGRAM_PUBLIC_FILE_BASE=https://portal.veraglobal.vn/tg-media
