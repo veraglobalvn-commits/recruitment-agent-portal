@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import type { Candidate, Order } from '@/lib/types';
@@ -216,12 +216,28 @@ export default function OrderDetail() {
     fetchCandidates();
   }, [orderId, fetchCandidates]);
 
+  const focusedCandidateExists = useMemo(() => {
+    if (!focusCandidateId) return false;
+    return candidates.some((c) => c.id_ld === focusCandidateId);
+  }, [focusCandidateId, candidates]);
+
+  const orderedCandidates = useMemo(() => {
+    if (!focusCandidateId) return candidates;
+    const idx = candidates.findIndex((c) => c.id_ld === focusCandidateId);
+    if (idx <= 0) return candidates;
+    return [candidates[idx], ...candidates.slice(0, idx), ...candidates.slice(idx + 1)];
+  }, [focusCandidateId, candidates]);
+
   useEffect(() => {
     if (!focusCandidateId || candidates.length === 0) return;
-    const target = document.querySelector(`[data-candidate-id="${focusCandidateId}"]`);
-    if (!(target instanceof HTMLElement)) return;
-    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  }, [focusCandidateId, candidates]);
+    const run = () => {
+      const target = document.querySelector(`[data-candidate-id="${focusCandidateId}"]`);
+      if (!(target instanceof HTMLElement)) return;
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    };
+    const t = setTimeout(run, 120);
+    return () => clearTimeout(t);
+  }, [focusCandidateId, candidates, orderedCandidates]);
 
   const handleCandidateUpdate = useCallback((id: string, updates: Partial<Candidate>) => {
     setCandidates((prev) => {
@@ -731,6 +747,14 @@ export default function OrderDetail() {
           </div>
         )}
 
+        {focusCandidateId && !loading && (
+          <div className={`p-3 rounded-xl border text-sm ${focusedCandidateExists ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-amber-50 border-amber-200 text-amber-700'}`}>
+            {focusedCandidateExists
+              ? `Focused candidate: ${focusCandidateId}`
+              : `Candidate not found in this order: ${focusCandidateId}`}
+          </div>
+        )}
+
         {/* Candidates */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
           <div className="flex justify-between items-center mb-3">
@@ -748,7 +772,7 @@ export default function OrderDetail() {
             <p className="text-gray-400 text-sm text-center py-4">No candidates found for this order.</p>
           ) : (
             <div className="space-y-3">
-              {candidates.map((c) => (
+              {orderedCandidates.map((c) => (
                 <CandidateCard
                   key={c.id_ld}
                   candidate={c}
