@@ -31,6 +31,22 @@ services:
       timeout: 5s
       retries: 3
 
+  # File server: serve cached Telegram files qua HTTP
+  # n8n download passport/avatar qua: http://file-server:9000/<TOKEN>/<file_path>
+  # nginx /tg-media/ proxy qua: http://127.0.0.1:9000/<TOKEN>/<file_path>
+  file-server:
+    image: python:3.11-alpine
+    container_name: tg-file-server
+    restart: always
+    working_dir: /data
+    command: python -m http.server 9000
+    volumes:
+      - tg-bot-api-data:/data:ro
+    ports:
+      - "127.0.0.1:9000:9000"
+    networks:
+      - n8n_default
+
 volumes:
   tg-bot-api-data:
     driver: local
