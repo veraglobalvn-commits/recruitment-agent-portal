@@ -23,6 +23,7 @@ interface CandidateCardProps {
   onVideoPlay?: (url: string) => void;
   isSelected?: boolean;
   onToggleSelect?: (id: string, selected: boolean) => void;
+  isFocused?: boolean;
 }
 
 export default function CandidateCard({
@@ -44,6 +45,7 @@ export default function CandidateCard({
   onVideoPlay,
   isSelected,
   onToggleSelect,
+  isFocused = false,
 }: CandidateCardProps) {
 
   const [editing, setEditing] = useState(false);
@@ -207,7 +209,10 @@ export default function CandidateCard({
   const isMissingCandidate = !candidate.pp_no || !candidate.interview_status;
 
   return (
-    <div className={`border rounded-xl hover:shadow-md transition-shadow bg-white overflow-hidden ${isNewVideo ? 'border-yellow-400 ring-2 ring-yellow-200' : isMissingCandidate ? 'border-red-200 bg-red-50/20' : 'border-gray-200'}`}>
+    <div
+      data-candidate-id={candidate.id_ld}
+      className={`border rounded-xl hover:shadow-md transition-shadow bg-white overflow-hidden ${isFocused ? 'border-blue-400 ring-2 ring-blue-200' : isNewVideo ? 'border-yellow-400 ring-2 ring-yellow-200' : isMissingCandidate ? 'border-red-200 bg-red-50/20' : 'border-gray-200'}`}
+    >
       {/* Header: Photo + Name + ID */}
       <div className="flex items-start gap-3 p-4 pb-3">
         {onToggleSelect && (

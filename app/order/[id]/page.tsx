@@ -31,6 +31,9 @@ export default function OrderDetail() {
   const demandLetterUrl = searchParams.get('dl')
     ? decodeURIComponent(searchParams.get('dl')!)
     : null;
+  const focusCandidateId = searchParams.get('candidate')
+    ? decodeURIComponent(searchParams.get('candidate')!)
+    : null;
 
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [memberNameMap, setMemberNameMap] = useState<Record<string, string>>({});
@@ -171,6 +174,8 @@ export default function OrderDetail() {
         health_cert_link: r.health_cert_link,
         interview_status: r.interview_status,
         created_at: r.created_at,
+        candidate_confirmed: r.candidate_confirmed ?? null,
+        video_links: r.video_links ?? null,
       })).sort((a, b) => {
         const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
         const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
@@ -210,6 +215,13 @@ export default function OrderDetail() {
     if (!orderId) return;
     fetchCandidates();
   }, [orderId, fetchCandidates]);
+
+  useEffect(() => {
+    if (!focusCandidateId || candidates.length === 0) return;
+    const target = document.querySelector(`[data-candidate-id="${focusCandidateId}"]`);
+    if (!(target instanceof HTMLElement)) return;
+    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [focusCandidateId, candidates]);
 
   const handleCandidateUpdate = useCallback((id: string, updates: Partial<Candidate>) => {
     setCandidates((prev) => {
@@ -750,6 +762,7 @@ export default function OrderDetail() {
                   onToggleSelect={handleToggleSelect}
                   addedBy={c.agent_id && c.agent_id !== currentAgentId ? memberNameMap[c.agent_id] : undefined}
                   canSetStatus={currentUserRole !== 'member'}
+                  isFocused={focusCandidateId === c.id_ld}
                 />
               ))}
             </div>
