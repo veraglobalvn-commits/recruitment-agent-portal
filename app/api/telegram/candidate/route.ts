@@ -45,6 +45,7 @@ async function extractPassportText(imageBase64: string): Promise<string> {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: params.toString(),
+    signal: AbortSignal.timeout(20000),
   });
 
   const responseText = await res.text();
@@ -78,6 +79,7 @@ async function parsePassportFields(rawText: string): Promise<PassportParsed> {
       'Authorization': `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
     },
+    signal: AbortSignal.timeout(20000),
     body: JSON.stringify({
       model: 'gpt-4o-mini',
       temperature: 0.1,
@@ -322,7 +324,7 @@ async function handleCreatePassport(body: CreatePassportInput) {
       .eq('id_ld', idLd)
       .maybeSingle();
 
-    if (existing) {
+    if (existing && !idLd.startsWith('NOID_')) {
       return NextResponse.json({
         ocr_success: ocrSuccess,
         duplicate: true,
