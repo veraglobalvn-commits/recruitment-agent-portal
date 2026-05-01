@@ -51,6 +51,7 @@ export default function OrderDetail() {
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
   const [candidateVideoUrl, setCandidateVideoUrl] = useState<string | null>(null);
   const [selectedCandidates, setSelectedCandidates] = useState<string[]>([]);
+  const [autoEditCandidateId, setAutoEditCandidateId] = useState<string | null>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
   const [dupWarning, setDupWarning] = useState<{
     fullName: string; orderId: string; ppNo: string;
@@ -230,6 +231,7 @@ export default function OrderDetail() {
 
   useEffect(() => {
     if (!focusCandidateId || candidates.length === 0) return;
+    if (!autoEditCandidateId) setAutoEditCandidateId(focusCandidateId);
     const run = () => {
       const target = document.querySelector(`[data-candidate-id="${focusCandidateId}"]`);
       if (!(target instanceof HTMLElement)) return;
@@ -237,7 +239,7 @@ export default function OrderDetail() {
     };
     const t = setTimeout(run, 120);
     return () => clearTimeout(t);
-  }, [focusCandidateId, candidates, orderedCandidates]);
+  }, [focusCandidateId, candidates, orderedCandidates, autoEditCandidateId]);
 
   const handleCandidateUpdate = useCallback((id: string, updates: Partial<Candidate>) => {
     setCandidates((prev) => {
@@ -787,6 +789,7 @@ export default function OrderDetail() {
                   addedBy={c.agent_id && c.agent_id !== currentAgentId ? memberNameMap[c.agent_id] : undefined}
                   canSetStatus={currentUserRole !== 'member'}
                   isFocused={focusCandidateId === c.id_ld}
+                  autoOpenEdit={autoEditCandidateId === c.id_ld}
                 />
               ))}
             </div>

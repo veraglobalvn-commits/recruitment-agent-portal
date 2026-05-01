@@ -24,6 +24,7 @@ interface CandidateCardProps {
   isSelected?: boolean;
   onToggleSelect?: (id: string, selected: boolean) => void;
   isFocused?: boolean;
+  autoOpenEdit?: boolean;
 }
 
 export default function CandidateCard({
@@ -46,6 +47,7 @@ export default function CandidateCard({
   isSelected,
   onToggleSelect,
   isFocused = false,
+  autoOpenEdit = false,
 }: CandidateCardProps) {
 
   const [editing, setEditing] = useState(false);
@@ -77,6 +79,11 @@ export default function CandidateCard({
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
+
+  useEffect(() => {
+    if (!autoOpenEdit) return;
+    setEditing(true);
+  }, [autoOpenEdit]);
 
   const handleConfirm = () => {
     if (pendingStatus && onStatusChange) {
@@ -245,6 +252,22 @@ export default function CandidateCard({
         <div className="flex-1 min-w-0">
           <div className="flex items-start gap-1 mb-0.5">
             <h3 className="font-bold text-gray-800 text-sm leading-tight flex-1 min-w-0 truncate">{candidate.full_name || <span className="text-red-400">N/A</span>}</h3>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            {candidate.candidate_confirmed ? (
+              <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium">
+                Commitment Confirmed
+              </span>
+            ) : (
+              <span className="text-[11px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-medium">
+                Commitment Not Confirmed
+              </span>
+            )}
+            {candidate.candidate_confirmed && candidate.candidate_confirmed.captured_at && (
+              <span className="text-[11px] text-gray-500">
+                {new Date(candidate.candidate_confirmed.captured_at).toLocaleString()}
+              </span>
+            )}
           </div>
           {candidate.interview_status && !onStatusChange && (
             <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
@@ -484,6 +507,19 @@ export default function CandidateCard({
               <button onClick={() => setEditing(false)} className="text-gray-400 hover:text-gray-600 text-2xl">✕</button>
             </div>
             <div className="space-y-3">
+              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl border border-gray-200">
+                {candidate.photo_link ? (
+                  <img src={candidate.photo_link} alt={candidate.full_name ?? ''} className="w-16 h-16 rounded-full object-cover border-2 border-gray-200" />
+                ) : (
+                  <div className="w-16 h-16 rounded-full bg-white flex items-center justify-center border-2 border-dashed border-gray-300 text-gray-400 text-xs">
+                    No Photo
+                  </div>
+                )}
+                <div className="min-w-0">
+                  <p className="text-xs text-gray-500">Avatar</p>
+                  <p className="text-sm font-semibold text-gray-800 truncate">{candidate.full_name || 'Unnamed Candidate'}</p>
+                </div>
+              </div>
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Full Name</label>
                 <input value={form.full_name} onChange={(e) => setForm(f => ({ ...f, full_name: e.target.value }))} className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[44px]" />
