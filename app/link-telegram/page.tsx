@@ -1,12 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createSupabaseClient } from '@/lib/supabase';
 
 type Status = 'loading' | 'confirm' | 'not_logged_in' | 'invalid' | 'success' | 'error';
 
-export default function LinkTelegramPage() {
+function LinkTelegramContent() {
   const router       = useRouter();
   const searchParams = useSearchParams();
   const [status, setStatus]     = useState<Status>('loading');
@@ -197,5 +197,17 @@ export default function LinkTelegramPage() {
 
       </div>
     </div>
+  );
+}
+
+export default function LinkTelegramPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="animate-pulse text-gray-400">Loading…</div>
+      </div>
+    }>
+      <LinkTelegramContent />
+    </Suspense>
   );
 }
