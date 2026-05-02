@@ -379,7 +379,11 @@ async function handleCreatePassport(body: CreatePassportInput) {
     );
   }
 
-  return NextResponse.json({ candidate_id: idLd, ocr_success: ocrSuccess });
+  return NextResponse.json({
+    candidate_id: idLd,
+    ocr_success: ocrSuccess,
+    full_name: (ocrSuccess && parsed?.Full_Name) ? parsed.Full_Name : null,
+  });
 }
 
 // ---------------------------------------------------------------------------
