@@ -155,6 +155,40 @@
 - Format ngày: `YYYY-MM-DD` (ISO 8601)
 - Luôn ghi rõ: Quyết định gì / Tại sao / Ảnh hưởng gì
 
+## 2026-05-02 (session 2 — n8n recovery + bot fix)
+
+### [2026-05-02] N8N_BLOCK_ENV_ACCESS_IN_NODE=false bắt buộc cho HTTP node expressions
+- **Quyết định:** Thêm `N8N_BLOCK_ENV_ACCESS_IN_NODE=false` vào `/var/www/portal/deploy/n8n/.env`.
+- **Lý do:** Không chỉ Code nodes mà **HTTP Request node URL expressions** (`{{ $env.TOKEN }}`) cũng cần setting này. Thiếu → `$env.*` trả `undefined` → URL `/bot[undefined]/...`.
+- **Ảnh hưởng:** Bắt buộc có trước khi workflow chạy được.
+
+### [2026-05-02] N8N_PROXY_HOPS=1 bắt buộc khi n8n sau nginx
+- **Quyết định:** Thêm `N8N_PROXY_HOPS=1` vào n8n `.env`.
+- **Lý do:** n8n dùng express-rate-limit; khi nginx forward request có `X-Forwarded-For` header mà Express chưa trust proxy → `ERR_ERL_UNEXPECTED_X_FORWARDED_FOR` → webhook request bị reject.
+- **Ảnh hưởng:** Sau khi set, webhook processing hoạt động bình thường qua nginx.
+
+### [2026-05-02] n8n volume mount path phải là /home/node (không phải /home/node/.n8n)
+- **Quyết định:** `docker-compose.yml` n8n dùng `n8n_data:/home/node` thay vì `n8n_data:/home/node/.n8n`.
+- **Lý do:** Volume `n8n_n8n_data` có cấu trúc `(root)/.n8n/config` (từ recovery cũ mount tại `/home/node`). Khi mount tại `/home/node/.n8n`, n8n đọc `(root)/config` — file này có encryption key khác → crash với "Mismatching encryption keys".
+- **Ảnh hưởng:** `docker compose up -d` (không force-recreate) đủ để apply thay đổi này an toàn.
+
+### [2026-05-02] telegram-bot-api phải ở tg_net để n8n kết nối được
+- **Quyết định:** Manually connect `telegram-bot-api` vào `tg_net` sau mỗi lần recreate: `docker network connect tg_net telegram-bot-api`.
+- **Lý do:** Container `telegram-bot-api` mặc định chỉ ở network của compose project riêng. n8n (trong `tg_net`) không resolve được hostname `telegram-bot-api` → workflow activation fail.
+- **Ảnh hưởng:** Cần persist bằng cách thêm `tg_net` vào `deploy/telegram-bot-api/docker-compose.yml` (việc này chưa làm).
+
+### [2026-05-02] Portal UI — telegram_user_id thiếu trong preloaded agent data
+- **Quyết định:** Thêm `telegram_user_id` vào SELECT query và `preloadedAgentRef` ở 3 đường login trong `app/page.tsx`.
+- **Lý do:** `preloadedAgentRef` được dùng để skip DB round-trip, nhưng thiếu `telegram_user_id` → `setTelegramLinked(false)` luôn → banner "Connect Telegram" hiện dù agent đã link.
+- **Ảnh hưởng:** Fix commit `f7e521a`, deploy thành công 2026-05-02.
+
+### [2026-05-02] deploy.sh next: not found — transient npm TAR error
+- **Quyết định:** Không thay đổi deploy.sh. Vấn đề là transient TAR extraction error trong `npm ci` gây `next` binary không được extract đúng.
+- **Lý do:** Disk space đủ (74GB free), `next` binary tồn tại sau deploy thất bại. Re-trigger deploy pass bình thường.
+- **Ảnh hưởng:** Nếu lặp lại, manual fix: `cd /var/www/portal && rm -rf node_modules && npm ci`.
+
+---
+
 ### [2026-05-02] telegram-bot-api bắt buộc dùng --local mode để bypass 20MB limit
 - **Quyết định:** Bật `TELEGRAM_LOCAL: "1"` trong docker-compose telegram-bot-api. Đảo ngược quyết định cũ "KHÔNG set TELEGRAM_LOCAL=1".
 - **Lý do:** Default mode chỉ proxy qua Telegram Cloud → vẫn bị giới hạn 20MB getFile. `--local` mode mới thực sự lưu file local và bypass limit. Workflow đã có sẵn code normalize absolute path.

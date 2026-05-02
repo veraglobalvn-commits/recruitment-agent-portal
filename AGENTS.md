@@ -4,8 +4,11 @@
 
 - **TUYỆT ĐỐI KHÔNG** paste code, diff, nội dung file, hay output dài ra chat.
 - Chỉ báo cáo: file nào đã đọc/sửa, làm gì, kết quả ra sao.
-- Nếu cần tham chiếu: dùng `<ref_file />` hoặc `<ref_snippet />`.
-- Ngoại lệ duy nhất: user yêu cầu rõ ràng "cho tôi xem code/nội dung".
+- Nếu cần tham chiếu: dùng `<ref_file />` hoặc `<ref_snippet />`. KHÔNG quote nội dung file dù chỉ vài dòng.
+- Ngoại lệ duy nhất được phép hiện nội dung:
+  1. User yêu cầu rõ ràng "cho tôi xem code/nội dung"
+  2. Shell command ngắn user cần chạy trên VPS (không phải nội dung file)
+- **Vi phạm thường gặp cần tránh:** đọc file rồi quote lại → dùng ref_snippet thay thế.
 
 ---
 
@@ -39,18 +42,22 @@
 
 #### n8n env vars bắt buộc (đã set trong `/var/www/portal/deploy/n8n/.env`)
 - `N8N_ENCRYPTION_KEY=ldXQwQUsQEZavpf0dzoQJc92GxbbAeBW`
-- `N8N_BLOCK_ENV_ACCESS_IN_NODE=false` — bắt buộc để `$env.*` hoạt động trong Code nodes
+- `N8N_BLOCK_ENV_ACCESS_IN_NODE=false` — bắt buộc để `$env.*` hoạt động trong **cả HTTP node expressions lẫn Code nodes**
 - `NODE_FUNCTION_ALLOW_BUILTIN=crypto` — bắt buộc để `require('crypto')` hoạt động
 - `TELEGRAM_BOT_TOKEN=...` — token bot (hardcode hoặc env)
 - `TELEGRAM_BRIDGE_SECRET=42b777...` — phải khớp với portal `.env.local`
 - `APP_URL=https://portal.veraglobal.vn` — để finalize URL đầy đủ
 - `WEBHOOK_URL=https://n8n.veraglobal.vn/` — để Telegram Trigger activate đúng
+- `N8N_PROXY_HOPS=1` — bắt buộc khi n8n chạy sau nginx proxy; thiếu sẽ gây `ERR_ERL_UNEXPECTED_X_FORWARDED_FOR` và webhook fail
 
 #### n8n Docker network (quan trọng)
 - Container n8n phải ở CẢ HAI networks: `tg_net` VÀ `n8n_default`
 - `tg_net`: để gọi `telegram-bot-api` và `tg-file-server` by service name
-- `n8n_default`: để có internet access (Supabase DNS, v.v.)
-- Đã cố định trong `docker-compose.yml` tại `/var/www/portal/deploy/n8n/`
+- `n8n_default`: để có internet access (Supabase DNS, v.v.) — **thiếu network này thì Supabase không resolve được**
+- Đã cố định trong `docker-compose.yml` tại `/var/www/portal/deploy/n8n/` (dùng `- default` trong networks list)
+- `telegram-bot-api` container PHẢI được connect vào `tg_net`: `docker network connect tg_net telegram-bot-api`
+  - Không persistent — nếu container recreate phải connect lại
+  - Cần thêm `tg_net` vào `deploy/telegram-bot-api/docker-compose.yml` để tự động
 
 #### telegram-bot-api (INFRA-005)
 - Phải chạy với `TELEGRAM_LOCAL: "1"` để bypass giới hạn 20MB getFile
@@ -83,6 +90,21 @@
 - Candidate wizard workflow migrated to native Supabase nodes for `bot_sessions` persistence (no HTTP header env dependency).
 - Deep-link candidate UX implemented for `/order/<id>?candidate=<id_ld>` with focus behavior.
 - **`TELEGRAM_BOT_TOKEN`** phải được set trong `/var/www/portal/deploy/n8n/.env` — workflow dùng `$env.TELEGRAM_BOT_TOKEN` thay vì hardcode. Nếu thiếu, tất cả HTTP call Telegram API sẽ dùng URL `/bot[undefined]/...`.
+- `TELEGRAM_BOT_API_BASE_URL` được đề cập trong docs cũ nhưng **KHÔNG được workflow đọc** — base URL đang hardcode `'http://telegram-bot-api:8081'` trực tiếp trong node URL.
+- Fallback `|| 'https://api.telegram.org'` trong node URLs là dead code (string literal luôn truthy).
+
+### n8n volume + mount (bài học quan trọng — 2026-05-02)
+- Volume thật: `n8n_n8n_data` (project prefix `n8n` + volume name `n8n_data`)
+- Cấu trúc bên trong volume: `(root)/.n8n/config` + `(root)/.n8n/database.sqlite` (2.2GB)
+- **Mount đúng**: `n8n_data:/home/node` → n8n đọc `~/.n8n/` = `(root)/.n8n/` ✓
+- **Mount SAI**: `n8n_data:/home/node/.n8n` → n8n đọc `(root)/config` (khác key) → crash
+- `docker restart n8n` **KHÔNG reload env_file** — phải dùng `docker compose up -d`
+- `docker compose up -d` (không `--force-recreate`) an toàn — không đụng volume
+
+### Portal UI — Telegram link state (bug fix 2026-05-02)
+- `preloadedAgentRef` trong `app/page.tsx` thiếu `telegram_user_id` ở cả 3 đường login
+- Hậu quả: `setTelegramLinked(false)` luôn → banner "Connect Telegram" hiện dù đã link
+- Fix (commit `f7e521a`): thêm `telegram_user_id` vào SELECT + preloadedAgentRef ở 3 nơi
 
 ### Database schema fact discovered
 - In production `candidates` table, soft-delete columns expected by some app paths were inconsistent with runtime assumptions during this session.
