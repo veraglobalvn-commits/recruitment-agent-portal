@@ -246,6 +246,7 @@ export interface User {
   agency_id?: string | null;
   permissions?: string[] | null;
   avatar_url: string | null;
+  telegram_user_id?: number | null;
   created_at?: string | null;
 }
 

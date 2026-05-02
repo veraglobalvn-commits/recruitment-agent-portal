@@ -8,6 +8,7 @@ import LoginForm from '@/components/agent/LoginForm';
 import DashboardStatsComponent from '@/components/agent/DashboardStats';
 import OrdersList from '@/components/agent/OrdersList';
 import LoadingSkeleton from '@/components/ui/LoadingSkeleton';
+import TelegramConnectSection from '@/components/agent/TelegramConnectSection';
 
 export default function Home() {
   const router = useRouter();
@@ -24,6 +25,7 @@ export default function Home() {
   const [agencyId, setAgencyId] = useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
+  const [telegramLinked, setTelegramLinked] = useState<boolean | null>(null);
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [loadingData, setLoadingData] = useState(true);
@@ -189,11 +191,11 @@ export default function Home() {
         const preloaded = preloadedAgentRef.current;
         preloadedAgentRef.current = null;
 
-        let agentData: { id: string; full_name: string; short_name: string | null; role: string | null; agency_id: string | null; avatar_url?: string | null } | null = preloaded;
+        let agentData: { id: string; full_name: string; short_name: string | null; role: string | null; agency_id: string | null; avatar_url?: string | null; telegram_user_id?: number | null } | null = preloaded;
         if (!agentData) {
           const agentRes = await supabase
             .from('users')
-            .select('id, full_name, short_name, role, agency_id, avatar_url')
+            .select('id, full_name, short_name, role, agency_id, avatar_url, telegram_user_id')
             .eq('supabase_uid', uid)
             .maybeSingle();
           if (agentRes.error || !agentRes.data) {
@@ -288,6 +290,7 @@ export default function Home() {
         setAvatarUrl(result.avatar_url);
         setUserRole(result.role);
         setAgencyId(result.agency_id);
+        setTelegramLinked(!!agentData?.telegram_user_id);
         setStats(result.stats);
         setOrders(result.orders);
         if (result.agent_id) localStorage.setItem('agent_id', result.agent_id);
@@ -509,6 +512,13 @@ export default function Home() {
           <LoadingSkeleton type="dashboard" />
         ) : (
           <>
+            {telegramLinked === false && (
+              <TelegramConnectSection
+                isLinked={false}
+                variant="banner"
+                onLinked={() => setTelegramLinked(true)}
+              />
+            )}
             {stats && <DashboardStatsComponent stats={stats} />}
             <div className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-gray-100">
               <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4">

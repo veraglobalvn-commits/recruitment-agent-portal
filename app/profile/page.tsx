@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import TelegramConnectSection from '@/components/agent/TelegramConnectSection';
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -21,6 +22,7 @@ export default function ProfilePage() {
   const [savingPassword, setSavingPassword] = useState(false);
   const [passwordMsg, setPasswordMsg] = useState<string | null>(null);
 
+  const [telegramLinked, setTelegramLinked] = useState<boolean | null>(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement>(null);
 
@@ -31,7 +33,7 @@ export default function ProfilePage() {
 
       const { data: userData } = await supabase
         .from('users')
-        .select('id, full_name, avatar_url')
+        .select('id, full_name, avatar_url, telegram_user_id')
         .eq('supabase_uid', session.user.id)
         .maybeSingle();
 
@@ -41,6 +43,7 @@ export default function ProfilePage() {
       setFullName(userData.full_name || '');
       setEmail(session.user.email || '');
       setAvatarUrl(userData.avatar_url || null);
+      setTelegramLinked(!!userData.telegram_user_id);
     } catch {
       router.replace('/');
     } finally {
@@ -286,6 +289,15 @@ export default function ProfilePage() {
             {savingPassword ? 'Updating...' : 'Update Password'}
           </button>
         </form>
+
+        {/* Telegram */}
+        {telegramLinked !== null && (
+          <TelegramConnectSection
+            isLinked={telegramLinked}
+            variant="card"
+            onLinked={() => setTelegramLinked(true)}
+          />
+        )}
 
       </div>
     </div>
