@@ -23,13 +23,16 @@ npm run build
 echo "  -> Build thành công."
 
 echo ""
-echo "[4/5] Reload PM2..."
-pm2 reload portal
-echo "  -> PM2 đã reload."
+echo "[4/5] Sync static assets + restart portal..."
+rsync -a .next/static .next/standalone/.next/
+systemctl restart portal
+echo "  -> Portal đã restart."
 
 echo ""
 echo "[5/5] Kiểm tra status..."
-pm2 status portal
+sleep 3
+systemctl is-active --quiet portal && echo "  -> portal: active ✓" || echo "  -> portal: FAILED ✗"
+curl -s -o /dev/null -w "  -> HTTP status: %{http_code}\n" https://portal.veraglobal.vn/
 
 echo ""
 echo "=========================================="
