@@ -33,7 +33,7 @@ export default function Home() {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const avatarInputRef = useRef<HTMLInputElement>(null);
-  const preloadedAgentRef = useRef<{ id: string; full_name: string; short_name: string | null; role: string | null; agency_id: string | null } | null>(null);
+  const preloadedAgentRef = useRef<{ id: string; full_name: string; short_name: string | null; role: string | null; agency_id: string | null; telegram_user_id?: number | null } | null>(null);
 
   const isOwner = useMemo(() => userRole === 'agent', [userRole]);
 
@@ -87,7 +87,7 @@ export default function Home() {
             try {
               const { data: agentData } = await supabase
                 .from('users')
-                .select('id, role, status, full_name, short_name, agency_id, avatar_url')
+                .select('id, role, status, full_name, short_name, agency_id, avatar_url, telegram_user_id')
                 .eq('supabase_uid', newSession.user.id)
                 .maybeSingle();
               if (agentData?.status === 'pending') {
@@ -100,7 +100,7 @@ export default function Home() {
                 return;
               }
               if (agentData) {
-                preloadedAgentRef.current = { id: agentData.id, full_name: agentData.full_name, short_name: agentData.short_name, role: agentData.role ?? null, agency_id: agentData.agency_id ?? null };
+                preloadedAgentRef.current = { id: agentData.id, full_name: agentData.full_name, short_name: agentData.short_name, role: agentData.role ?? null, agency_id: agentData.agency_id ?? null, telegram_user_id: agentData.telegram_user_id ?? null };
               }
               setUserId(newSession.user.id);
               setIsLoggedIn(true);
@@ -122,7 +122,7 @@ export default function Home() {
       try {
         const { data: agentData } = await supabase
           .from('users')
-          .select('id, role, status, full_name, short_name, agency_id, avatar_url')
+          .select('id, role, status, full_name, short_name, agency_id, avatar_url, telegram_user_id')
           .eq('supabase_uid', session.user.id)
           .maybeSingle();
         if (cancelled) return;
@@ -138,7 +138,7 @@ export default function Home() {
           return;
         }
         if (agentData) {
-          preloadedAgentRef.current = { id: agentData.id, full_name: agentData.full_name, short_name: agentData.short_name, role: agentData.role ?? null, agency_id: agentData.agency_id ?? null };
+          preloadedAgentRef.current = { id: agentData.id, full_name: agentData.full_name, short_name: agentData.short_name, role: agentData.role ?? null, agency_id: agentData.agency_id ?? null, telegram_user_id: agentData.telegram_user_id ?? null };
         }
         setUserId(session.user.id);
         setIsLoggedIn(true);
@@ -341,7 +341,7 @@ export default function Home() {
       if (data?.user) {
         const { data: agentData } = await supabase
           .from('users')
-          .select('id, role, status, full_name, short_name, agency_id, avatar_url')
+          .select('id, role, status, full_name, short_name, agency_id, avatar_url, telegram_user_id')
           .eq('supabase_uid', data.user.id)
           .maybeSingle();
 
@@ -370,7 +370,7 @@ export default function Home() {
           return;
         }
         // Preload agent info so fetchDashboardData skips a redundant round-trip
-        preloadedAgentRef.current = { id: agentData.id, full_name: agentData.full_name, short_name: agentData.short_name, role: agentData.role ?? null, agency_id: agentData.agency_id ?? null };
+        preloadedAgentRef.current = { id: agentData.id, full_name: agentData.full_name, short_name: agentData.short_name, role: agentData.role ?? null, agency_id: agentData.agency_id ?? null, telegram_user_id: agentData.telegram_user_id ?? null };
         setUserId(data.user.id);
         setIsLoggedIn(true);
         setLoading(false);
