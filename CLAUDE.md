@@ -1,233 +1,146 @@
-# Agent Portal — Development Guide
+# CLAUDE.md
 
-> **Onboarding for AI:** Read this file + `lib/types.ts` to understand the full project. Only read individual page/component files when you need to edit them.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
----
-
-## Tech Stack
-- **Framework:** Next.js 14.2.35 (App Router)
-- **Language:** TypeScript (strict)
-- **Styling:** Tailwind CSS 3.4
-- **Auth:** Supabase Auth (`@supabase/ssr`)
-- **Database:** Supabase PostgreSQL (primary read/write)
-- **Storage:** Supabase Storage (`agent-media` bucket)
-- **OCR:** OCR.space + OpenAI GPT-4o-mini (passport & business license scanning)
-- **Data sync:** n8n webhooks → Lark Suite Bitable
-- **Hosting:** Vercel (auto-deploy from `main` branch)
-- **Domain:** `portal.veraglobal.vn`
+> **Đọc `.claude/CLAUDE.md` để có hướng dẫn đầy đủ về quy tắc làm việc hằng ngày, sensitive areas, và workflow đa agent.**
 
 ---
 
-## Commands
+## Quy tắc bắt buộc (áp dụng mọi agent, mọi session)
+
+- **TUYỆT ĐỐI KHÔNG** paste code, diff, nội dung file, hay output dài ra chat.
+- Chỉ báo cáo: file nào đã đọc/sửa, làm gì, kết quả. Dùng `<ref_file />` / `<ref_snippet />` để tham chiếu.
+
+---
+
+## Dự án
+
+Vera Global Agent Portal — cổng tuyển dụng lao động xuất khẩu, hai mặt giao diện:
+
+- **Agent Portal** (`/`) — nhân viên/đại lý: xem đơn hàng, upload hồ sơ ứng viên, quản lý team
+- **Admin Portal** (`/admin/*`) — quản trị toàn hệ thống
+
+---
+
+## Lệnh
+
 ```bash
-npm run dev       # Dev server on :3000
-npm run build     # Production build
-npm run lint      # ESLint (next/core-web-vitals)
-npx tsc --noEmit  # TypeScript type check (always run after edits)
+npm run dev        # Dev server tại localhost:3000
+npm run build      # Build production
+npm run lint       # ESLint
+npx tsc --noEmit   # TypeScript — PHẢI 0 lỗi sau mỗi thay đổi ≥ 2 file
 ```
 
 ---
 
-## Module Status
+## Kiến trúc
 
-| Module | Route | Status | Description |
-|--------|-------|--------|-------------|
-| Agent Login & Dashboard | `/` | ✅ Done | Agent login, stats, orders list, candidate management |
-| Order Detail | `/order/[id]` | ✅ Done | Protected by middleware, shows candidates per order |
-| Admin Layout & Sidebar | `/admin/*` | ✅ Done | Sidebar nav (6 items), mobile drawer, admin auth guard |
-| Admin Dashboard | `/admin` | ✅ Done | KPI cards, orders table, agent activity, quick-add FAB |
-| Companies (VN) | `/admin/companies` | ✅ Done | List + search + mobile cards + desktop table |
-| Company Detail | `/admin/companies/[id]` | ✅ Done | Edit form (auto-save), orders, payment, media, docs, soft delete |
-| Add Company Modal | — | ✅ Done | 2-tab (manual + OCR scan), duplicate check |
-| OCR API | `/api/ocr` | ✅ Done | OCR.space → GPT-4o-mini structured extraction |
-| Passport Upload API | `/api/passport` | ✅ Done | OCR.space → GPT-4o-mini → Supabase DB → Storage → n8n/Lark |
-| Orders Admin | `/admin/orders/[id]` | ✅ Done | Order list, detail, edit, candidates, payment |
-| Candidates Admin | `/admin/candidates` | ✅ Done | List all candidates with filters, edit, delete |
-| Agents Admin | `/admin/agents/[id]` | ✅ Done | Edit agent info, role, and labor percentage |
-| Reports | `/admin/reports` | ❌ Not built | Nav item exists, page doesn't |
+**Stack:** Next.js 14 App Router + TypeScript strict, Supabase (PostgreSQL + Auth + Storage), Tailwind CSS (không dùng component library), n8n webhooks, Vercel (auto-deploy từ `main`).
 
----
+### Hai loại Supabase client
 
-## File Map
+| Client | File | Key | Dùng ở đâu |
+|---|---|---|---|
+| Browser | `lib/supabase.ts` | anon key (theo RLS) | Client Components |
+| Server | `lib/auth-helpers.ts` → `getAdminClient()` | service_role (bypass RLS) | API routes, Server Components |
+
+`SUPABASE_SERVICE_ROLE_KEY` tuyệt đối không expose ra client.
+
+### Luồng xác thực
+
+```
+Request → middleware.ts (Edge, đọc JWT từ cookie)
+  ├── Unauthenticated → redirect /
+  └── /admin/* → app/admin/layout.tsx kiểm tra agents.role = 'admin' từ DB
+```
+
+**5 roles** (`lib/permissions.ts`): `admin` → `operator` → `read_only` | `agent` → `member`.
+
+**Mọi API route** phải gọi `getAuthenticatedUser()` hoặc `getAdminUser()`. Ngoại lệ duy nhất: `/api/share/[id]` và `/api/auth/*`.
+
+### Cấu trúc thư mục chính
 
 ```
 app/
-  layout.tsx                          # Root layout (server component, minimal)
-  globals.css                         # Tailwind imports + body bg/font
-  page.tsx                            # Agent portal: login → dashboard → orders
-  error.tsx                           # Global error boundary
-  order/[id]/page.tsx                 # Agent order detail + candidate cards
-  admin/
-    layout.tsx                        # Admin shell: sidebar + mobile drawer + auth guard (role check)
-    page.tsx                          # Admin dashboard: KPIs, orders, agents, FAB
-    companies/
-      page.tsx                        # Company list: search, mobile cards, desktop table
-      [id]/page.tsx                   # Company detail: info form, orders, payment, media, docs
-    orders/
-      page.tsx                        # Order list: search, filter, mobile cards, desktop table
-      [id]/page.tsx                   # Order detail: edit info, agent, payment, docs, candidates
-    agents/
-      page.tsx                        # Agent list
-      [id]/page.tsx                   # Edit agent info, role, labor_percentage
-    candidates/
-      page.tsx                        # All candidates list with filters, edit, delete
-  api/
-    ocr/route.ts                      # POST: base64 → OCR.space → GPT-4o-mini → parsed fields
-    passport/route.ts                 # POST: base64 → OCR.space → GPT-4o-mini → Supabase DB → Storage → n8n/Lark
-    agents/create/route.ts            # POST: create new agent (admin only)
+├── page.tsx                    # Login → Agent dashboard
+├── order/[id]/page.tsx         # Agent: chi tiết đơn + quản lý ứng viên
+├── admin/                      # Admin portal (layout.tsx = auth guard)
+│   ├── page.tsx                # KPI dashboard
+│   └── orders|companies|agencies|agents|candidates|finance|users/
+├── api/                        # Route handlers (đều cần auth trừ share + auth/*)
+│   ├── passport/route.ts       # OCR hộ chiếu → upsert candidate → n8n
+│   ├── admin/agents|agencies|orders|order-agents/
+│   └── orders/yctd|contract/   # Trigger n8n async
+└── auth/                       # register, callback, pending, reset-password
 
 components/
-  LoginForm.tsx                       # Agent login form (email + password)
-  DashboardStats.tsx                  # Agent dashboard stat cards
-  PaymentChart.tsx                    # Payment pie chart (Recharts)
-  OrdersList.tsx                      # Agent orders list
-  CandidateCard.tsx                   # Single candidate with upload/actions
-  LoadingSkeleton.tsx                 # Animated pulse placeholders
-  admin/
-    CompanyFormModal.tsx              # Add company modal (manual + OCR scan tabs)
-    AddOrderModal.tsx                 # Add order modal (company selector + form)
-    AddAgentModal.tsx                 # Add agent modal
-    ConfirmDeleteModal.tsx            # Confirm delete by typing "xoá"
+├── agent/     # LoginForm, CandidateCard, OrdersList, DashboardStats
+├── admin/     # CompanyFormModal, AddOrderModal, ConfirmDeleteModal…
+└── ui/        # StatusPill, ProgressBar, MediaViewer, LoadingSkeleton
 
 lib/
-  types.ts                            # All TypeScript interfaces (single source of truth)
-  supabase.ts                         # Browser Supabase client singleton (anon key)
-  auth-helpers.ts                     # Server-side auth: getAuthenticatedUser(), getAdminUser()
-  imageUtils.ts                       # compressImage, compressToBase64, fmtFileSize
-
-middleware.ts                         # Session guard: redirects unauthenticated → /
-                                      # Protects: /order/* and /admin/*
-n8n/                                  # n8n workflow JSON files (sanitized, no secrets)
-scripts/                              # Utility Python scripts (migrations, Lark sync, testing)
+├── types.ts           # Tất cả interfaces — source of truth TypeScript
+├── auth-helpers.ts    # getAuthenticatedUser, getAdminUser, getAdminClient
+├── permissions.ts     # RBAC: hasPermission(), ROLE_PERMISSIONS map
+├── supabase.ts        # Browser client
+├── formatters.ts      # fmtVND, fmtUSD, fmtVndShort, fmtUsdShort
+├── imageUtils.ts      # Client-side image compression (max 1500px, JPEG 0.8)
+└── admin-context.tsx  # React Context cho admin portal (role, userId)
 ```
 
----
+### Database (key tables)
 
-## Auth Pattern
-
-### Browser (client components)
-- `lib/supabase.ts` → `createSupabaseClient()` với anon key
-- Direct Supabase calls from useCallback/useEffect
-
-### Server / API Routes
-- `lib/auth-helpers.ts` → service role key (bypasses RLS)
-- `getAuthenticatedUser(req: NextRequest)` — verifies Bearer token, returns user or 401
-- `getAdminUser(req: NextRequest)` — same + checks `agents.role === 'admin'`, returns 403 if not admin
-- **All API routes must use one of these helpers** (no unauthenticated endpoints)
-
-### Middleware (Edge Runtime)
-- `middleware.ts` dùng `@supabase/ssr` createServerClient + cookie để verify session
-- Unauthenticated → redirect về `/`
-- Role check (admin) ở `app/admin/layout.tsx` (cần DB query, không làm trong Edge Runtime)
-
-### Route Protection Summary
-| Route | Guard |
+| Bảng | Ghi chú |
 |---|---|
-| `/order/*` | Middleware (session) |
-| `/admin/*` | Middleware (session) + Layout (role=admin) |
-| `/api/ocr` | Bearer token (`getAuthenticatedUser`) |
-| `/api/passport` | Bearer token (`getAuthenticatedUser`) |
-| `/api/agents/create` | Bearer token + admin role (`getAdminUser`) |
+| `users` | Agent/operator/admin, FK `supabase_uid = auth.uid()` |
+| `agencies` | Công ty môi giới (1 agency → nhiều users) |
+| `orders` | Đơn hàng tuyển dụng |
+| `order_agents` | Phân công agent cho đơn (order_id, agent_id, assigned_labor_number) |
+| `candidates` | Ứng viên — PK `id_ld = {ppNo}_{cleanName}` |
+| `companies` | Công ty sử dụng lao động |
+| `finance_transactions` | Giao dịch thu chi |
+
+**Soft delete:** cột `deleted_at` — không xóa cứng bao giờ.  
+**Thêm cột mới:** chạy `ALTER TABLE ... ADD COLUMN IF NOT EXISTS ...; NOTIFY pgrst, 'reload schema';` trong Supabase SQL Editor **trước** khi commit code.
+
+### Storage paths (`agent-media` bucket)
+
+```
+candidates/{order_id}/passport_*.jpg
+{order_id}/{candidate_id}/*.{mp4,webm}
+agents/{agent_id}/avatar_*.{ext}
+companies/{id}/img_*.jpg | docs/*
+```
+
+Đổi path = mất link file đã upload — không tự ý thay đổi.
+
+### Async workflows (n8n)
+
+`/api/passport`, `/api/orders/yctd`, `/api/orders/contract`, `/api/translate` → gọi n8n webhook (fire-and-forget).  
+Kết quả đồng bộ lên Lark Bitable — Lark chỉ là bản sao, **Supabase là nguồn gốc**.
 
 ---
 
-## Data Architecture
+## Files nhạy cảm
 
-### Supabase Tables
+| File | Rủi ro nếu sai |
+|---|---|
+| `middleware.ts` | Mất auth toàn hệ thống |
+| `lib/auth-helpers.ts` | Lộ service role key |
+| `app/admin/layout.tsx` | Lộ admin portal |
+| `app/api/passport/route.ts` | Mất dữ liệu ứng viên |
+| `lib/types.ts` | Lỗi TypeScript dây chuyền |
 
-| Table | Key Columns | Notes |
-|-------|-------------|-------|
-| `agents` | `id, supabase_uid, role(admin/agent), full_name, short_name, avatar_url, labor_percentage` | Auth mapped via `supabase_uid = auth.uid()`. `labor_percentage` for multi-agent orders (0-100, manually set by admin) |
-| `companies` | `id, company_name, short_name, tax_code, legal_rep, legal_rep_title, address, phone, email, industry, business_reg_authority, business_reg_date, company_media(JSONB[]), avatar_url, video_url, doc_links(JSONB[]), deleted_at, en_company_name, en_legal_rep, en_address, en_title` | Soft delete via `deleted_at` |
-| `orders` | `id(ORD-xxx), company_id(FK→companies), company_name, job_type, job_type_en, total_labor, labor_missing, status, total_fee_vn, payment_status_vn, service_fee_per_person, agent_id, url_demand_letter, salary_usd, url_order, legal_status, meal, dormitory, recruitment_info` | FK: `orders_company_id_fkey` |
-| `candidates` | `id_ld, order_id, agent_id, full_name, pp_no, dob, pp_doi, pp_doe, pob, address, phone, visa_status, passport_link, video_link, photo_link, height_ft, weight_kg, pcc_link, health_cert_link, interview_status, created_at` | Agent can UPDATE own candidates. Delete only when no files + no pass/fail. |
-
-### Supabase Storage
-- **Bucket:** `agent-media`
-- **Paths:** `companies/{id}/img_*.jpg`, `companies/{id}/docs/*`, `candidates/{id_ld}/*`
-- All images compressed client-side before upload (max 1500px, JPEG 0.8)
-
-### Auth Flow
-- **Agent:** Login → `supabase.auth.signInWithPassword` → session check → dashboard
-- **Admin:** Same login → check `agents.role = 'admin'` via `supabase_uid` → redirect if not admin
+Bất kỳ thay đổi nào với các file trên → trình bày rõ sẽ sửa gì và vì sao trước khi bắt đầu.
 
 ---
 
-## Key Patterns (follow these)
+## Đọc thêm
 
-### Component Pattern
-- All components use `'use client'` directive
-- State: raw React hooks (`useState`, `useEffect`, `useCallback`) — no state library
-- Data fetching: direct Supabase client calls in `useCallback` + `useEffect`
-- Modals: fixed overlay divs with `backdrop-blur-sm`, mobile bottom-sheet (`items-end sm:items-center`, `rounded-t-3xl sm:rounded-2xl`, drag handle `w-10 h-1 bg-gray-300 rounded-full`)
-- Loading: `animate-pulse` skeleton divs
-- No form library, no UI component library, no `clsx`/`cn` utility
-
-### CRUD Pattern
-- **Create:** Duplicate check before insert (name + tax_code for companies)
-- **Read:** `supabase.from('table').select().is('deleted_at', null).order('created_at', { ascending: false })`
-- **Update:** Auto-save with debounce (1.5s) on company detail; manual save button elsewhere
-- **Delete:** Soft delete only (`deleted_at = new Date()`), remove Storage files, keep text data
-
-### Responsive Pattern
-- Mobile: card layouts (`md:hidden`)
-- Desktop: tables (`hidden md:block`)
-- Touch targets: `min-h-[44px] min-w-[44px]`
-- Sidebar: hamburger on mobile, fixed on desktop (`hidden md:flex w-56`)
-
-### Styling Tokens
-- Cards: `bg-white rounded-2xl shadow-sm border border-gray-100`
-- Buttons primary: `bg-blue-600 hover:bg-blue-700 text-white rounded-xl`
-- Inputs: `border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-400`
-- Status pills: `text-xs px-2 py-0.5 rounded-full font-medium` with semantic colors
-- Section headers: `text-sm font-semibold text-slate-700` in `px-4 py-3 border-b border-gray-50`
-
----
-
-## Conventions
-- Use `@/` path alias for imports
-- TypeScript strict mode — no `any` types in new code (existing `any` casts are acceptable)
-- Tailwind utility classes only — no custom CSS except `globals.css`
-- **Responsive design is mandatory** — test at 375px and 1280px
-- **Language rule:** Admin UI text is in **Vietnamese**. Data values from DB display as-is.
-- **UX advisory:** Proactively advise on UI/UX. Push back on suboptimal flows.
-- **Minimal-flow UX:** Prefer fewest taps/clicks. Avoid multi-step wizards.
-- **Sort order:** Lists default to newest first (`created_at DESC`)
-- **Admin-only delete:** Companies/orders can only be deleted by admin role
-
----
-
-## Rules (from past mistakes — must follow)
-
-### Process
-- **Don't execute before plan is approved.** DB migrations always need user confirmation first. Critical bug fixes (data loss) can run immediately but must notify first.
-- **Don't persist with failing approach ≥3 times.** Stop, benchmark alternatives quantitatively, pick highest scoring solution.
-- **DB-before-deploy rule:** Any feature that adds new DB columns MUST provide (1) the `ADD COLUMN IF NOT EXISTS` SQL, (2) a verification `SELECT` to confirm columns exist, and (3) `NOTIFY pgrst, 'reload schema';` — all in one block to run in Supabase SQL Editor **before** merging to main. Never commit code that references columns not yet confirmed in production DB.
-- **Schema cache error diagnosis:** When seeing `Could not find the 'X' column of 'Y' in the schema cache` in production, the root cause is ALWAYS: column exists in code/`lib/types.ts` but NOT in the DB. Immediate fix: `ALTER TABLE Y ADD COLUMN IF NOT EXISTS X TEXT; NOTIFY pgrst, 'reload schema';` — no redeploy needed. Before fixing, also grep for ALL other columns in the same new "batch" (e.g., `en_*`) and add them all at once to avoid recurring errors.
-
-### Data Safety
-- **Data flow principle:** Web ⟺ Supabase is the default. Lark sync (if any): Supabase ⟺ N8N ⟺ Lark. Never let Lark be the primary data source — Supabase must always receive data before Lark.
-- **Verify before writing:** Check FK constraints and column existence in DB before writing join queries or inserts. Test with REST API curl after migrations.
-- **Duplicate check:** Every create form must check for duplicates before insert (e.g., company name + tax_code).
-- **Soft delete only:** Use `deleted_at` column. Keep text data, remove Storage files (images/docs).
-- **CRUD complete:** All data entities must have Create / Read / Update / Delete unless there's a specific reason not to.
-
-### Code Quality
-- **DB-related code must be tested end-to-end.** After coding any feature that reads/writes to DB, verify it actually works against the real database (query check, UI check, data flow) before marking done.
-- **Run `npx tsc --noEmit`** immediately after every edit session — must be 0 errors.
-- **Check for dangling code** after large edits (read end of file to confirm no orphaned code).
-- **UI text vs data value:** Hard-coded labels/buttons/headings = follow language rule. DB values (status, names) = display as-is, never translate.
-- **Never define components inside render:** Defining a component (function) inside another component's render body causes React to remount it on every re-render, breaking input focus. Move to module scope or use inline JSX instead.
-- **Responsive is mandatory for all UI work:** Before coding any new page or UI-related task, ensure the design works on mobile (375px) and desktop (1280px). Use mobile cards + desktop tables pattern. Touch targets must be `min-h-[44px] min-w-[44px]`.
-- **No console.log in production code.** Use `console.error` only at API route boundaries. Never log PII (names, passport numbers, DOB).
-
----
-
-## Environment Variables
-See `.env.example`. Key vars:
-- `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` — Supabase (browser-safe)
-- `SUPABASE_SERVICE_ROLE_KEY` — Service role key for server-side API routes (bypass RLS, **server-only**)
-- `OCR_SPACE_API_KEY` — OCR.space API
-- `OPENAI_API_KEY` — GPT-4o-mini for OCR field extraction
-- `NEXT_PUBLIC_N8N_UPLOAD_URL` — n8n webhook for Lark passport sync
-- `NEXT_PUBLIC_N8N_VIDEO_UPDATE_URL` — n8n webhook for Lark video update
+| Chủ đề | File |
+|---|---|
+| Architecture đầy đủ, API routes, known risks | `docs/architecture.md` |
+| Auth patterns chi tiết, env vars, storage | `docs/auth-and-data.md` |
+| UI patterns, responsive, Tailwind conventions | `docs/ui-patterns.md` |
+| Quy tắc code chi tiết (process, data safety, security) | `docs/coding-rules.md` |
+| Hướng dẫn làm việc hằng ngày, workflow đa agent | `.claude/CLAUDE.md` |
