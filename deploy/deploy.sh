@@ -9,6 +9,7 @@ cd /var/www/portal
 
 echo ""
 echo "[1/5] Pull code mới nhất từ main..."
+git reset --hard HEAD
 git pull origin main
 echo "  -> Pull thành công."
 
