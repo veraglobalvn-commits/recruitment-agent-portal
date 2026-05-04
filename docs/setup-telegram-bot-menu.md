@@ -18,10 +18,10 @@
 4. BotFather sẽ hỏi gửi danh sách commands theo format `command - description` (mỗi dòng 1 lệnh, KHÔNG có `/` ở đầu). Paste nguyên khối sau:
 
    ```
-   add - Start adding a new candidate
-   cancel - Cancel current action and clear session
-   reset - Same as cancel — clear session immediately
-   help - Show command menu
+   add - Add new candidate • নতুন প্রার্থী যোগ করুন
+   cancel - Cancel & clear session • বাতিল করুন
+   reset - Reset session • রিসেট করুন
+   help - Show all commands • সব কমান্ড দেখুন
    ```
 
 5. BotFather reply `Success! Command list updated.` → done.
@@ -29,7 +29,7 @@
 ## Verify
 
 - Mở chat với bot trong Telegram
-- Gõ `/` → thấy dropdown 4 lệnh kèm mô tả
+- Gõ `/` → thấy dropdown 4 lệnh kèm mô tả song ngữ
 - Bấm 1 lệnh → tự fill vào input box
 
 ## Update khi thêm/xóa lệnh
