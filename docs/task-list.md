@@ -168,12 +168,10 @@
   - **Bug đang fix**: auto-open edit modal không hoạt động — đã patch (250ms delay trong useEffect `[autoOpenEdit]`), cần UAT xác nhận
   - Cần user test: mở link `/order/<id>?candidate=<id_ld>` từ Telegram → xác nhận modal tự mở
 
-- **[T-2A-DOC-007]** Setup BotFather menu cho bot
+- **[T-2A-DOC-007]** Setup BotFather menu cho bot — **✅ DONE** (2026-05-02)
   - Type: Doc / Config
-  - Agent: User thực thi (5 phút trong Telegram, không cần code)
-  - Status: Ready (xem `docs/setup-telegram-bot-menu.md`)
-  - Description: Đăng ký 4 commands với BotFather (`/setcommands`) để Telegram client tự suggest menu khi user gõ `/`. Cải thiện UX, không cần code workflow.
-  - Acceptance: User gõ `/` trong chat bot → thấy dropdown menu với 4 lệnh (`/add`, `/cancel`, `/reset`, `/help`)
+  - Status: **completed** — user đã setup qua BotFather, menu song ngữ EN + Bengali
+  - Commands: `/add`, `/cancel`, `/reset`, `/help` với description tiếng Anh + gợi ý Bengali
 
 ---
 
