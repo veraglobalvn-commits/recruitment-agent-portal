@@ -6,6 +6,45 @@
 
 ---
 
+## ⚠️ UAT Pending — Nhắc user test mỗi đầu session
+
+> AI agent đọc section này → nhắc user test trước khi làm việc mới nếu chưa có dấu ✅
+
+### [UAT-001] Video Notification → Telegram Group (fix 2026-05-02)
+*Root cause đã fix: `NEXT_PUBLIC_N8N_VIDEO_NOTIFY_URL` thiếu + `VIDEO_UPDATE_URL` sai giá trị → rebuilt*
+
+- [ ] **TC1** — Admin upload video từ `/admin/candidates` → Telegram group nhận tin nhắn có link video + tên ứng viên
+- [ ] **TC2** — Agent upload video từ `/order/[id]` → Telegram group nhận tin nhắn (cùng workflow)
+- [ ] **TC3** — Sau khi nhận tin nhắn group, bấm nút **Pass / Fail** inline keyboard → candidate `interview_status` cập nhật trong DB, nút disable
+- [ ] **TC4** — Edit candidate info (tên, ngày sinh...) → n8n `update-candidate` webhook được gọi (kiểm tra n8n executions của workflow `[Portal API] Update Candidate`)
+
+### [UAT-002] N8N-002 Idle Ping v2 (fix 2026-05-02)
+*Root cause đã fix: HTTP nodes dùng `$env.SUPABASE_*` undefined → thay native Supabase + Telegram nodes*
+
+- [ ] **TC1** — Gõ `/add` trong bot, chọn order, để idle **10 phút** → nhận tin "Still there? Type /cancel..."
+- [ ] **TC2** — Gõ `/add`, để idle **30 phút** → nhận tin "Session expired..." + row trong `bot_sessions` bị xóa (verify Supabase)
+- [ ] **TC3** — Không có session nào active → workflow chạy mỗi phút, không có lỗi, không gửi gì (kiểm tra n8n executions: 0 items sau Supabase Get = silent stop bình thường)
+
+### [UAT-003] Bot Wizard — Full flow (regression)
+*Sau các lần fix bot, cần test lại toàn bộ happy path*
+
+- [ ] **TC1** — `/add` → chọn order → chụp/gửi ảnh passport → OCR trả về đúng tên + ngày sinh → hiện checklist 6 mục
+- [ ] **TC2** — Tick đủ 6 ô checklist → nút Confirm xuất hiện → bấm Confirm → bước tiếp
+- [ ] **TC3** — Upload avatar → bot nhận ảnh → tiến đến bước Finalize
+- [ ] **TC4** — `/finalize` → bot gửi summary (ảnh avatar + tên + order + link portal) đúng định dạng
+- [ ] **TC5** — Upload video **>20MB** → bot nhận file (không báo lỗi "too large") → video_link lưu vào DB
+- [ ] **TC6** — `/reset` giữa chừng → session xóa → bot về trạng thái chờ lệnh mới
+- [ ] **TC7** — `/help` → bot trả về danh sách 4 lệnh
+
+### [UAT-004] Deep-link từ Telegram → Portal (T-2A-UI-008)
+- [ ] **TC1** — Click link finalize từ Telegram (format `/order/[id]?candidate=[id_ld]`) → trang load đúng, candidate được highlight + scroll vào view
+- [ ] **TC2** — Edit modal **tự mở** sau ~250ms (không cần click tay)
+
+### [UAT-005] BotFather Menu
+- [ ] **TC1** — Gõ `/` trong chat bot → thấy dropdown 4 lệnh với description song ngữ Anh + Bengali
+
+---
+
 ## Active Tasks
 
 ### Phase 3A — Admin Portal Enhancements
