@@ -28,15 +28,20 @@
   - Confidence min: 85% (sau khi đã có architect-spec)
   - **⚠️ BẮT BUỘC**: n8n version đã xác nhận 1.110.1. Test import workflow JSON trước khi báo done.
 
-- **[T-2A-N8N-002]** Build n8n workflow: Wizard Idle Ping (cron) — **✅ DONE**
+- **[T-2A-N8N-002]** Build n8n workflow: Wizard Idle Ping (cron) — **✅ DONE** (v2 fix 2026-05-02)
   - Type: Feature
   - Agent: **Claude PM**
-  - Status: **completed** — 2026-05-02, file `n8n-workflows/T-2A-N8N-002-idle-ping.json`
+  - Status: **completed** — v2 fix 2026-05-02, file `n8n-workflows/T-2A-N8N-002-idle-ping.json`
   - Description: Cron mỗi 1 phút — ping sessions idle >10 phút, xóa sessions hết hạn >30 phút
-  - Implementation: Schedule Trigger → Code: Compute Times → HTTP: Get Active Sessions → Code: Classify Sessions → IF: Is Expired → (expired) Send + Delete / (idle) Send Ping
+  - **v1 bug:** HTTP nodes dùng `$env.SUPABASE_ANON_KEY` / `$env.SUPABASE_SERVICE_ROLE_KEY` → `[undefined]` → 401 "No API key" → `neverError: true` nuốt lỗi → workflow silent fail
+  - **v2 fix:** Thay toàn bộ HTTP nodes bằng native nodes:
+    - `HTTP: Get Active Sessions` → `Supabase: Get Active Sessions` (native, dùng credential "Supabase account")
+    - `HTTP: Send Expired TG` → `Telegram: Send Expired` (native, dùng credential "Telegram Bot")
+    - `HTTP: Delete Session` → `Supabase: Delete Session` (native)
+    - `HTTP: Send Idle Ping TG` → `Telegram: Send Idle Ping` (native)
+    - `Code: Classify Sessions`: sửa từ array-loop sang per-item (native Supabase getAll trả 1 item/row)
   - Column names đúng: `current_step`, `last_activity_at`
-  - Dùng local bot API: `http://telegram-bot-api:8081` (không hardcode token)
-  - **Cần user import vào n8n và activate**
+  - **Cần user import v2 vào n8n, verify credentials, activate — xóa v1 cũ**
 
 - **[T-2A-VPS-003]** Setup VPS media directory + Nginx config
   - Type: Infra
@@ -90,9 +95,10 @@
   - Finalize summary: sendPhoto + caption (avatar + name + order + link)
   - Commit: `81af926`
 
-- **[T-2A-VPS-003]** Setup VPS media directory + Nginx — **⚠️ PENDING USER ACTION**
-  - Nginx chưa serve `/media/` → passport link vẫn 404
-  - Việc cần làm: chạy `scripts/setup-vps-media.sh` + add `scripts/nginx-media.conf` vào nginx
+- **[T-2A-VPS-003]** Setup VPS media directory + Nginx — **✅ DONE** (2026-05-02)
+  - `/var/www/media/candidates` đã tạo, owner root, chmod 755
+  - Nginx serve `/media/` → `/var/www/media/` tại `portal.veraglobal.vn.ssl.conf`
+  - Verify: `curl https://portal.veraglobal.vn/media/` → 403 ✓
 
 ---
 
