@@ -6,6 +6,30 @@
 
 ---
 
+## 2026-05-04 (session 4 — bot incident + UAT + planning)
+
+### [2026-05-04] Bot wizard "An error occurred" — TELEGRAM_BRIDGE_SECRET mismatch
+- **Quyết định:** Sync `TELEGRAM_BRIDGE_SECRET` giữa n8n và portal — luôn dùng giá trị từ portal `.env.local` làm chuẩn.
+- **Lý do (điều tra thực tế):**
+  1. Tất cả n8n executions đều `success` → lỗi nằm trong flow, không phải n8n crash
+  2. Verify portal API thủ công → trả `401 BAD_SIGNATURE`
+  3. Compare 2 secrets: n8n=`d5895243...`, portal=`42b777e8...` → **mismatch**
+  4. n8n sign HMAC bằng secret sai → portal reject → wizard catch → gửi "An error occurred"
+- **HMAC protocol đúng (không thay đổi):** `HMAC-SHA256(secret, "${timestamp}.${rawBody}")`, headers `x-bridge-timestamp` + `x-bridge-signature`
+- **Fix:** Cập nhật `/var/www/portal/deploy/n8n/.env`, `docker compose up -d` — không cần rebuild portal
+- **Bài học:** Khi rebuild portal (thay đổi `.env.local`), phải verify `TELEGRAM_BRIDGE_SECRET` khớp với n8n. Thêm vào checklist deploy.
+- **Commit:** Chỉ thay đổi trên VPS, không có code thay đổi cần commit.
+
+### [2026-05-04] Video notification không hoạt động — 2 env vars sai trong portal
+- **Quyết định:** Fix `NEXT_PUBLIC_N8N_VIDEO_NOTIFY_URL` (thiếu) và `NEXT_PUBLIC_N8N_VIDEO_UPDATE_URL` (value=key name) trong VPS `.env.local`. Rebuild portal.
+- **Lý do:** Portal code check `if (notifyUrl)` → falsy → không gọi webhook → n8n Video Notification workflow không có execution. PCC Daily Report (cron) vẫn chạy bình thường → vấn đề không liên quan đến bot migration hay workflow.
+- **Webhook URLs xác nhận từ n8n DB:**
+  - `NEXT_PUBLIC_N8N_VIDEO_NOTIFY_URL` = `https://n8n.veraglobal.vn/webhook/telegram-video-notify`
+  - `NEXT_PUBLIC_N8N_VIDEO_UPDATE_URL` = `https://n8n.veraglobal.vn/webhook/update-candidate`
+- **Bài học:** `NEXT_PUBLIC_*` vars được bake vào bundle lúc build → sai value không báo lỗi runtime.
+
+---
+
 ## 2026-05-02 (session 3 — T-ADM-001 planning)
 
 ### [T-ADM-001] assigned_labor_number tự động track theo thực tế khi move ứng viên

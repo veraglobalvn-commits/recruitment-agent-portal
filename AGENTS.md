@@ -32,6 +32,15 @@
 - Verify app process listening: `ss -ltnp | grep :3001`
 - Verify portal: `curl -s -o /dev/null -w "portal=%{http_code}\n" https://portal.veraglobal.vn/`
 
+### Checklist sau mỗi lần rebuild portal (BẮT BUỘC)
+Sau khi thay đổi `.env.local` và rebuild, chạy lệnh sau để verify secrets khớp:
+```bash
+N8N=$(docker exec n8n env | grep TELEGRAM_BRIDGE_SECRET | cut -d= -f2)
+PORTAL=$(grep TELEGRAM_BRIDGE_SECRET /var/www/portal/.env.local | cut -d= -f2)
+[ "$N8N" = "$PORTAL" ] && echo "OK: secrets match" || echo "MISMATCH: fix n8n .env then docker compose up -d"
+```
+Nếu MISMATCH: `sed -i "s/TELEGRAM_BRIDGE_SECRET=.*/TELEGRAM_BRIDGE_SECRET=$PORTAL/" /var/www/portal/deploy/n8n/.env && cd /var/www/portal/deploy/n8n && docker compose up -d`
+
 ### Session notes (2026-05-02) — incident recovery + bot UX fixes
 
 #### Incident: n8n data loss + recovery (2026-05-02)
@@ -109,6 +118,24 @@
 ### Database schema fact discovered
 - In production `candidates` table, soft-delete columns expected by some app paths were inconsistent with runtime assumptions during this session.
 - For telegram candidate API path, avoid introducing schema assumptions without checking live DB first.
+
+### Bot wizard "An error occurred" — incident 2026-05-04
+
+**Triệu chứng:** Bot trả "An error occurred. Please try again or type /cancel." mọi lúc.
+**Nguyên nhân:** `TELEGRAM_BRIDGE_SECRET` mismatch giữa n8n và portal:
+  - n8n `.env` có: `d5895243...` (64 ký tự)
+  - Portal `.env.local` có: `42b777e8...` (64 ký tự)
+  - n8n ký HMAC với secret sai → portal trả 401 `BAD_SIGNATURE` → wizard catch lỗi → gửi error message
+**Fix:** Update `TELEGRAM_BRIDGE_SECRET` trong `/var/www/portal/deploy/n8n/.env` = giá trị của portal, rồi `docker compose up -d`
+**Verify lệnh:**
+  ```bash
+  # So sánh 2 bên
+  docker exec n8n env | grep TELEGRAM_BRIDGE_SECRET
+  grep TELEGRAM_BRIDGE_SECRET /var/www/portal/.env.local
+  # Phải giống nhau hoàn toàn
+  ```
+**HMAC format (đúng, không đổi):** `HMAC-SHA256(secret, "${timestamp}.${rawBody}")` — headers: `x-bridge-timestamp` + `x-bridge-signature`
+**Bài học:** Khi thay đổi `.env.local` portal và rebuild, luôn kiểm tra secret khớp với n8n.
 
 ### Current rollback/stable reference used in this session
 - Stable runtime commit used for recovery: `3e31a57`.
