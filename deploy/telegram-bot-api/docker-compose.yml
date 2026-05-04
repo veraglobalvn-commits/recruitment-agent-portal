@@ -16,17 +16,19 @@ services:
     environment:
       TELEGRAM_API_ID: ${TELEGRAM_API_ID}
       TELEGRAM_API_HASH: ${TELEGRAM_API_HASH}
-      # KHÔNG set TELEGRAM_LOCAL=1: giữ default mode (file_path relative)
-      # → HTTP pattern y hệt cloud, chỉ đổi base URL trong workflow
-      # Nếu sau này muốn tối ưu (truy cập file qua filesystem thay vì HTTP) → bật flag này
-      # và update workflow parse file_path absolute.
+      # Local mode: bypass Telegram Cloud 20MB getFile limit
+      # file_path từ getFile sẽ là absolute (/var/lib/telegram-bot-api/TOKEN/...)
+      # workflow cần normalize về relative để tg-file-server serve đúng
+      TELEGRAM_LOCAL: "1"
       TELEGRAM_STAT: "0"
       TELEGRAM_VERBOSITY: "1"
     volumes:
       # Persistent storage cho file cache
       - tg-bot-api-data:/var/lib/telegram-bot-api
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:8081/"]
+      # Server trả 404 cho / nhưng vẫn đang chạy → exit code 8 (wget 4xx)
+      # Chỉ fail khi không connect được (exit code 4 = network error)
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:8081/ 2>&1; test $? -ne 4"]
       interval: 30s
       timeout: 5s
       retries: 3

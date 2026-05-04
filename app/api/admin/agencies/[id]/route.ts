@@ -85,5 +85,16 @@ export async function DELETE(
     .maybeSingle();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (!data) return NextResponse.json({ error: 'Không tìm thấy agency' }, { status: 404 });
+
+  const { error: usersErr } = await auth.supabase
+    .from('users')
+    .update({ status: 'inactive' })
+    .eq('agency_id', id);
+
+  if (usersErr) {
+    console.error('[agencies.delete] Failed to deactivate users:', usersErr.message);
+  }
+
   return NextResponse.json({ agency: data });
 }

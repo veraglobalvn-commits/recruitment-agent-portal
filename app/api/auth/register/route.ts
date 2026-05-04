@@ -42,13 +42,6 @@ export async function POST(req: NextRequest) {
     const adminClient = getAdminClient();
     const normalizedEmail = email.trim().toLowerCase();
 
-    // Check duplicate email via auth (admin list users)
-    const { data: existingAuth } = await adminClient.auth.admin.listUsers();
-    const emailExists = existingAuth?.users?.some(u => u.email === normalizedEmail);
-    if (emailExists) {
-      return NextResponse.json({ error: 'Email đã được đăng ký, vui lòng đăng nhập' }, { status: 409 });
-    }
-
     const { data: authData, error: authErr } = await adminClient.auth.admin.createUser({
       email: normalizedEmail,
       password,
@@ -69,29 +62,42 @@ export async function POST(req: NextRequest) {
     // Ensure unique ID
     let finalId = generatedId;
     let suffix = 1;
-    while (true) {
+    const MAX_ID_ATTEMPTS = 10;
+    while (suffix <= MAX_ID_ATTEMPTS) {
       const { data: existing } = await adminClient
         .from('users')
         .select('id')
         .ilike('id', finalId)
         .maybeSingle();
       if (!existing) break;
+      if (suffix === MAX_ID_ATTEMPTS) {
+        await adminClient.auth.admin.deleteUser(uid).catch(e => console.error('[register] Rollback failed:', e));
+        return NextResponse.json({ error: 'Không thể tạo ID người dùng' }, { status: 500 });
+      }
       finalId = `${generatedId}${suffix}`;
       suffix++;
     }
 
     // Step 1: Create agency row first (FK agencies.id must exist before users.agency_id)
-    const { error: agencyErr } = await adminClient
-      .from('agencies')
-      .insert({
-        id: finalId,
-        company_name: company_name?.trim() || null,
-        status: 'active',
-      });
+    let agencyInsertErr: { code?: string; message: string } | null = null;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const { error } = await adminClient
+        .from('agencies')
+        .insert({
+          id: finalId,
+          company_name: company_name?.trim() || null,
+          status: 'active',
+        });
+      agencyInsertErr = error;
+      if (!error) break;
+      if (error.code !== '23505') break;
+      finalId = `${generatedId}${suffix}`;
+      suffix++;
+    }
 
-    if (agencyErr) {
-      await adminClient.auth.admin.deleteUser(uid);
-      return NextResponse.json({ error: `Tạo agency thất bại: ${agencyErr.message}` }, { status: 500 });
+    if (agencyInsertErr) {
+      await adminClient.auth.admin.deleteUser(uid).catch(e => console.error('[register] Rollback failed:', e));
+      return NextResponse.json({ error: `Tạo agency thất bại: ${agencyInsertErr.message}` }, { status: 500 });
     }
 
     // Step 2: Create user row with agency_id pointing to the agency just created
@@ -111,8 +117,11 @@ export async function POST(req: NextRequest) {
 
     if (dbErr) {
       // Rollback: delete agency then auth user
-      await adminClient.from('agencies').delete().eq('id', finalId);
-      await adminClient.auth.admin.deleteUser(uid);
+      await adminClient.from('agencies').delete().eq('id', finalId).then(
+        ({ error: rbErr }) => { if (rbErr) console.error('[register] Rollback failed:', rbErr); },
+        (e: unknown) => console.error('[register] Rollback failed:', e),
+      );
+      await adminClient.auth.admin.deleteUser(uid).catch((e: unknown) => console.error('[register] Rollback failed:', e));
       return NextResponse.json({ error: `Tạo hồ sơ thất bại: ${dbErr.message}` }, { status: 500 });
     }
 

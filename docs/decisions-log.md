@@ -172,10 +172,10 @@
 - **Lý do:** Volume `n8n_n8n_data` có cấu trúc `(root)/.n8n/config` (từ recovery cũ mount tại `/home/node`). Khi mount tại `/home/node/.n8n`, n8n đọc `(root)/config` — file này có encryption key khác → crash với "Mismatching encryption keys".
 - **Ảnh hưởng:** `docker compose up -d` (không force-recreate) đủ để apply thay đổi này an toàn.
 
-### [2026-05-02] telegram-bot-api phải ở tg_net để n8n kết nối được
-- **Quyết định:** Manually connect `telegram-bot-api` vào `tg_net` sau mỗi lần recreate: `docker network connect tg_net telegram-bot-api`.
-- **Lý do:** Container `telegram-bot-api` mặc định chỉ ở network của compose project riêng. n8n (trong `tg_net`) không resolve được hostname `telegram-bot-api` → workflow activation fail.
-- **Ảnh hưởng:** Cần persist bằng cách thêm `tg_net` vào `deploy/telegram-bot-api/docker-compose.yml` (việc này chưa làm).
+### [2026-05-02] telegram-bot-api + n8n kết nối qua n8n_default — tg_net không cần thiết
+- **Quyết định:** `deploy/telegram-bot-api/docker-compose.yml` đặt `telegram-bot-api` (và `tg-file-server`) vào network `n8n_default` (external). Commit `f7e521a` đồng thời add n8n vào `n8n_default` → cả 2 service cùng network, resolve hostname được.
+- **Lý do:** Gap ban đầu ("cần connect tg_net") đã được resolve theo cách khác: chia sẻ `n8n_default` thay vì `tg_net`. n8n gọi `http://telegram-bot-api:8081` qua n8n_default — hoạt động ổn định.
+- **Ảnh hưởng:** Không cần manual `docker network connect tg_net telegram-bot-api` nữa. Việc add `tg_net` vào telegram-bot-api compose không cần làm.
 
 ### [2026-05-02] Portal UI — telegram_user_id thiếu trong preloaded agent data
 - **Quyết định:** Thêm `telegram_user_id` vào SELECT query và `preloadedAgentRef` ở 3 đường login trong `app/page.tsx`.
@@ -189,10 +189,12 @@
 
 ---
 
-### [2026-05-02] telegram-bot-api bắt buộc dùng --local mode để bypass 20MB limit
-- **Quyết định:** Bật `TELEGRAM_LOCAL: "1"` trong docker-compose telegram-bot-api. Đảo ngược quyết định cũ "KHÔNG set TELEGRAM_LOCAL=1".
-- **Lý do:** Default mode chỉ proxy qua Telegram Cloud → vẫn bị giới hạn 20MB getFile. `--local` mode mới thực sự lưu file local và bypass limit. Workflow đã có sẵn code normalize absolute path.
-- **Ảnh hưởng:** `file_path` từ getFile là absolute (`/var/lib/telegram-bot-api/TOKEN/...`), workflow normalize về relative để file-server serve đúng.
+### [2026-05-02] TELEGRAM_LOCAL=1 — confirmed active, synced vào compose file
+- **Quyết định:** Bật `TELEGRAM_LOCAL: "1"` trong `docker-compose.yml` telegram-bot-api để bypass giới hạn 20MB getFile.
+- **Lý do:** Xác nhận qua `docker inspect`: container đang chạy với `TELEGRAM_LOCAL=1` (set thủ công trong session 2026-05-02, không qua compose file). Nếu container bị recreate mà compose file không có var này → mất local mode.
+- **Fix (2026-05-02):** Sync vào `deploy/telegram-bot-api/docker-compose.yml` (git + VPS). Commit `91059cd`.
+- **Lưu ý kỹ thuật:** `file_path` từ getFile ở local mode là absolute path (`/var/lib/telegram-bot-api/TOKEN/...`). Workflow normalize về relative trước khi file-server serve.
+- **Healthcheck:** Fix cùng commit — healthcheck cũ test `wget /` → 404 → "unhealthy" giả. Fix: check exit code ≠ 4 (connection refused) thay vì exit 0 (200 OK).
 
 ### [2026-05-02] n8n phải ở 2 networks: tg_net + n8n_default
 - **Quyết định:** n8n container join cả `tg_net` (để gọi telegram-bot-api) VÀ `n8n_default` (để có internet/DNS).
