@@ -467,9 +467,10 @@ async function handleFinalize(body: FinalizeInput) {
 
   // 4. Fetch group notification metadata in parallel
   const [agentRes, orderRes, countRes] = await Promise.all([
+    // Bug fix: agent_name is null — use short_name || full_name
     supabase
       .from('users')
-      .select('agent_name')
+      .select('short_name, full_name')
       .eq('id', callerAgentId)
       .maybeSingle(),
     supabase
@@ -477,20 +478,24 @@ async function handleFinalize(body: FinalizeInput) {
       .select('total_labor')
       .eq('id', orderId)
       .maybeSingle(),
+    // Bug fix: use live candidate count, not assigned_labor_number quota field
     supabase
-      .from('order_agents')
-      .select('assigned_labor_number')
+      .from('candidates')
+      .select('id_ld', { count: 'exact', head: true })
       .eq('order_id', orderId)
       .eq('agent_id', callerAgentId)
-      .maybeSingle(),
+      .is('deleted_at', null),
   ]);
+
+  const agentDisplayName =
+    agentRes.data?.short_name || agentRes.data?.full_name || null;
 
   return NextResponse.json({
     candidate_id: body.candidate_id,
     web_url: `/order/${orderId}?candidate=${body.candidate_id}`,
-    agent_name: agentRes.data?.agent_name ?? null,
+    agent_name: agentDisplayName,
     total_labor: orderRes.data?.total_labor ?? null,
-    assigned_labor_number: countRes.data?.assigned_labor_number ?? null,
+    assigned_labor_number: countRes.count ?? null,
   });
 }
 
