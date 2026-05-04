@@ -41,6 +41,29 @@ PORTAL=$(grep TELEGRAM_BRIDGE_SECRET /var/www/portal/.env.local | cut -d= -f2)
 ```
 Nếu MISMATCH: `sed -i "s/TELEGRAM_BRIDGE_SECRET=.*/TELEGRAM_BRIDGE_SECRET=$PORTAL/" /var/www/portal/deploy/n8n/.env && cd /var/www/portal/deploy/n8n && docker compose up -d`
 
+### ⚠️ CRITICAL — docker compose up -d n8n (BẮT BUỘC ĐỌC TRƯỚC KHI CHẠY)
+
+**Bất kỳ lúc nào chạy `docker compose up -d` cho n8n** (dù chỉ để thêm 1 env var mới), container sẽ bị **RECREATE** và load lại toàn bộ từ file `.env`. Nếu file `.env` có secret cũ/sai → bot lỗi ngay.
+
+**LUÔN chạy 2 bước này TRƯỚC `docker compose up -d`:**
+```bash
+# Bước 1: Fix TELEGRAM_BRIDGE_SECRET trong .env file (không phải trong container)
+PORTAL=$(grep TELEGRAM_BRIDGE_SECRET /var/www/portal/.env.local | cut -d= -f2)
+sed -i "s/TELEGRAM_BRIDGE_SECRET=.*/TELEGRAM_BRIDGE_SECRET=$PORTAL/" /var/www/portal/deploy/n8n/.env
+
+# Bước 2: Verify trước khi up
+grep TELEGRAM_BRIDGE_SECRET /var/www/portal/deploy/n8n/.env
+```
+
+**Sau `docker compose up -d`, LUÔN verify lại:**
+```bash
+N8N=$(docker exec n8n env | grep TELEGRAM_BRIDGE_SECRET | cut -d= -f2)
+PORTAL=$(grep TELEGRAM_BRIDGE_SECRET /var/www/portal/.env.local | cut -d= -f2)
+[ "$N8N" = "$PORTAL" ] && echo "OK" || echo "MISMATCH — bot sẽ lỗi!"
+```
+
+**Lý do lỗi hay lặp lại:** Các lần fix trước chỉ sửa secret trong container đang chạy (qua env override), không ghi vào file `.env`. Mỗi lần recreate container là mất fix đó. Fix đúng là phải `sed -i` vào file `.env` trước khi `docker compose up -d`. (Incident 2026-05-04, 2026-05-05)
+
 ### Session notes (2026-05-02) — incident recovery + bot UX fixes
 
 #### Incident: n8n data loss + recovery (2026-05-02)
