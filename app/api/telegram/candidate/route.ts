@@ -479,12 +479,12 @@ async function handleFinalize(body: FinalizeInput) {
       .eq('id', orderId)
       .maybeSingle(),
     // Bug fix: use live candidate count, not assigned_labor_number quota field
+    // Note: deleted_at column does not exist in production candidates table
     supabase
       .from('candidates')
       .select('id_ld', { count: 'exact', head: true })
       .eq('order_id', orderId)
-      .eq('agent_id', callerAgentId)
-      .is('deleted_at', null),
+      .eq('agent_id', callerAgentId),
   ]);
 
   const agentDisplayName =
