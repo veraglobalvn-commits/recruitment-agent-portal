@@ -188,7 +188,7 @@ export default function AdminDashboard() {
           { label: 'Chỉ tiêu lao động', value: data.totalLaborTarget, sub: `${data.orders.length} đơn hàng`, color: 'text-slate-800' },
           { label: 'Đã trúng tuyển', value: data.totalPassed, sub: 'qua phỏng vấn', color: 'text-green-600' },
           { label: 'Còn thiếu', value: totalMissing, sub: 'để hoàn thành', color: 'text-red-500' },
-          { label: 'Doanh thu dự kiến', value: fmtVndShort(data.totalRevenue) + ' ₫', sub: 'phí dịch vụ VN (sau VAT 8%)', color: 'text-blue-600', isStr: true },
+          { label: 'Doanh thu dự kiến', value: fmtVndShort(data.totalRevenue) + ' ₫', sub: 'sau VAT 8%', color: 'text-blue-600', isStr: true },
         ].map(({ label, value, sub, color, isStr }) => (
           <div key={label} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
             <p className="text-xs text-gray-500 leading-tight">{label}</p>
@@ -296,9 +296,9 @@ export default function AdminDashboard() {
                     {o.labor_missing ? <span className="text-red-400 text-xs font-normal"> (-{o.labor_missing})</span> : null}
                   </p>
                 </div>
-                <div>
+                <div className="overflow-hidden">
                   <p className="text-xs text-gray-400">Phí DV</p>
-                  <p className="text-sm font-bold text-slate-700">{fmtVndShort(o.total_fee_vn)} ₫</p>
+                  <p className="text-sm font-bold text-slate-700 truncate">{fmtVndShort(o.total_fee_vn)} ₫</p>
                 </div>
                 <div>
                   <p className="text-xs text-gray-400">Thanh toán</p>

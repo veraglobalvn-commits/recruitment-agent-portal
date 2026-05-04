@@ -82,7 +82,9 @@ export default function CandidateCard({
 
   useEffect(() => {
     if (!autoOpenEdit) return;
-    setEditing(true);
+    // Delay to let scrollIntoView complete before opening modal
+    const t = setTimeout(() => setEditing(true), 250);
+    return () => clearTimeout(t);
   }, [autoOpenEdit]);
 
   const handleConfirm = () => {
@@ -370,34 +372,43 @@ export default function CandidateCard({
       {/* Doc Buttons: Video, Passport, PCC, Health Cert */}
       <div className="px-4 pb-4 space-y-2">
         <div className="flex flex-wrap gap-2">
-          {/* Video - special handling */}
-          {candidate.video_link ? (
-            <button
-              onClick={() => {
-                onVideoViewed?.();
-                if (onVideoPlay) {
-                  onVideoPlay(candidate.video_link!);
-                } else {
-                  window.open(candidate.video_link!, '_blank', 'noopener,noreferrer');
-                }
-              }}
-              className={`text-xs px-3 py-2 rounded-lg hover:bg-green-200 min-h-[44px] flex items-center font-medium ${
-                isNewVideo ? 'bg-yellow-100 text-yellow-700 animate-pulse' : 'bg-green-100 text-green-700'
-              }`}
-            >
-              ▶ Video
-            </button>
-          ) : isVideoUploading ? (
-            <button disabled className="text-xs bg-yellow-100 text-yellow-600 px-3 py-2 rounded-lg min-h-[44px] flex items-center gap-1 cursor-not-allowed">
-              <span className="inline-block w-3 h-3 border-2 border-yellow-500 border-t-transparent rounded-full animate-spin" />
-              Video
-            </button>
-          ) : (
-            <button onClick={() => onVideoUploadClick(candidate.id_ld)}
-              className="text-xs bg-red-100 text-red-600 px-3 py-2 rounded-lg hover:bg-red-200 min-h-[44px] flex items-center gap-1 font-medium">
-              ▶ Video
-            </button>
-          )}
+          {/* Video - multi-video support */}
+          {(() => {
+            const urls = (candidate.video_links && candidate.video_links.length > 0)
+              ? candidate.video_links
+              : (candidate.video_link ? [candidate.video_link] : []);
+            if (urls.length > 0) {
+              return urls.map((url, i) => (
+                <button
+                  key={i}
+                  onClick={() => {
+                    if (i === 0) onVideoViewed?.();
+                    if (onVideoPlay) onVideoPlay(url);
+                    else window.open(url, '_blank', 'noopener,noreferrer');
+                  }}
+                  className={`text-xs px-3 py-2 rounded-lg hover:bg-green-200 min-h-[44px] flex items-center font-medium ${
+                    i === 0 && isNewVideo ? 'bg-yellow-100 text-yellow-700 animate-pulse' : 'bg-green-100 text-green-700'
+                  }`}
+                >
+                  ▶ {urls.length > 1 ? `Video ${i + 1}` : 'Video'}
+                </button>
+              ));
+            }
+            if (isVideoUploading) {
+              return (
+                <button disabled className="text-xs bg-yellow-100 text-yellow-600 px-3 py-2 rounded-lg min-h-[44px] flex items-center gap-1 cursor-not-allowed">
+                  <span className="inline-block w-3 h-3 border-2 border-yellow-500 border-t-transparent rounded-full animate-spin" />
+                  Video
+                </button>
+              );
+            }
+            return (
+              <button onClick={() => onVideoUploadClick(candidate.id_ld)}
+                className="text-xs bg-red-100 text-red-600 px-3 py-2 rounded-lg hover:bg-red-200 min-h-[44px] flex items-center gap-1 font-medium">
+                ▶ Video
+              </button>
+            );
+          })()}
 
           {/* Passport - view only, uploaded by OCR */}
           {candidate.passport_link ? (

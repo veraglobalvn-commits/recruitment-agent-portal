@@ -132,7 +132,7 @@ export default function CandidatesPage() {
       const [candRes, activeAgents, ordRes] = await Promise.all([
         supabase
           .from('candidates')
-          .select('id_ld, order_id, agent_id, full_name, pp_no, dob, pp_doi, pp_doe, pob, address, phone, height_ft, weight_kg, visa_status, passport_link, video_link, photo_link, pcc_link, health_cert_link, interview_status, created_at')
+          .select('id_ld, order_id, agent_id, full_name, pp_no, dob, pp_doi, pp_doe, pob, address, phone, height_ft, weight_kg, visa_status, passport_link, video_link, photo_link, pcc_link, health_cert_link, interview_status, created_at, candidate_confirmed, video_links')
           .order('created_at', { ascending: false })
           .limit(300),
         fetchActiveAgents(),

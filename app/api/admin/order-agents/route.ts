@@ -15,6 +15,39 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'order_id và agent_id là bắt buộc' }, { status: 400 });
     }
 
+    const newValue = body.assigned_labor_number ?? 0;
+
+    const { data: order } = await auth.supabase
+        .from('orders')
+        .select('total_labor')
+        .eq('id', body.order_id)
+        .maybeSingle();
+
+    if (order === null) {
+        return NextResponse.json({ error: 'Đơn hàng không tồn tại' }, { status: 400 });
+    }
+
+    if (order.total_labor !== null) {
+        const totalLabor = order.total_labor;
+
+        if (newValue > totalLabor) {
+            return NextResponse.json({ error: `Số lượng phân công (${newValue}) vượt tổng chỉ tiêu đơn hàng (${totalLabor})` }, { status: 400 });
+        }
+
+        const { data: existing } = await auth.supabase
+            .from('order_agents')
+            .select('assigned_labor_number, agent_id')
+            .eq('order_id', body.order_id);
+
+        const currentSum = (existing || [])
+            .filter(r => r.agent_id !== body.agent_id)
+            .reduce((sum, r) => sum + (r.assigned_labor_number ?? 0), 0);
+
+        if (currentSum + newValue > totalLabor) {
+            return NextResponse.json({ error: `Tổng phân công (${currentSum + newValue}) vượt chỉ tiêu đơn hàng (${totalLabor})` }, { status: 400 });
+        }
+    }
+
     const { data, error } = await auth.supabase
         .from('order_agents')
         .upsert({

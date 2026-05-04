@@ -16,6 +16,7 @@ interface UserData {
   agency_id: string | null;
   permissions: string[] | null;
   avatar_url: string | null;
+  telegram_user_id: number | null;
 }
 
 interface AgencyBrief {
@@ -70,6 +71,7 @@ export default function UserDetailPage() {
     short_name: '',
     role: 'agent',
     status: 'active',
+    telegram_user_id: '',
   });
 
   const setField = (k: keyof typeof form, v: string) => {
@@ -106,6 +108,7 @@ export default function UserDetailPage() {
           short_name: userData.short_name ?? '',
           role: userData.role ?? 'agent',
           status: userData.status ?? 'active',
+          telegram_user_id: userData.telegram_user_id != null ? String(userData.telegram_user_id) : '',
         });
       } else {
         setLoadError(`Không tìm thấy user với ID: "${id}"`);
@@ -114,7 +117,7 @@ export default function UserDetailPage() {
       const allOrders = (ordersRes.data || []) as (OrderBrief & { agent_ids: string[] | null })[];
       setOrders(allOrders.filter((o) => (o.agent_ids || []).includes(id)));
       setCandidates((candidatesRes.data || []) as Candidate[]);
-    } catch (err) {
+    } catch (_err) {
       setLoadError('Lỗi tải dữ liệu');
     } finally {
       setLoading(false);
@@ -134,6 +137,14 @@ export default function UserDetailPage() {
     };
     if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
 
+    const telegramId = form.telegram_user_id.trim();
+    const telegramIdParsed = telegramId === '' ? null : parseInt(telegramId, 10);
+    if (telegramIdParsed !== null && (isNaN(telegramIdParsed) || telegramIdParsed <= 0)) {
+      setSaveMsg('Telegram User ID phải là số nguyên dương');
+      setSaving(false);
+      return;
+    }
+
     const res = await fetch(`/api/admin/agents/${encodeURIComponent(id)}`, {
       method: 'PATCH',
       headers,
@@ -142,6 +153,7 @@ export default function UserDetailPage() {
         short_name: form.short_name.trim() || null,
         role: form.role,
         status: form.status,
+        telegram_user_id: telegramIdParsed,
       }),
     });
 
@@ -273,6 +285,21 @@ export default function UserDetailPage() {
                 <option value="inactive">Ngừng hoạt động</option>
               </select>
             </div>
+            {adminRole === 'admin' && (
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Telegram User ID</label>
+                <input
+                  type="number"
+                  step="1"
+                  min={1}
+                  value={form.telegram_user_id}
+                  onChange={(e) => setField('telegram_user_id', e.target.value)}
+                  placeholder="Nhập Telegram User ID của agent"
+                  className={inputCls}
+                />
+                <p className="text-xs text-gray-400 mt-1">Lấy từ @userinfobot trên Telegram</p>
+              </div>
+            )}
           </div>
         </div>
 

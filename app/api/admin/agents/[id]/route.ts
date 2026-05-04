@@ -12,7 +12,7 @@ export async function GET(
   const { id } = await params;
   const { data, error } = await auth.supabase
     .from('users')
-    .select('id, supabase_uid, full_name, short_name, role, status, agency_id, permissions, avatar_url, created_at')
+    .select('id, supabase_uid, full_name, short_name, role, status, agency_id, permissions, avatar_url, created_at, telegram_user_id')
     .eq('id', id)
     .maybeSingle();
 
@@ -47,6 +47,7 @@ export async function PATCH(
     status?: string;
     agency_id?: string | null;
     permissions?: string[];
+    telegram_user_id?: number | null;
   };
 
   const updates: Record<string, unknown> = {};
@@ -66,6 +67,24 @@ export async function PATCH(
   }
   if (body.agency_id !== undefined) updates.agency_id = body.agency_id || null;
   if (body.permissions !== undefined) updates.permissions = body.permissions;
+  if (body.telegram_user_id !== undefined) {
+    if (body.telegram_user_id !== null) {
+      const tid = body.telegram_user_id;
+      if (!Number.isInteger(tid) || tid <= 0) {
+        return NextResponse.json({ error: 'Telegram User ID phải là số nguyên dương' }, { status: 400 });
+      }
+      const { data: existing } = await auth.supabase
+        .from('users')
+        .select('id')
+        .eq('telegram_user_id', tid)
+        .neq('id', id)
+        .maybeSingle();
+      if (existing) {
+        return NextResponse.json({ error: 'Telegram ID này đã được dùng bởi agent khác' }, { status: 409 });
+      }
+    }
+    updates.telegram_user_id = body.telegram_user_id;
+  }
 
   if (body.status === 'inactive' && body.role === undefined) {
     const { data: self } = await auth.supabase
