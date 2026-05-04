@@ -189,12 +189,12 @@
 
 ---
 
-### [2026-05-02] TELEGRAM_LOCAL — trạng thái thực tế cần xác nhận
-- **Quyết định gốc (ghi nhận):** Có ý định bật `TELEGRAM_LOCAL: "1"` để bypass 20MB limit.
-- **Thực tế file git:** `deploy/telegram-bot-api/docker-compose.yml` KHÔNG có `TELEGRAM_LOCAL` env var. Comment vẫn ghi "KHÔNG set TELEGRAM_LOCAL=1".
-- **Cần xác nhận:** VPS có thể đã set manual nhưng chưa update file git. Hoặc quyết định chưa được thực thi.
-- **Hành động cần làm:** Kiểm tra VPS (`docker inspect telegram-bot-api | grep TELEGRAM_LOCAL`). Nếu đã set trên VPS → update file git cho đồng bộ. Nếu chưa set → video >20MB vẫn có thể bị giới hạn.
-- **Ảnh hưởng:** Nếu TELEGRAM_LOCAL=1 thực sự active, `file_path` từ getFile là absolute path — workflow phải normalize về relative cho file-server. Nếu không active, default mode đang chạy (file_path relative, OK).
+### [2026-05-02] TELEGRAM_LOCAL=1 — confirmed active, synced vào compose file
+- **Quyết định:** Bật `TELEGRAM_LOCAL: "1"` trong `docker-compose.yml` telegram-bot-api để bypass giới hạn 20MB getFile.
+- **Lý do:** Xác nhận qua `docker inspect`: container đang chạy với `TELEGRAM_LOCAL=1` (set thủ công trong session 2026-05-02, không qua compose file). Nếu container bị recreate mà compose file không có var này → mất local mode.
+- **Fix (2026-05-02):** Sync vào `deploy/telegram-bot-api/docker-compose.yml` (git + VPS). Commit `91059cd`.
+- **Lưu ý kỹ thuật:** `file_path` từ getFile ở local mode là absolute path (`/var/lib/telegram-bot-api/TOKEN/...`). Workflow normalize về relative trước khi file-server serve.
+- **Healthcheck:** Fix cùng commit — healthcheck cũ test `wget /` → 404 → "unhealthy" giả. Fix: check exit code ≠ 4 (connection refused) thay vì exit 0 (200 OK).
 
 ### [2026-05-02] n8n phải ở 2 networks: tg_net + n8n_default
 - **Quyết định:** n8n container join cả `tg_net` (để gọi telegram-bot-api) VÀ `n8n_default` (để có internet/DNS).
