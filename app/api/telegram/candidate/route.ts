@@ -488,7 +488,7 @@ async function handleFinalize(body: FinalizeInput) {
   ]);
 
   const agentDisplayName =
-    agentRes.data?.short_name || agentRes.data?.full_name || null;
+    agentRes.data?.full_name || agentRes.data?.short_name || null;
 
   return NextResponse.json({
     candidate_id: body.candidate_id,
