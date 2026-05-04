@@ -465,9 +465,32 @@ async function handleFinalize(body: FinalizeInput) {
 
   const orderId: string = candidate.order_id ?? '';
 
+  // 4. Fetch group notification metadata in parallel
+  const [agentRes, orderRes, countRes] = await Promise.all([
+    supabase
+      .from('users')
+      .select('agent_name')
+      .eq('id', callerAgentId)
+      .maybeSingle(),
+    supabase
+      .from('orders')
+      .select('total_labor')
+      .eq('id', orderId)
+      .maybeSingle(),
+    supabase
+      .from('order_agents')
+      .select('assigned_labor_number')
+      .eq('order_id', orderId)
+      .eq('agent_id', callerAgentId)
+      .maybeSingle(),
+  ]);
+
   return NextResponse.json({
     candidate_id: body.candidate_id,
     web_url: `/order/${orderId}?candidate=${body.candidate_id}`,
+    agent_name: agentRes.data?.agent_name ?? null,
+    total_labor: orderRes.data?.total_labor ?? null,
+    assigned_labor_number: countRes.data?.assigned_labor_number ?? null,
   });
 }
 
