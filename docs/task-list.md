@@ -8,6 +8,46 @@
 
 ## Active Tasks
 
+### Phase 3A — Admin Portal Enhancements
+
+- **[T-ADM-001]** Admin đổi order cho ứng viên (bulk) — **🔜 READY TO BUILD**
+  - Type: Feature
+  - Agent: Devin
+  - Status: **planned** — spec confirmed 2026-05-02
+  - Description: Admin có thể chọn nhiều ứng viên (từ trang candidates hoặc order detail) và chuyển sang order khác. Agent sở hữu ứng viên được tự động thêm/cập nhật trong order mới.
+
+  **Scope:**
+  - 2 entry points: `/admin/candidates` và `/admin/orders/[id]`
+  - Bulk select (checkbox trên CandidateCard) + floating action bar
+  - Modal chọn order đích + confirm
+  - API: `POST /api/admin/candidates/change-order`
+
+  **Logic `assigned_labor_number` (đã confirm):**
+  - Sau mỗi lần move, UPSERT `order_agents` SET `assigned_labor_number` = tổng candidates thực tế của agent trong order đích SAU MOVE
+  - Áp dụng với cả agent đã có sẵn lẫn chưa có trong order → luôn phản ánh thực tế
+  - Clamp: `min(new_count, remaining_quota)` nếu order có `total_labor`; warning nếu bị clamp
+  - Nhất quán khi move 1 hay nhiều ứng viên cùng lúc
+
+  **Files:**
+  - `app/api/admin/candidates/change-order/route.ts` — tạo mới
+  - `components/admin/ChangeOrderModal.tsx` — tạo mới (dùng chung 2 trang)
+  - `app/admin/candidates/page.tsx` — sửa (checkbox + floating bar + modal)
+  - `app/admin/orders/[id]/page.tsx` — sửa (tận dụng `selectedCandidates` state có sẵn + floating bar + modal; sau move xóa khỏi local state)
+  - `components/agent/CandidateCard.tsx` — sửa (thêm optional props `selectable / selected / onToggleSelect`)
+
+  **Acceptance criteria:**
+  - [ ] Chọn ≥1 ứng viên → floating bar hiện
+  - [ ] Modal dropdown order đích, exclude order hiện tại
+  - [ ] API move thành công: `candidates.order_id` được cập nhật
+  - [ ] Agent chưa có trong order mới → auto INSERT vào `order_agents` với count thực tế
+  - [ ] Agent đã có trong order mới → UPDATE `assigned_labor_number` = count thực tế (clamped)
+  - [ ] Warning hiện nếu bị clamp do vượt quota
+  - [ ] Move từng ứng viên hay bulk → kết quả `assigned_labor_number` như nhau
+  - [ ] `/admin/orders/[id]`: ứng viên đã move biến khỏi danh sách ngay (local state update)
+  - [ ] TypeScript 0 lỗi, không ảnh hưởng agent portal
+
+---
+
 ### Phase 2A — Telegram Candidate Wizard (Devin đến 2026-05-06)
 
 - **[T-2A-N8N-001]** Build n8n workflow: Candidate Wizard v2 (revision) — **✅ DONE**

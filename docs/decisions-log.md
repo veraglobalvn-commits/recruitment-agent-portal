@@ -6,6 +6,20 @@
 
 ---
 
+## 2026-05-02 (session 3 — T-ADM-001 planning)
+
+### [T-ADM-001] assigned_labor_number tự động track theo thực tế khi move ứng viên
+- **Quyết định:** Sau mỗi lần move candidates sang order mới, UPSERT `order_agents` SET `assigned_labor_number` = tổng candidates thực tế của agent trong order đó SAU MOVE. Áp dụng cả khi agent đã có lẫn chưa có trong order_agents.
+- **Lý do:** Đảm bảo nhất quán — move 1 ứng viên hay bulk 10 ứng viên cùng lúc đều cho kết quả `assigned_labor_number` như nhau. Nếu chỉ set lúc "lần đầu thêm agent", move từng ứng viên sẽ khiến số bị lệch thực tế.
+- **Ảnh hưởng:** Admin không cần tự tính/cập nhật quota sau khi move. Nếu muốn set quota riêng khác thực tế, vào order detail điều chỉnh thủ công sau. Có clamp `min(count, remaining_quota)` + warning nếu vượt `total_labor`.
+
+### [T-ADM-001] Tính năng đổi order có ở 2 entry points
+- **Quyết định:** `/admin/candidates` (chọn từ nhiều order) + `/admin/orders/[id]` (chọn trong order hiện tại → chuyển đi). Dùng chung `ChangeOrderModal` component và cùng 1 API endpoint.
+- **Lý do:** Tránh duplicate logic, đảm bảo UX nhất quán. Order detail đã có `selectedCandidates` state → tận dụng.
+- **Ảnh hưởng:** Cần tạo `components/admin/ChangeOrderModal.tsx` dùng chung. CandidateCard thêm optional props `selectable/selected/onToggleSelect` không breaking existing usages.
+
+---
+
 ## 2026-04-30
 
 ### [Phase 2A] T-2A-INFRA-005: nginx proxy `/tg-media/<path>` thay vì copy file → Supabase Storage
