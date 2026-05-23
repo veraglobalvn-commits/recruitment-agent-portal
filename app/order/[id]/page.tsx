@@ -16,6 +16,11 @@ interface CompanyVideos {
   industry: string | null;
 }
 
+// Reads the effective agent ID from localStorage — owner_agent_id for members, agent_id for owners
+function getEffectiveAgentId(): string | null {
+  return localStorage.getItem('owner_agent_id') || localStorage.getItem('agent_id');
+}
+
 function getAgentOrderStatus(order: Order, candidateCount: number): { label: string; cls: string } {
   if (order.agent_order_status === 'Finished') return { label: 'Finished', cls: 'bg-green-100 text-green-700' };
   if (order.agent_order_status === 'Cancelled') return { label: 'Cancelled', cls: 'bg-red-100 text-red-700' };
@@ -36,7 +41,7 @@ export default function OrderDetail() {
     : null;
 
   const [candidates, setCandidates] = useState<Candidate[]>([]);
-  const [memberNameMap, setMemberNameMap] = useState<Record<string, string>>({});
+
   const [orderData, setOrderData] = useState<Order | null>(null);
   const [companyVideos, setCompanyVideos] = useState<CompanyVideos | null>(null);
   const [currentAgentId, setCurrentAgentId] = useState<string | null>(null);
@@ -84,16 +89,36 @@ export default function OrderDetail() {
     return () => input.removeEventListener('cancel', onCancel);
   }, []);
 
-  // Returns owner's agent_id for members, own agent_id for agents
-  const getEffectiveAgentId = () =>
-    localStorage.getItem('owner_agent_id') || localStorage.getItem('agent_id');
-
   const fetchCandidates = useCallback(async () => {
     try {
-      const agentId = getEffectiveAgentId();
       const role = localStorage.getItem('user_role');
-      setCurrentAgentId(agentId);
       setCurrentUserRole(role);
+
+      // Resolve effective agent ID: for members, always use owner's ID.
+      // Fetch from DB if not yet cached in localStorage (e.g. direct URL access before dashboard load).
+      let effectiveAgentId = localStorage.getItem('agent_id');
+      if (role === 'member') {
+        let ownerId: string | null = localStorage.getItem('owner_agent_id');
+        if (!ownerId) {
+          const agencyId = localStorage.getItem('agency_id');
+          if (agencyId) {
+            const { data: ownerData } = await supabase
+              .from('users')
+              .select('id')
+              .eq('agency_id', agencyId)
+              .eq('role', 'agent')
+              .eq('status', 'active')
+              .maybeSingle();
+            if (ownerData?.id) {
+              ownerId = ownerData.id as string;
+              localStorage.setItem('owner_agent_id', ownerId);
+            }
+          }
+        }
+        if (ownerId) effectiveAgentId = ownerId;
+      }
+
+      setCurrentAgentId(effectiveAgentId);
 
       const cacheKey = `c_url_${orderId}`;
       const cached = sessionStorage.getItem(cacheKey);
@@ -106,6 +131,7 @@ export default function OrderDetail() {
 
       // All candidates in this order belong to owner's agent_id (members write as owner)
       // Both agent owner and member see the same set: all candidates of the owner
+      const agentId = effectiveAgentId;
       const [candRes, orderRes] = await Promise.all([
         agentId
           ? supabase.from('candidates').select('*').eq('order_id', orderId).eq('agent_id', agentId)
@@ -202,15 +228,6 @@ export default function OrderDetail() {
 
       setCandidates(newCandidates);
       sessionStorage.setItem(cacheKey, JSON.stringify(newCandidates));
-
-      // Fetch names for members who added candidates (for agent-owner "added by" display)
-      const uniqueAgentIds = Array.from(new Set(newCandidates.map(c => c.agent_id).filter((id): id is string => !!id && id !== agentId)));
-      if (uniqueAgentIds.length > 0) {
-        const { data: usersData } = await supabase.from('users').select('id, full_name, short_name').in('id', uniqueAgentIds);
-        const nameMap: Record<string, string> = {};
-        for (const u of (usersData || [])) nameMap[u.id] = u.short_name || u.full_name || u.id;
-        setMemberNameMap(nameMap);
-      }
 
       if (agentId && orderRes.data) {
         const oaRes = await supabase
@@ -809,8 +826,8 @@ export default function OrderDetail() {
                   onVideoPlay={(url) => setCandidateVideoUrl(url)}
                   isSelected={selectedCandidates.includes(c.id_ld)}
                   onToggleSelect={handleToggleSelect}
-                  addedBy={c.agent_id && c.agent_id !== currentAgentId ? memberNameMap[c.agent_id] : undefined}
-                  canSetStatus={currentUserRole !== 'member'}
+
+                  canSetStatus={false}
                   isFocused={focusCandidateId === c.id_ld}
                   autoOpenEdit={autoEditCandidateId === c.id_ld}
                 />
