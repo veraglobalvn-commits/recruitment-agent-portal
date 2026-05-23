@@ -55,6 +55,7 @@ export default function Home() {
     localStorage.removeItem('user_role');
     localStorage.removeItem('agency_id');
     localStorage.removeItem('owner_agent_id');
+    sessionStorage.clear();
   }, []);
 
   useEffect(() => {
@@ -108,6 +109,13 @@ export default function Home() {
             } catch {
               // ignore
             }
+          } else {
+            // Session expired naturally — clear stale localStorage so next login starts clean
+            localStorage.removeItem('owner_agent_id');
+            localStorage.removeItem('agent_id');
+            localStorage.removeItem('user_role');
+            localStorage.removeItem('agency_id');
+            sessionStorage.clear();
           }
           setCheckingSession(false);
         });

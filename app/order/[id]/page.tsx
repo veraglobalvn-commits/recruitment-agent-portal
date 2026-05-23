@@ -100,7 +100,22 @@ export default function OrderDetail() {
       if (role === 'member') {
         let ownerId: string | null = localStorage.getItem('owner_agent_id');
         if (!ownerId) {
-          const agencyId = localStorage.getItem('agency_id');
+          let agencyId = localStorage.getItem('agency_id');
+          // Fallback: fetch agency_id from DB if missing (e.g. direct URL access before dashboard load)
+          if (!agencyId) {
+            const memberId = localStorage.getItem('agent_id');
+            if (memberId) {
+              const { data: memberData } = await supabase
+                .from('users')
+                .select('agency_id')
+                .eq('id', memberId)
+                .maybeSingle();
+              if (memberData?.agency_id) {
+                agencyId = memberData.agency_id as string;
+                localStorage.setItem('agency_id', agencyId);
+              }
+            }
+          }
           if (agencyId) {
             const { data: ownerData } = await supabase
               .from('users')
