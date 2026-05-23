@@ -37,8 +37,6 @@ export default function OrderDetail() {
 
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [memberNameMap, setMemberNameMap] = useState<Record<string, string>>({});
-  // IDs of team members under the current agent owner (empty if current user is a member)
-  const [teamMemberIds, setTeamMemberIds] = useState<string[]>([]);
   const [orderData, setOrderData] = useState<Order | null>(null);
   const [companyVideos, setCompanyVideos] = useState<CompanyVideos | null>(null);
   const [currentAgentId, setCurrentAgentId] = useState<string | null>(null);
@@ -86,9 +84,13 @@ export default function OrderDetail() {
     return () => input.removeEventListener('cancel', onCancel);
   }, []);
 
+  // Returns owner's agent_id for members, own agent_id for agents
+  const getEffectiveAgentId = () =>
+    localStorage.getItem('owner_agent_id') || localStorage.getItem('agent_id');
+
   const fetchCandidates = useCallback(async () => {
     try {
-      const agentId = localStorage.getItem('agent_id');
+      const agentId = getEffectiveAgentId();
       const role = localStorage.getItem('user_role');
       setCurrentAgentId(agentId);
       setCurrentUserRole(role);
@@ -102,29 +104,12 @@ export default function OrderDetail() {
         } catch (e) { /* ignore */ }
       }
 
-      const agencyId = localStorage.getItem('agency_id');
-
-      // If agent owner: fetch member IDs to include their candidates in stats
-      // If member: no team members (they only see their own candidates)
-      let fetchedMemberIds: string[] = [];
-      if (role === 'agent' && agencyId) {
-        const { data: membersData } = await supabase
-          .from('users')
-          .select('id')
-          .eq('agency_id', agencyId)
-          .eq('role', 'member')
-          .eq('status', 'active');
-        fetchedMemberIds = (membersData ?? []).map((u: { id: string }) => u.id);
-        setTeamMemberIds(fetchedMemberIds);
-      }
-
-      // Candidate query: member sees only their own; agent sees all in order
-      const candQuery = role === 'member' && agentId
-        ? supabase.from('candidates').select('*').eq('order_id', orderId).eq('agent_id', agentId)
-        : supabase.from('candidates').select('*').eq('order_id', orderId);
-
+      // All candidates in this order belong to owner's agent_id (members write as owner)
+      // Both agent owner and member see the same set: all candidates of the owner
       const [candRes, orderRes] = await Promise.all([
-        candQuery,
+        agentId
+          ? supabase.from('candidates').select('*').eq('order_id', orderId).eq('agent_id', agentId)
+          : supabase.from('candidates').select('*').eq('order_id', orderId),
         supabase.from('orders').select('*').eq('id', orderId).single(),
       ]);
 
@@ -315,7 +300,7 @@ export default function OrderDetail() {
     try {
       const cleanName = addForm.full_name.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z]/g, '').toUpperCase();
       const idLd = `${addForm.pp_no.trim()}_${cleanName}`;
-      const agentId = localStorage.getItem('agent_id');
+      const agentId = getEffectiveAgentId();
 
       const { data: existing } = await supabase.from('candidates').select('id_ld, full_name, order_id').eq('id_ld', idLd).maybeSingle();
       if (existing) {
@@ -383,7 +368,7 @@ export default function OrderDetail() {
           if (!user) throw new Error('Not authenticated');
 
           const { data: { session } } = await supabase.auth.getSession();
-          const agentId = localStorage.getItem('agent_id');
+          const agentId = getEffectiveAgentId();
 
           const res = await fetch('/api/passport', {
             method: 'POST',
@@ -584,12 +569,8 @@ export default function OrderDetail() {
   const agentStatus = orderData ? getAgentOrderStatus(orderData, candidates.length) : null;
 
   const allocated = allocatedLabor;
-  // Agent owner counts their own + all team members' candidates; member counts only their own
-  const myTeamIds = currentAgentId ? new Set([currentAgentId, ...teamMemberIds]) : new Set<string>();
-  const agentPassed = currentAgentId
-    ? candidates.filter(c => c.agent_id && myTeamIds.has(c.agent_id) && c.interview_status === 'Passed').length
-    : 0;
-  // Total applied = all visible candidates (already filtered per role in fetchCandidates)
+  // All visible candidates already belong to owner's agent_id
+  const agentPassed = candidates.filter(c => c.interview_status === 'Passed').length;
   const myApplied = candidates.length;
 
   return (

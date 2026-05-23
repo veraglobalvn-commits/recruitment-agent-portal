@@ -54,6 +54,7 @@ export default function Home() {
     localStorage.removeItem('agent_id');
     localStorage.removeItem('user_role');
     localStorage.removeItem('agency_id');
+    localStorage.removeItem('owner_agent_id');
   }, []);
 
   useEffect(() => {
@@ -180,6 +181,7 @@ export default function Home() {
             setOrders(result.orders || []);
             if (result.role) { setUserRole(result.role); localStorage.setItem('user_role', result.role); }
             if (result.agency_id) { setAgencyId(result.agency_id); localStorage.setItem('agency_id', result.agency_id); }
+            if (result.owner_agent_id) localStorage.setItem('owner_agent_id', result.owner_agent_id);
             if (result.avatar_url) setAvatarUrl(result.avatar_url);
             setLoadingData(false); // instant from cache
           } catch (e) {
@@ -207,29 +209,34 @@ export default function Home() {
         }
 
         // Fetch stats, orders, order_agents, and candidate counts in parallel
-        const agentIdEncoded = agentData.id.replace(/"/g, '\\"');
         const isMember = agentData.role === 'member';
 
-        // Members are not in order.agent_ids — look up their orders via order_agents
-        let ordersQuery;
-        if (isMember) {
-          const oaLookup = await supabase
-            .from('order_agents')
-            .select('order_id')
-            .eq('agent_id', agentData.id);
-          const assignedOrderIds = (oaLookup.data ?? []).map((r: { order_id: string }) => r.order_id);
-          ordersQuery = assignedOrderIds.length > 0
-            ? supabase.from('orders').select('*').in('id', assignedOrderIds)
-            : Promise.resolve({ data: [], error: null });
+        // For members: find the agent owner (same agency, role='agent') — always exactly 1
+        let effectiveAgentId = agentData.id; // ID used for orders/stats/candidates queries
+        if (isMember && agentData.agency_id) {
+          const { data: ownerData } = await supabase
+            .from('users')
+            .select('id')
+            .eq('agency_id', agentData.agency_id)
+            .eq('role', 'agent')
+            .eq('status', 'active')
+            .maybeSingle();
+          if (ownerData?.id) {
+            effectiveAgentId = ownerData.id;
+            localStorage.setItem('owner_agent_id', ownerData.id);
+          }
         } else {
-          ordersQuery = supabase.from('orders').select('*').filter('agent_ids', 'cs', `{"${agentIdEncoded}"}`);
+          localStorage.removeItem('owner_agent_id');
         }
 
+        const effectiveIdEncoded = effectiveAgentId.replace(/"/g, '\\"');
+
+        // Members use owner's order_agents assignments; orders are via agent_ids of owner
         const [statsRes, ordersRes, oaRes, candCountRes] = await Promise.all([
-          supabase.from('recruitment_stats').select('*').eq('agent_id', agentData.id).maybeSingle(),
-          ordersQuery,
-          supabase.from('order_agents').select('order_id, assigned_labor_number, assigned_date').eq('agent_id', agentData.id),
-          supabase.from('candidates').select('order_id').eq('agent_id', agentData.id),
+          supabase.from('recruitment_stats').select('*').eq('agent_id', effectiveAgentId).maybeSingle(),
+          supabase.from('orders').select('*').filter('agent_ids', 'cs', `{"${effectiveIdEncoded}"}`),
+          supabase.from('order_agents').select('order_id, assigned_labor_number, assigned_date').eq('agent_id', effectiveAgentId),
+          supabase.from('candidates').select('order_id').eq('agent_id', effectiveAgentId),
         ]);
 
         const statsData = statsRes.data;
@@ -299,6 +306,7 @@ export default function Home() {
           avatar_url: agentData.avatar_url ?? null,
           role: agentData.role ?? null,
           agency_id: agentData.agency_id ?? null,
+          owner_agent_id: isMember ? effectiveAgentId : null,
           stats,
           orders: ordersWithAllocation,
         };
@@ -314,6 +322,7 @@ export default function Home() {
         if (result.agent_id) localStorage.setItem('agent_id', result.agent_id);
         if (result.role) localStorage.setItem('user_role', result.role);
         if (result.agency_id) localStorage.setItem('agency_id', result.agency_id);
+        if (result.owner_agent_id) localStorage.setItem('owner_agent_id', result.owner_agent_id);
         sessionStorage.setItem(cacheKey, JSON.stringify(result));
 
       } catch (err) {
