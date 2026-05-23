@@ -233,8 +233,9 @@ export default function Home() {
         ]);
 
         const statsData = statsRes.data;
-        const ordersData = (ordersRes as { data: unknown[] | null; error: { message: string } | null }).error ? [] : ((ordersRes as { data: unknown[] | null; error: unknown }).data ?? []);
-        if ((ordersRes as { error: { message: string } | null }).error) console.error('Orders query error:', (ordersRes as { error: { message: string } }).error.message);
+        const ordersResult = ordersRes as { data: unknown[] | null; error: { message: string } | null };
+        const ordersData: unknown[] = ordersResult.error ? [] : (ordersResult.data ?? []);
+        if (ordersResult.error) console.error('Orders query error:', ordersResult.error.message);
 
         const stats: DashboardStats | null = statsData ? {
           Tong_Lao_Dong: statsData.tong_lao_dong,

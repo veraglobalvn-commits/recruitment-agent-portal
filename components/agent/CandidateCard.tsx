@@ -415,10 +415,11 @@ export default function CandidateCard({
                   )}
                   <button
                     onClick={() => onVideoUploadClick(candidate.id_ld)}
+                    disabled={isVideoUploading}
                     title="Upload another video"
-                    className="w-7 h-7 flex items-center justify-center rounded-full bg-blue-100 hover:bg-blue-200 text-blue-600 text-xs flex-shrink-0"
+                    className="w-7 h-7 flex items-center justify-center rounded-full bg-blue-100 hover:bg-blue-200 text-blue-600 text-xs flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
                   >
-                    +
+                    {isVideoUploading ? <span className="w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" /> : '+'}
                   </button>
                 </div>
               );

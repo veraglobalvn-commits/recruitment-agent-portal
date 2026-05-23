@@ -3,7 +3,6 @@ import ProgressBar from '@/components/ui/ProgressBar';
 
 import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
-import { fetchActiveAgents } from '@/lib/query-helpers';
 import Link from 'next/link';
 import AddAgentModal from '@/components/admin/AddAgentModal';
 
@@ -33,18 +32,16 @@ export default function AgenciesPage() {
       const headers: Record<string, string> = {};
       if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
 
-      const [agRes, allUsersRes, activeUsers, ordersRes, candidatesRes, oaRes] = await Promise.all([
+      const [agRes, allUsersRes, ordersRes, candidatesRes, oaRes] = await Promise.all([
         fetch('/api/admin/agencies', { headers }).then(r => r.json()),
-        supabase.from('users').select('id, agency_id').neq('role', 'admin'),
-        fetchActiveAgents('id, agency_id'),
+        supabase.from('users').select('id, agency_id, status').neq('role', 'admin'),
         supabase.from('orders').select('id, agent_ids, total_labor'),
         supabase.from('candidates').select('id_ld, agent_id, interview_status'),
         supabase.from('order_agents').select('agent_id, assigned_labor_number'),
       ]);
 
       const agenciesRaw = agRes.agencies || [];
-      const allUsers = (allUsersRes.data || []) as { id: string; agency_id: string | null }[];
-      const activeUsersList = activeUsers || [];
+      const allUsers = (allUsersRes.data || []) as { id: string; agency_id: string | null; status: string | null }[];
       const orders = ordersRes.data || [];
       const candidates = candidatesRes.data || [];
 
@@ -59,9 +56,9 @@ export default function AgenciesPage() {
         if (u.agency_id) memberCountMap[u.agency_id] = (memberCountMap[u.agency_id] || 0) + 1;
       });
 
-      // Use only active users for candidate/order mapping
+      // Use active users (agents + members) for candidate/order stats
       const agencyUserIds: Record<string, string[]> = {};
-      (activeUsersList as unknown as { id: string; agency_id: string | null }[]).forEach((u) => {
+      allUsers.filter(u => u.status === 'active').forEach((u) => {
         const aid = u.agency_id;
         if (aid) {
           if (!agencyUserIds[aid]) agencyUserIds[aid] = [];
