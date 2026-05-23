@@ -49,6 +49,33 @@ Tập trung hoàn thiện toàn bộ chức năng vận hành trên website (por
 
 ## 🔴 P1 — Core vận hành (làm trước)
 
+### [T-FIX-001] Chạy migration RLS cho member role — **⚠️ PENDING USER ACTION**
+- Type: Bug/Migration
+- Agent: User (cần DB password hoặc Supabase PAT)
+- Status: **blocked** — migration file đã viết, chờ user chạy trên Supabase SQL Editor
+- Description: 2 fix còn lại sau session 2026-05-23 không thể tự động hóa vì cần DB-level DDL access.
+
+**File migration đã sẵn sàng:**
+- `supabase/migrations/20260523000002_fix_member_rls_users_and_stats.sql`
+
+**Cách chạy (1 phút):**
+1. Vào Supabase Dashboard → SQL Editor
+2. Copy toàn bộ nội dung file migration trên → Paste → Run
+
+**Nội dung fix:**
+- **Fix A:** Thêm policy `users_member_read_agency` — cho phép member SELECT users cùng agency (hiện tại member bị block bởi RLS, không tự query được; code đã có fallback qua `/api/agents/me` nhưng policy này vẫn cần cho defense-in-depth).
+- **Fix B:** `GRANT SELECT ON recruitment_stats TO authenticated` — member thấy được stats dashboard (hiện tại stats = null vì view chưa grant).
+
+**Sau khi chạy:**
+- [ ] Member thấy stats (Applied/Passed/Remaining) trên dashboard
+- [ ] Member query users cùng agency không bị empty result
+
+**Để Devin tự chạy trong tương lai:** Thêm một trong hai vào `.env.local` trên VPS:
+- `SUPABASE_DB_PASSWORD=...` (Dashboard → Settings → Database → Database password)
+- `SUPABASE_ACCESS_TOKEN=...` (supabase.com → Account → Access Tokens)
+
+---
+
 ### [T-WEB-001] Admin bulk move candidates — **🔜 READY TO BUILD**
 - Type: Feature
 - Agent: Devin

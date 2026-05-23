@@ -6,6 +6,35 @@
 
 ---
 
+## 2026-05-23 (session 6 — member/session bug fixes)
+
+### [2026-05-23] Fix 5 bugs member/owner_agent_id + session stale
+
+**Bugs đã fix (code, committed):**
+- **BUG-2** `e86812b`: member truy cập `/order/[id]` direct URL trước khi dashboard load → `agency_id` thiếu → 0 candidates. Fix: fallback fetch qua `/api/agents/me` (service_role, bypass RLS).
+- **BUG-3** `e86812b`: `sessionStorage` không clear khi logout → stale cache. Fix: thêm `sessionStorage.clear()` vào `handleLogout`.
+- **BUG-4** `e86812b`: `localStorage` stale khi session expire tự nhiên. Fix: xóa trong `onAuthStateChange` else branch.
+- **BUG-5** `8997b7b` (critical): member bị RLS block khi query `users` table bằng browser client → `owner_agent_id` không fetch được → 0 orders/candidates dù RLS đã fix trước đó. Fix: `/api/agents/me` trả về `owner_agent_id` server-side (service_role), `fetchDashboardData` dùng API thay vì `supabase.from('users')`.
+
+**Bugs pending — cần user chạy migration (T-FIX-001):**
+- **BUG-1**: `recruitment_stats` view chưa grant SELECT cho `authenticated` → member stats = null.
+- **BUG-5 defense-in-depth**: `users_member_read_agency` policy chưa có → member không query được users cùng agency qua browser client trực tiếp.
+- **Migration file:** `supabase/migrations/20260523000002_fix_member_rls_users_and_stats.sql`
+
+**Lý do không tự động hóa được:**
+- Supabase REST API (PostgREST) không cho phép DDL.
+- Management API cần Personal Access Token (không phải service_role key).
+- DB direct connection (`psql`) cần DB password — chỉ có trong Supabase Dashboard.
+- **Để session sau Devin tự chạy:** thêm `SUPABASE_DB_PASSWORD` hoặc `SUPABASE_ACCESS_TOKEN` vào `.env.local` trên VPS.
+
+### [2026-05-23] Pattern: dùng /api/agents/me thay vì browser client query users table
+
+- **Quyết định:** Mọi chỗ cần fetch thông tin user khác (kể cả owner của member) phải đi qua server-side API route dùng `getAdminClient()` (service_role), không dùng browser supabase client.
+- **Lý do:** Browser client bị RLS `users_read_self` — chỉ đọc được bản thân. Đây là silent failure — không có error, chỉ có null/empty result.
+- **Ảnh hưởng:** `/api/agents/me` đã được mở rộng trả về `owner_agent_id` cho member. Pattern này áp dụng cho mọi cross-user lookup trong tương lai.
+
+---
+
 ## 2026-05-23 (session 5 — master plan restructure)
 
 ### [2026-05-23] Đổi chiến lược: website core trước, Telegram/Lark sau
