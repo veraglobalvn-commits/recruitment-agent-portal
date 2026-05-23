@@ -197,41 +197,41 @@ export default function Home() {
           }
         }
 
-        // Use preloaded agent data from login to skip a round-trip
+        // Use preloaded agent data from login to skip a round-trip.
+        // For members we always call /api/agents/me (service_role) to resolve owner_agent_id
+        // because browser client (anon key) is blocked by RLS from querying other users.
         const preloaded = preloadedAgentRef.current;
         preloadedAgentRef.current = null;
 
         let agentData: { id: string; full_name: string; short_name: string | null; role: string | null; agency_id: string | null; avatar_url?: string | null; telegram_user_id?: number | null } | null = preloaded;
+        let resolvedOwnerAgentId: string | null = null;
+
+        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        const meHeaders: Record<string, string> = currentSession?.access_token
+          ? { Authorization: `Bearer ${currentSession.access_token}` }
+          : {};
+        const meRes = await fetch('/api/agents/me', { headers: meHeaders });
+        if (meRes.ok) {
+          const meJson = await meRes.json() as { user: typeof agentData; owner_agent_id: string | null };
+          if (meJson.user) agentData = meJson.user;
+          resolvedOwnerAgentId = meJson.owner_agent_id;
+        }
+
         if (!agentData) {
-          const agentRes = await supabase
-            .from('users')
-            .select('id, full_name, short_name, role, agency_id, avatar_url, telegram_user_id')
-            .eq('supabase_uid', uid)
-            .maybeSingle();
-          if (agentRes.error || !agentRes.data) {
-            setError('Agent not found. Please contact admin.');
-            setIsLoggedIn(false);
-            return;
-          }
-          agentData = agentRes.data;
+          setError('Agent not found. Please contact admin.');
+          setIsLoggedIn(false);
+          return;
         }
 
         // Fetch stats, orders, order_agents, and candidate counts in parallel
         const isMember = agentData.role === 'member';
 
-        // For members: find the agent owner (same agency, role='agent') — always exactly 1
-        let effectiveAgentId = agentData.id; // ID used for orders/stats/candidates queries
-        if (isMember && agentData.agency_id) {
-          const { data: ownerData } = await supabase
-            .from('users')
-            .select('id')
-            .eq('agency_id', agentData.agency_id)
-            .eq('role', 'agent')
-            .eq('status', 'active')
-            .maybeSingle();
-          if (ownerData?.id) {
-            effectiveAgentId = ownerData.id;
-            localStorage.setItem('owner_agent_id', ownerData.id);
+        // For members: use owner_agent_id resolved server-side (service_role bypasses RLS)
+        let effectiveAgentId = agentData.id;
+        if (isMember) {
+          if (resolvedOwnerAgentId) {
+            effectiveAgentId = resolvedOwnerAgentId;
+            localStorage.setItem('owner_agent_id', resolvedOwnerAgentId);
           }
         } else {
           localStorage.removeItem('owner_agent_id');

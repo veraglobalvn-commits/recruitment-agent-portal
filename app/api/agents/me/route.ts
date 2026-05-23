@@ -15,14 +15,29 @@ export async function GET(req: NextRequest) {
   if (!userData) return NextResponse.json({ error: 'Không tìm thấy user' }, { status: 404 });
 
   let agencyData = null;
+  let ownerAgentId: string | null = null;
+
   if (userData.agency_id) {
-    const { data: ag } = await result.supabase
-      .from('agencies')
-      .select('id, company_name, license_no, status')
-      .eq('id', userData.agency_id)
-      .maybeSingle();
-    agencyData = ag;
+    const [agRes, ownerRes] = await Promise.all([
+      result.supabase
+        .from('agencies')
+        .select('id, company_name, license_no, status')
+        .eq('id', userData.agency_id)
+        .maybeSingle(),
+      // For members: resolve the owner agent in the same agency (role='agent')
+      userData.role === 'member'
+        ? result.supabase
+            .from('users')
+            .select('id')
+            .eq('agency_id', userData.agency_id)
+            .eq('role', 'agent')
+            .eq('status', 'active')
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
+    ]);
+    agencyData = agRes.data;
+    if (ownerRes.data?.id) ownerAgentId = ownerRes.data.id as string;
   }
 
-  return NextResponse.json({ user: userData, agency: agencyData });
+  return NextResponse.json({ user: userData, agency: agencyData, owner_agent_id: ownerAgentId });
 }

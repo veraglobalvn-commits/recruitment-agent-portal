@@ -100,33 +100,19 @@ export default function OrderDetail() {
       if (role === 'member') {
         let ownerId: string | null = localStorage.getItem('owner_agent_id');
         if (!ownerId) {
-          let agencyId = localStorage.getItem('agency_id');
-          // Fallback: fetch agency_id from DB if missing (e.g. direct URL access before dashboard load)
-          if (!agencyId) {
-            const memberId = localStorage.getItem('agent_id');
-            if (memberId) {
-              const { data: memberData } = await supabase
-                .from('users')
-                .select('agency_id')
-                .eq('id', memberId)
-                .maybeSingle();
-              if (memberData?.agency_id) {
-                agencyId = memberData.agency_id as string;
-                localStorage.setItem('agency_id', agencyId);
-              }
-            }
-          }
-          if (agencyId) {
-            const { data: ownerData } = await supabase
-              .from('users')
-              .select('id')
-              .eq('agency_id', agencyId)
-              .eq('role', 'agent')
-              .eq('status', 'active')
-              .maybeSingle();
-            if (ownerData?.id) {
-              ownerId = ownerData.id as string;
+          // owner_agent_id not cached yet — resolve via server-side API (service_role bypasses RLS)
+          // so member can look up the owner even before dashboard has loaded.
+          const { data: { session } } = await supabase.auth.getSession();
+          const headers: Record<string, string> = session?.access_token
+            ? { Authorization: `Bearer ${session.access_token}` }
+            : {};
+          const meRes = await fetch('/api/agents/me', { headers });
+          if (meRes.ok) {
+            const meJson = await meRes.json() as { user?: { agency_id?: string | null }; owner_agent_id?: string | null };
+            if (meJson.owner_agent_id) {
+              ownerId = meJson.owner_agent_id;
               localStorage.setItem('owner_agent_id', ownerId);
+              if (meJson.user?.agency_id) localStorage.setItem('agency_id', meJson.user.agency_id);
             }
           }
         }
