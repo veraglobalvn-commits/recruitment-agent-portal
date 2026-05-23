@@ -37,6 +37,8 @@ export default function OrderDetail() {
 
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [memberNameMap, setMemberNameMap] = useState<Record<string, string>>({});
+  // IDs of team members under the current agent owner (empty if current user is a member)
+  const [teamMemberIds, setTeamMemberIds] = useState<string[]>([]);
   const [orderData, setOrderData] = useState<Order | null>(null);
   const [companyVideos, setCompanyVideos] = useState<CompanyVideos | null>(null);
   const [currentAgentId, setCurrentAgentId] = useState<string | null>(null);
@@ -100,8 +102,29 @@ export default function OrderDetail() {
         } catch (e) { /* ignore */ }
       }
 
+      const agencyId = localStorage.getItem('agency_id');
+
+      // If agent owner: fetch member IDs to include their candidates in stats
+      // If member: no team members (they only see their own candidates)
+      let fetchedMemberIds: string[] = [];
+      if (role === 'agent' && agencyId) {
+        const { data: membersData } = await supabase
+          .from('users')
+          .select('id')
+          .eq('agency_id', agencyId)
+          .eq('role', 'member')
+          .eq('status', 'active');
+        fetchedMemberIds = (membersData ?? []).map((u: { id: string }) => u.id);
+        setTeamMemberIds(fetchedMemberIds);
+      }
+
+      // Candidate query: member sees only their own; agent sees all in order
+      const candQuery = role === 'member' && agentId
+        ? supabase.from('candidates').select('*').eq('order_id', orderId).eq('agent_id', agentId)
+        : supabase.from('candidates').select('*').eq('order_id', orderId);
+
       const [candRes, orderRes] = await Promise.all([
-        supabase.from('candidates').select('*').eq('order_id', orderId),
+        candQuery,
         supabase.from('orders').select('*').eq('id', orderId).single(),
       ]);
 
@@ -561,9 +584,13 @@ export default function OrderDetail() {
   const agentStatus = orderData ? getAgentOrderStatus(orderData, candidates.length) : null;
 
   const allocated = allocatedLabor;
+  // Agent owner counts their own + all team members' candidates; member counts only their own
+  const myTeamIds = currentAgentId ? new Set([currentAgentId, ...teamMemberIds]) : new Set<string>();
   const agentPassed = currentAgentId
-    ? candidates.filter(c => c.agent_id === currentAgentId && c.interview_status === 'Passed').length
+    ? candidates.filter(c => c.agent_id && myTeamIds.has(c.agent_id) && c.interview_status === 'Passed').length
     : 0;
+  // Total applied = all visible candidates (already filtered per role in fetchCandidates)
+  const myApplied = candidates.length;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -739,7 +766,7 @@ export default function OrderDetail() {
             <div className="grid grid-cols-4 gap-3 text-center">
               <div>
                 <p className="text-xs text-gray-400 mb-1">Applied</p>
-                <p className="text-2xl font-bold text-blue-600">{candidates.length}</p>
+                <p className="text-2xl font-bold text-blue-600">{myApplied}</p>
               </div>
               <div>
                 <p className="text-xs text-gray-400 mb-1">Target</p>
