@@ -12,6 +12,23 @@
 
 ---
 
+## Quy tắc kỹ thuật bắt buộc
+
+### Role mới = phải update RLS đồng thời
+
+Khi thêm role mới hoặc thay đổi quyền của role trong `lib/permissions.ts`, **BẮT BUỘC** kiểm tra và cập nhật đồng thời RLS policies trong Supabase:
+
+1. Đọc tất cả migration files trong `supabase/migrations/` để xác định mọi policy có liên quan.
+2. Với mỗi policy dùng `get_current_user_role() IN (...)`: kiểm tra role mới đã có trong list chưa.
+3. Nếu thiếu: viết migration SQL mới (`supabase/migrations/YYYYMMDD_fix_rls_<role>.sql`) và yêu cầu user chạy ngay trên Supabase SQL Editor.
+4. **Không được commit code app** sử dụng role mới khi chưa confirm RLS đã được update.
+
+**Lý do:** Role defined ở app-level (`lib/permissions.ts`) hoàn toàn độc lập với DB-level RLS. App có thể query đúng, nhưng Supabase trả về empty rows vì RLS block — không có error, chỉ có silent empty result. Đây là bug khó phát hiện nhất.
+
+**Incident 2026-05-23:** Role `'member'` có trong `lib/permissions.ts` từ lâu, nhưng tất cả RLS policies trên `orders`, `candidates`, `companies`, `order_agents` đều thiếu `'member'` → member login vào thấy 0 orders, 0 candidates. Fix: `supabase/migrations/20260523000001_add_member_role_to_rls.sql`.
+
+---
+
 ## Session notes (2026-05-01)
 
 ### Production runtime + deploy (critical)
