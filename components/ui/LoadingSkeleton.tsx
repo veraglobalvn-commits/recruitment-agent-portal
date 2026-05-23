@@ -1,8 +1,16 @@
 interface LoadingSkeletonProps {
-  type: 'dashboard' | 'order';
+  type: 'dashboard' | 'order' | 'auth-check';
 }
 
 export default function LoadingSkeleton({ type }: LoadingSkeletonProps) {
+  if (type === 'auth-check') {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
   if (type === 'dashboard') {
     return (
       <div className="min-h-screen bg-gray-100 p-4 md:p-8">

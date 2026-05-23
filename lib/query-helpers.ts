@@ -14,7 +14,7 @@ export async function fetchActiveAgents(
   const { data, error } = await supabase
     .from('users')
     .select(select)
-    .neq('role', 'admin')
+    .eq('role', 'agent')
     .eq('status', 'active')
     .order('full_name');
 

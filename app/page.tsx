@@ -208,16 +208,33 @@ export default function Home() {
 
         // Fetch stats, orders, order_agents, and candidate counts in parallel
         const agentIdEncoded = agentData.id.replace(/"/g, '\\"');
+        const isMember = agentData.role === 'member';
+
+        // Members are not in order.agent_ids — look up their orders via order_agents
+        let ordersQuery;
+        if (isMember) {
+          const oaLookup = await supabase
+            .from('order_agents')
+            .select('order_id')
+            .eq('agent_id', agentData.id);
+          const assignedOrderIds = (oaLookup.data ?? []).map((r: { order_id: string }) => r.order_id);
+          ordersQuery = assignedOrderIds.length > 0
+            ? supabase.from('orders').select('*').in('id', assignedOrderIds)
+            : Promise.resolve({ data: [], error: null });
+        } else {
+          ordersQuery = supabase.from('orders').select('*').filter('agent_ids', 'cs', `{"${agentIdEncoded}"}`);
+        }
+
         const [statsRes, ordersRes, oaRes, candCountRes] = await Promise.all([
           supabase.from('recruitment_stats').select('*').eq('agent_id', agentData.id).maybeSingle(),
-          supabase.from('orders').select('*').filter('agent_ids', 'cs', `{"${agentIdEncoded}"}`),
+          ordersQuery,
           supabase.from('order_agents').select('order_id, assigned_labor_number, assigned_date').eq('agent_id', agentData.id),
           supabase.from('candidates').select('order_id').eq('agent_id', agentData.id),
         ]);
 
         const statsData = statsRes.data;
-        const ordersData = ordersRes.error ? [] : (ordersRes.data ?? []);
-        if (ordersRes.error) console.error('Orders query error:', ordersRes.error.message);
+        const ordersData = (ordersRes as { data: unknown[] | null; error: { message: string } | null }).error ? [] : ((ordersRes as { data: unknown[] | null; error: unknown }).data ?? []);
+        if ((ordersRes as { error: { message: string } | null }).error) console.error('Orders query error:', (ordersRes as { error: { message: string } }).error.message);
 
         const stats: DashboardStats | null = statsData ? {
           Tong_Lao_Dong: statsData.tong_lao_dong,
@@ -419,7 +436,7 @@ export default function Home() {
   };
 
   if (checkingSession) {
-    return <LoadingSkeleton type="dashboard" />;
+    return <LoadingSkeleton type="auth-check" />;
   }
 
   if (!isLoggedIn) {
@@ -512,6 +529,7 @@ export default function Home() {
           <LoadingSkeleton type="dashboard" />
         ) : (
           <>
+            {/* Telegram connect hidden until feature is built
             {telegramLinked === false && (
               <TelegramConnectSection
                 isLinked={false}
@@ -519,6 +537,7 @@ export default function Home() {
                 onLinked={() => setTelegramLinked(true)}
               />
             )}
+            */}
             {stats && <DashboardStatsComponent stats={stats} />}
             <div className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-gray-100">
               <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4">

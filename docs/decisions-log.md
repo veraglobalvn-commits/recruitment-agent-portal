@@ -6,6 +6,20 @@
 
 ---
 
+## 2026-05-23 (session 5 — master plan restructure)
+
+### [2026-05-23] Đổi chiến lược: website core trước, Telegram/Lark sau
+- **Quyết định:** Tái cơ cấu task-list theo 4 nhóm ưu tiên: P1 (core vận hành) → P2 (UX/Admin) → P3 (mở rộng website) → HOLD (Telegram/Lark). Mọi task Telegram/Lark mới bị freeze cho đến khi website P1+P2 hoàn thành.
+- **Lý do:** Phản hồi từ user — tập trung hoàn thiện chức năng vận hành thực tế (tuyển dụng, agents, in document, sắp xếp lao động, tài chính) trước khi mở rộng sang kênh phụ trợ.
+- **Ảnh hưởng:**
+  - T-WEB-001 (bulk move candidates) giữ nguyên priority cao nhất, READY TO BUILD.
+  - T-WEB-002 (In Demand Letter) được thêm mới vào P1 — chưa có UI + API + n8n workflow.
+  - T-WEB-003 (verify YCTD/Contract n8n) cần user kiểm tra thực tế.
+  - T-TELE-C, T-TELE-D, T-LARK-A, T-BOT-EXT chuyển sang HOLD.
+  - UAT 5 nhóm giữ nguyên nhưng không block task mới.
+
+---
+
 ## 2026-05-04 (session 4 — bot incident + UAT + planning)
 
 ### [2026-05-04] Bot wizard "An error occurred" — TELEGRAM_BRIDGE_SECRET mismatch

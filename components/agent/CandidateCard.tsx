@@ -70,6 +70,7 @@ export default function CandidateCard({
   });
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
   const [pendingStatus, setPendingStatus] = useState<'Passed' | 'Failed' | null>(null);
+  const [videoSliderIndex, setVideoSliderIndex] = useState(0);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -372,27 +373,55 @@ export default function CandidateCard({
       {/* Doc Buttons: Video, Passport, PCC, Health Cert */}
       <div className="px-4 pb-4 space-y-2">
         <div className="flex flex-wrap gap-2">
-          {/* Video - multi-video support */}
+          {/* Video - multi-video slider */}
           {(() => {
             const urls = (candidate.video_links && candidate.video_links.length > 0)
               ? candidate.video_links
               : (candidate.video_link ? [candidate.video_link] : []);
+            const clampedIdx = Math.min(videoSliderIndex, Math.max(0, urls.length - 1));
             if (urls.length > 0) {
-              return urls.map((url, i) => (
-                <button
-                  key={i}
-                  onClick={() => {
-                    if (i === 0) onVideoViewed?.();
-                    if (onVideoPlay) onVideoPlay(url);
-                    else window.open(url, '_blank', 'noopener,noreferrer');
-                  }}
-                  className={`text-xs px-3 py-2 rounded-lg hover:bg-green-200 min-h-[44px] flex items-center font-medium ${
-                    i === 0 && isNewVideo ? 'bg-yellow-100 text-yellow-700 animate-pulse' : 'bg-green-100 text-green-700'
-                  }`}
-                >
-                  ▶ {urls.length > 1 ? `Video ${i + 1}` : 'Video'}
-                </button>
-              ));
+              return (
+                <div className="flex items-center gap-1">
+                  {urls.length > 1 && (
+                    <button
+                      onClick={() => setVideoSliderIndex(i => Math.max(0, i - 1))}
+                      disabled={clampedIdx === 0}
+                      className="w-7 h-7 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 disabled:opacity-30 text-xs flex-shrink-0"
+                    >
+                      ◀
+                    </button>
+                  )}
+                  <button
+                    onClick={() => {
+                      if (clampedIdx === 0) onVideoViewed?.();
+                      const url = urls[clampedIdx];
+                      if (onVideoPlay) onVideoPlay(url);
+                      else window.open(url, '_blank', 'noopener,noreferrer');
+                    }}
+                    className={`text-xs px-3 py-2 rounded-lg hover:bg-green-200 min-h-[44px] flex items-center gap-1 font-medium ${
+                      clampedIdx === 0 && isNewVideo ? 'bg-yellow-100 text-yellow-700 animate-pulse' : 'bg-green-100 text-green-700'
+                    }`}
+                  >
+                    ▶ {urls.length > 1 ? `Video ${clampedIdx + 1}/${urls.length}` : 'Video'}
+                  </button>
+                  {urls.length > 1 && (
+                    <button
+                      onClick={() => setVideoSliderIndex(i => Math.min(urls.length - 1, i + 1))}
+                      disabled={clampedIdx === urls.length - 1}
+                      className="w-7 h-7 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 disabled:opacity-30 text-xs flex-shrink-0"
+                    >
+                      ▶
+                    </button>
+                  )}
+                  <button
+                    onClick={() => onVideoUploadClick(candidate.id_ld)}
+                    title="Upload another video"
+                    className="w-7 h-7 flex items-center justify-center rounded-full bg-blue-100 hover:bg-blue-200 text-blue-600 text-xs flex-shrink-0"
+                  >
+                    +
+                  </button>
+                </div>
+              );
             }
             if (isVideoUploading) {
               return (

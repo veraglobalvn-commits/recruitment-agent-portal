@@ -75,6 +75,15 @@ export default function OrderDetail() {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
+  // Reset video uploading state if user cancels the file picker dialog
+  useEffect(() => {
+    const input = videoInputRef.current;
+    if (!input) return;
+    const onCancel = () => setVideoUploadingCandidate(null);
+    input.addEventListener('cancel', onCancel);
+    return () => input.removeEventListener('cancel', onCancel);
+  }, []);
+
   const fetchCandidates = useCallback(async () => {
     try {
       const agentId = localStorage.getItem('agent_id');
@@ -475,7 +484,13 @@ export default function OrderDetail() {
       const { data: publicUrlData } = supabase.storage.from('agent-media').getPublicUrl(filePath);
       const videoUrl = publicUrlData.publicUrl;
 
-      await supabase.from('candidates').update({ video_link: videoUrl }).eq('id_ld', videoUploadingCandidate);
+      // Append to video_links array (multi-video support)
+      const existing = candidates.find((c) => c.id_ld === videoUploadingCandidate);
+      const existingLinks = existing?.video_links ?? (existing?.video_link ? [existing.video_link] : []);
+      const newVideoLinks = [...existingLinks, videoUrl];
+      await supabase.from('candidates')
+        .update({ video_link: videoUrl, video_links: newVideoLinks })
+        .eq('id_ld', videoUploadingCandidate);
 
       const larkUrl = process.env.NEXT_PUBLIC_N8N_VIDEO_UPDATE_URL;
       if (larkUrl) {
@@ -502,7 +517,7 @@ export default function OrderDetail() {
       }
 
       setUploadMsg(`✅ Video uploaded successfully!`);
-      handleCandidateUpdate(videoUploadingCandidate, { video_link: videoUrl });
+      handleCandidateUpdate(videoUploadingCandidate, { video_link: videoUrl, video_links: newVideoLinks });
       setTimeout(() => setUploadMsg(null), 5000);
     } catch (err) {
       setUploadMsg(`❌ Video Upload Error: ${err instanceof Error ? err.message : String(err)}`);
@@ -841,11 +856,18 @@ export default function OrderDetail() {
 
       {/* Floating Action Button */}
       <div ref={fabRef} className="fixed bottom-6 right-6 z-30">
+        {isUploading && (
+          <div className="flex items-center gap-2 px-4 py-2 bg-white rounded-full shadow-lg border border-blue-200 mb-2">
+            <span className="inline-block w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin flex-shrink-0" />
+            <span className="text-sm text-blue-700 font-medium">Reading passport...</span>
+          </div>
+        )}
         {fabMenuOpen ? (
           <div className="flex flex-col gap-2 items-end mb-2">
             <button
               onClick={() => { setFabMenuOpen(false); fileInputRef.current?.click(); }}
-              className="flex items-center gap-2 px-4 py-2 bg-white rounded-full shadow-lg border border-gray-200 hover:bg-gray-50 transition-colors min-h-[44px]"
+              disabled={isUploading}
+              className="flex items-center gap-2 px-4 py-2 bg-white rounded-full shadow-lg border border-gray-200 hover:bg-gray-50 transition-colors min-h-[44px] disabled:opacity-50"
             >
               <span className="text-sm font-medium text-gray-700">Passport</span>
               <span className="text-xl">🪪</span>
@@ -860,12 +882,13 @@ export default function OrderDetail() {
           </div>
         ) : null}
         <button
-          onClick={() => setFabMenuOpen(!fabMenuOpen)}
-          className={`w-14 h-14 rounded-full shadow-lg flex items-center justify-center text-2xl transition-all ${
+          onClick={() => { if (!isUploading) setFabMenuOpen(!fabMenuOpen); }}
+          disabled={isUploading}
+          className={`w-14 h-14 rounded-full shadow-lg flex items-center justify-center text-2xl transition-all disabled:opacity-50 ${
             fabMenuOpen ? 'bg-red-500 hover:bg-red-600 rotate-45' : 'bg-blue-600 hover:bg-blue-700'
           }`}
         >
-          {fabMenuOpen ? '✕' : '+'}
+          {isUploading ? <span className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" /> : fabMenuOpen ? '✕' : '+'}
         </button>
       </div>
 
