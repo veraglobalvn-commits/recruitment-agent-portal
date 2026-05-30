@@ -6,6 +6,23 @@
 
 ---
 
+## 2026-05-30 (session 7 — member owner production fix)
+
+### [2026-05-30] Khép lại bug member không thấy order của owner agent
+
+- **Triệu chứng:** `MEMBER_TEST_2` thuộc agency/owner `DUONGTRANHD90` (`duongtranhd90@gmail.com`) login nhưng không thấy order.
+- **Điều tra:** DB/RLS sau migration cho thấy member session đã đọc được 2 order của owner (`NICE_042026`, `GOM_SON_DONG_042026`). Production `/api/agents/me` lại trả `owner_agent_id = null`.
+- **Root cause:** VPS production đang chạy commit cũ trên branch `devin/t-2a-infra-005-telegram-bot-api`, chưa có code fix 2026-05-23 (`/api/agents/me` resolve owner_agent_id bằng service_role, dashboard dùng owner id cho member).
+- **Fix đã làm:**
+  - Chạy 2 migration RLS bằng `supabase db query --linked --file`.
+  - Push chuỗi commit fix member/owner lên `origin/main`.
+  - Trên VPS: stash file dirty `app/api/telegram/candidate/route.ts`, checkout/pull `main`, `npm ci`, `npm run build`, copy `.next/static` vào standalone, restart `portal`.
+  - Theo checklist deploy: phát hiện `TELEGRAM_BRIDGE_SECRET` mismatch, sync secret từ portal `.env.local` vào `/var/www/portal/deploy/n8n/.env`, `docker compose up -d`, verify OK.
+- **Verify:** production `/api/agents/me` với session `MEMBER_TEST_2` trả `owner_agent_id = DUONGTRANHD90`; member query thấy 2 order; user xác nhận member đã thấy order trong UI.
+- **Lưu ý VPS:** còn `stash@{0}: codex-pre-main-deploy` giữ thay đổi cũ ở `app/api/telegram/candidate/route.ts`; còn file untracked `deploy/telegram-bot-api/docker-compose.yml.bak`. Không tự xóa khi chưa review.
+
+---
+
 ## 2026-05-23 (session 6 — member/session bug fixes)
 
 ### [2026-05-23] Fix 5 bugs member/owner_agent_id + session stale
