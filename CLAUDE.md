@@ -80,6 +80,7 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 ## Quy tắc bắt buộc (áp dụng mọi agent, mọi session)
 
 - **TUYỆT ĐỐI KHÔNG** paste code, diff, nội dung file, hay output dài ra chat.
+- **TUYỆT ĐỐI KHÔNG** để lộ diff đỏ/xanh hoặc patch nội dung file trong transcript khi add/edit file, trừ khi user yêu cầu rõ ràng xem code/nội dung. Ưu tiên thao tác chỉnh file không in diff; chỉ báo cáo file đã sửa, mục đích, và kết quả verify.
 - Chỉ báo cáo: file nào đã đọc/sửa, làm gì, kết quả. Dùng `<ref_file />` / `<ref_snippet />` để tham chiếu.
 
 ---
