@@ -6,11 +6,16 @@
 
 ---
 
-## Chiến lược (cập nhật 2026-05-23)
+## Chiến lược (cập nhật 2026-05-31)
 
 **Ưu tiên mới: Website core trước → Telegram/Lark sau**
 
-Tập trung hoàn thiện toàn bộ chức năng vận hành trên website (portal) trước khi phát triển thêm tính năng mở rộng trên Telegram / Lark. Telegram bot hiện tại giữ nguyên, không mở rộng thêm workflow mới cho đến khi website ổn định.
+Tập trung hoàn thiện toàn bộ chức năng vận hành trên website (portal) trước khi phát triển thêm tính năng mở rộng trên Telegram / Lark / n8n. Website phải là nơi thực hiện được đầy đủ nghiệp vụ trước; các hệ thống mở rộng chỉ bổ sung automation, notification, hoặc document generation sau khi workflow website đã chạy được.
+
+**Nguyên tắc bắt buộc cho feature mới:**
+- Mọi chức năng nghiệp vụ phải có website flow trước, rồi mới tích hợp Telegram/Lark/n8n nếu cần.
+- Ví dụ: "thông báo khi có ứng viên mới" phải có notification/inbox/trạng thái xử lý trên website trước; Telegram chỉ là kênh push phụ sau đó.
+- Với feature tạo entity DB mới hoặc thay đổi quan hệ nghiệp vụ, phải hỏi user để chốt business rules trước khi thiết kế schema/migration.
 
 **Phân nhóm ưu tiên:**
 1. **🔴 P1 — Core vận hành** (phải có để chạy thực tế)
@@ -49,6 +54,115 @@ Tập trung hoàn thiện toàn bộ chức năng vận hành trên website (por
 
 ## 🔴 P1 — Core vận hành (làm trước)
 
+### [T-WEB-CORE-001] Audit core recruitment website flow — ✅ DONE (2026-05-31)
+- Type: Audit/Verify
+- Agent: Codex
+- Status: **completed** — audit code-level, chưa chạy UAT browser bằng account thật trong phiên này
+- Description: Xác nhận toàn bộ flow tuyển dụng chính chạy được trên website trước khi làm mở rộng.
+
+**Scope:**
+- Agent owner/member thấy đúng orders/candidates
+- Agent owner/member upload ứng viên vào order
+- Admin thấy ứng viên mới trên website
+- Admin chấm Pass/Fail trên website hoặc qua flow hiện có, DB cập nhật đúng
+- Xác định phần nào đang phụ thuộc Telegram/n8n mà website chưa có fallback đầy đủ
+
+**Acceptance criteria:**
+- [x] Liệt kê các route/API/component đã audit
+- [x] Ghi rõ blocker nếu owner/member/admin chưa dùng được end-to-end trên website
+- [x] Không build Telegram/Lark/n8n feature mới trong task này
+
+**Audit result (2026-05-31):**
+- Routes/components audited: `/` agent dashboard, `/order/[id]`, `/admin/candidates`, `/admin/orders/[id]`, `CandidateCard`, `OrdersList`, `ChangeOrderModal`.
+- APIs audited: `/api/agents/me`, `/api/passport`, `/api/candidates/[id]`, `/api/admin/candidates/change-order`, `/api/admin/order-agents`, `/api/admin/orders/[id]`.
+- Owner/member visibility: website flow uses `/api/agents/me` to resolve `owner_agent_id`; dashboard/order detail then query by effective owner agent id. This matches the production member fix.
+- Candidate upload: website has manual add and OCR passport upload. OCR route writes candidate via service role and only syncs Lark/n8n fire-and-forget after DB write, so website DB write is primary.
+- Admin visibility: `/admin/candidates` and `/admin/orders/[id]` load candidates directly from Supabase and expose filters/order links.
+- Admin Pass/Fail: website UI exists in `/admin/candidates`; DB update is direct browser Supabase update, relying on admin RLS. This is usable if admin RLS is correct, but should be hardened later through an admin API route for consistency.
+- Website fallback gap: candidate edit/photo/PCC/health/video update works on website DB/storage first, but Lark/n8n update remains fire-and-forget. No blocking dependency for website DB state.
+- Blocker found: no website-native "new/unreviewed candidate" queue/state beyond filtering Pending and local-only `newVideoCandidates`; this remains `T-WEB-CORE-002`.
+- Verification gap: no live browser UAT performed in this audit; recommend user test owner/member/admin accounts when convenient.
+
+---
+
+### [T-WEB-CORE-002] Website-first candidate notification — ✅ DECIDED (2026-05-31)
+- Type: Feature
+- Agent: Codex
+- Status: **completed as UX decision** — dùng `/admin/candidates` filter Pending làm queue chấm ứng viên; chưa build inbox/dashboard riêng
+- Description: Admin phải nhận biết có ứng viên mới ngay trong website trước; Telegram notification chỉ là kênh mở rộng sau.
+
+**Acceptance criteria:**
+- [x] Website admin có cơ chế nhận biết ứng viên mới/chưa xử lý
+- [x] Admin có thể mở candidate/order liên quan từ website
+- [x] Trạng thái đã xem/đã xử lý rõ ràng nếu nghiệp vụ yêu cầu
+- [x] Sau khi website flow ổn mới xem xét push Telegram
+
+**Decision note (2026-05-31):**
+- Không đặt danh sách/KPI ứng viên chờ xử lý trên `/admin` dashboard vì lượng ứng viên cần chấm sẽ lớn, UX không phù hợp.
+- User duyệt hướng dùng filter Pending hiện có trên `/admin/candidates` làm queue chính để admin chấm ứng viên.
+- Nếu cần cải thiện sau: đổi nhãn Pending thành "Chờ chấm", sort mới nhất lên đầu, thêm count theo filter, và link từ order detail sang candidates đã filter theo order + pending.
+
+---
+
+### [T-WEB-JOBPOS-001] Discovery job positions business rules — ✅ DONE (2026-05-31)
+- Type: Discovery
+- Agent: Codex
+- Status: **completed** — user confirmed business rules; code/schema audit found no existing dedicated position entity
+- Description: Hỏi user để chốt nghiệp vụ job positions trước khi thiết kế DB/API/UI.
+
+**Business rules confirmed (2026-05-31):**
+- Job positions là danh mục dùng chung toàn hệ thống, nhưng chia theo ngành nghề của đơn hàng.
+- Admin và agent đều được gán position cho candidate, nhưng chỉ sau khi candidate đã passed.
+- Mỗi candidate chỉ có 1 position.
+- Field giai đoạn đầu: tên vị trí, số lượng.
+- Quota tổng vẫn tính theo order. Mỗi order có số lượng riêng cho từng position, admin fill số lượng position cho order đó.
+
+**Audit result:**
+- Code hiện có dùng `orders.job_type`/`job_type_en` dạng text tự do để mô tả loại lao động/vị trí trên order.
+- `lib/types.ts` chưa có type/table dedicated cho job positions.
+- Không thấy bảng migration hiện có cho position catalog, order-position quota, hoặc candidate-position assignment.
+- Không thấy candidate field hiện có để gán position riêng.
+
+**Acceptance criteria:**
+- [x] User confirm business rules
+- [x] Audit schema/code hiện có để tránh tạo trùng concept
+- [x] Chỉ sau đó mới viết task build/migration cụ thể
+
+---
+
+### [T-WEB-JOBPOS-002] Build website job positions flow — IMPLEMENTED + MIGRATED (2026-05-31)
+- Type: Feature/DB
+- Agent: Codex
+- Status: **implemented + migrated, pending UAT** — migration đã chạy trên Supabase; cần test admin/agent bằng tài khoản thật
+- Description: Thêm danh mục vị trí toàn hệ thống, cấu hình số lượng vị trí theo từng order, và gán 1 vị trí cho candidate sau khi candidate passed.
+
+**Expected scope:**
+- DB: position catalog theo ngành nghề, order-position quota, candidate position assignment.
+- Admin: quản lý position catalog; fill số lượng từng position trong order.
+- Admin/Agent: gán position cho candidate đã passed.
+- Validation: không cho gán position cho candidate chưa passed; mỗi candidate tối đa 1 position.
+- Reporting: hiển thị số lượng từng position trong order và số đã gán.
+
+**Acceptance criteria:**
+- [x] Có migration SQL được tạo và đã chạy sau khi user xác nhận
+- [x] Admin cấu hình được position quota theo order
+- [x] Admin/agent gán được 1 position cho candidate đã passed
+- [x] Candidate chưa passed không gán được position
+- [x] Order detail hiển thị quota từng position và count đã gán
+- [x] TypeScript 0 lỗi
+
+**Implementation result (2026-05-31):**
+- Migration tạo `job_positions`, `order_positions`, và thêm `candidates.position_id`.
+- API đọc/cấu hình position theo order, tạo catalog position theo ngành nghề, và gán position cho candidate qua server-side auth.
+- Admin order detail có section "Vị trí tuyển dụng" để thêm position và set số lượng từng order.
+- Agent/admin CandidateCard có dropdown gán position cho candidate Passed.
+- Agent order detail hiển thị quota/assigned count theo position.
+- Migration run: `supabase/migrations/20260531000001_add_job_positions.sql`.
+- Verify: PostgREST trả 200 cho `job_positions`, `order_positions`, và `candidates.position_id`.
+- Pending: UAT admin/agent bằng tài khoản thật.
+
+---
+
 ### [T-FIX-001] Chạy migration RLS cho member role — ✅ DONE (2026-05-30)
 - Type: Bug/Migration
 - Status: **completed** — Codex chạy trực tiếp 2 migration qua `supabase db query --linked --file`
@@ -58,10 +172,10 @@ Tập trung hoàn thiện toàn bộ chức năng vận hành trên website (por
 
 ---
 
-### [T-WEB-001] Admin bulk move candidates — **🔜 READY TO BUILD**
+### [T-WEB-001] Admin bulk move candidates — ✅ DONE (2026-05-30)
 - Type: Feature
 - Agent: Devin
-- Status: **planned** — spec confirmed 2026-05-02
+- Status: **completed** — implemented by Codex, user verified move flow works
 - Description: Admin chọn nhiều ứng viên và chuyển sang order khác. Agent sở hữu được tự động thêm/cập nhật trong order mới.
 
 **Scope:**
@@ -82,14 +196,14 @@ Tập trung hoàn thiện toàn bộ chức năng vận hành trên website (por
 - `components/agent/CandidateCard.tsx` — sửa (optional props `selectable/selected/onToggleSelect`)
 
 **Acceptance criteria:**
-- [ ] Chọn ≥1 ứng viên → floating bar hiện
-- [ ] Modal dropdown order đích, exclude order hiện tại
-- [ ] API move thành công: `candidates.order_id` cập nhật
-- [ ] Agent chưa có trong order mới → auto INSERT `order_agents` với count thực tế
-- [ ] Agent đã có → UPDATE `assigned_labor_number` = count thực tế (clamped)
-- [ ] Warning nếu bị clamp do vượt quota
-- [ ] `/admin/orders/[id]`: ứng viên đã move biến khỏi danh sách ngay
-- [ ] TypeScript 0 lỗi
+- [x] Chọn ≥1 ứng viên → floating bar hiện
+- [x] Modal dropdown order đích, exclude order hiện tại
+- [x] API move thành công: `candidates.order_id` cập nhật
+- [x] Agent chưa có trong order mới → auto INSERT `order_agents` với count thực tế
+- [x] Agent đã có → UPDATE `assigned_labor_number` = count thực tế (clamped)
+- [x] Warning nếu bị clamp do vượt quota
+- [x] `/admin/orders/[id]`: ứng viên đã move biến khỏi danh sách ngay
+- [x] TypeScript 0 lỗi
 
 ---
 

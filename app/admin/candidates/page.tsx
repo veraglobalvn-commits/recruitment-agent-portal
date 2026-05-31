@@ -7,6 +7,7 @@ import { fetchActiveAgents } from '@/lib/query-helpers';
 import Link from 'next/link';
 import CandidateCard from '@/components/agent/CandidateCard';
 import VideoPlayer from '@/components/ui/VideoPlayer';
+import ChangeOrderModal from '@/components/admin/ChangeOrderModal';
 
 type StatusFilter = 'all' | 'Passed' | 'Failed' | 'Pending';
 
@@ -100,6 +101,7 @@ export default function CandidatesPage() {
   const [agents, setAgents] = useState<AgentOption[]>([]);
   const [orders, setOrders] = useState<OrderBrief[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
@@ -107,6 +109,8 @@ export default function CandidatesPage() {
   const [orderFilter, setOrderFilter] = useState<string>('all');
   const [playingVideo, setPlayingVideo] = useState<string | null>(null);
   const [videoUploadingCandidate, setVideoUploadingCandidate] = useState<string | null>(null);
+  const [selectedCandidates, setSelectedCandidates] = useState<string[]>([]);
+  const [showChangeOrderModal, setShowChangeOrderModal] = useState(false);
   const [newVideoCandidates, setNewVideoCandidates] = useState<string[]>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('newVideoCandidates');
@@ -128,21 +132,27 @@ export default function CandidatesPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const [candRes, activeAgents, ordRes] = await Promise.all([
         supabase
           .from('candidates')
-          .select('id_ld, order_id, agent_id, full_name, pp_no, dob, pp_doi, pp_doe, pob, address, phone, height_ft, weight_kg, visa_status, passport_link, video_link, photo_link, pcc_link, health_cert_link, interview_status, created_at, candidate_confirmed, video_links')
-          .order('created_at', { ascending: false })
+          .select('*')
+          .order('id_ld', { ascending: false })
           .limit(300),
         fetchActiveAgents(),
         supabase.from('orders').select('id, company_name, job_type'),
       ]);
+
+      if (candRes.error) throw new Error(candRes.error.message);
+      if (ordRes.error) throw new Error(ordRes.error.message);
+
       setCandidates((candRes.data ?? []) as Candidate[]);
       setAgents(activeAgents);
       setOrders((ordRes.data ?? []) as OrderBrief[]);
-    } catch {
-      // data stays empty, loading stops
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : String(err));
+      setCandidates([]);
     } finally {
       setLoading(false);
     }
@@ -193,6 +203,14 @@ export default function CandidatesPage() {
         return dateB - dateA;
       });
   }, [search, statusFilter, agentFilter, orderFilter, candidates, newVideoSet]);
+
+  const selectedOrderIds = useMemo(() => {
+    return Array.from(new Set(
+      candidates
+        .filter((c) => selectedCandidates.includes(c.id_ld) && c.order_id)
+        .map((c) => c.order_id as string),
+    ));
+  }, [candidates, selectedCandidates]);
 
   const handleStatusChange = useCallback(async (candidateId: string, status: 'Passed' | 'Failed') => {
     setCandidates((prev) => prev.map((c) => c.id_ld === candidateId ? { ...c, interview_status: status } : c));
@@ -256,6 +274,17 @@ export default function CandidatesPage() {
     setNewVideoCandidates((prev) => prev.filter((id) => id !== candidateId));
   }, []);
 
+  const handleChangeOrderMoved = useCallback((targetOrderId: string, warnings: string[]) => {
+    setCandidates((prev) => prev.map((c) => (
+      selectedCandidates.includes(c.id_ld) ? { ...c, order_id: targetOrderId } : c
+    )));
+    setSelectedCandidates([]);
+    setShowChangeOrderModal(false);
+    if (warnings.length > 0) {
+      alert(warnings.join('\n'));
+    }
+  }, [selectedCandidates]);
+
   const totalPassed = candidates.filter((c) => c.interview_status === 'Passed').length;
   const totalFailed = candidates.filter((c) => c.interview_status === 'Failed').length;
 
@@ -267,6 +296,16 @@ export default function CandidatesPage() {
       {playingVideo && (
         <VideoPlayer url={playingVideo} onClose={() => setPlayingVideo(null)} />
       )}
+
+      <ChangeOrderModal
+        open={showChangeOrderModal}
+        orders={orders}
+        selectedCount={selectedCandidates.length}
+        excludedOrderIds={selectedOrderIds}
+        candidateIds={selectedCandidates}
+        onClose={() => setShowChangeOrderModal(false)}
+        onMoved={handleChangeOrderMoved}
+      />
 
       <input type="file" accept="video/*" ref={videoInputRef} onChange={handleVideoChange} className="hidden" />
 
@@ -316,6 +355,12 @@ export default function CandidatesPage() {
         />
       </div>
 
+      {loadError && (
+        <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-3 py-2">
+          Không tải được danh sách ứng viên: {loadError}
+        </div>
+      )}
+
       {loading ? (
         <div className="space-y-3 animate-pulse">
           {[...Array(5)].map((_, i) => <div key={i} className="h-48 bg-gray-200 rounded-2xl" />)}
@@ -346,9 +391,31 @@ export default function CandidatesPage() {
                 isNewVideo={newVideoSet.has(c.id_ld)}
                 onVideoViewed={() => handleVideoViewed(c.id_ld)}
                 onVideoPlay={(url) => setPlayingVideo(url)}
+                isSelected={selectedCandidates.includes(c.id_ld)}
+                onToggleSelect={(candidateId, checked) => setSelectedCandidates((prev) => (
+                  checked ? [...prev, candidateId] : prev.filter((id) => id !== candidateId)
+                ))}
               />
             );
           })}
+        </div>
+      )}
+
+      {selectedCandidates.length > 0 && (
+        <div className="fixed left-4 right-4 bottom-4 z-40 bg-white border border-blue-100 shadow-xl rounded-2xl p-3 flex items-center gap-3">
+          <span className="text-xs text-blue-700 font-medium flex-1">Đã chọn {selectedCandidates.length} ứng viên</span>
+          <button
+            onClick={() => setSelectedCandidates([])}
+            className="text-xs text-gray-500 hover:text-gray-700 min-h-[36px] px-2"
+          >
+            Bỏ chọn
+          </button>
+          <button
+            onClick={() => setShowChangeOrderModal(true)}
+            className="text-xs bg-blue-600 text-white px-3 py-2 rounded-lg hover:bg-blue-700 min-h-[36px]"
+          >
+            Chuyển đơn
+          </button>
         </div>
       )}
     </div>

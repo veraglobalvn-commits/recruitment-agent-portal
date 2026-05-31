@@ -6,6 +6,46 @@
 
 ---
 
+## 2026-05-31 (session 8 — website-first operating plan)
+
+### [2026-05-31] Website phải hoàn chỉnh nghiệp vụ trước khi tích hợp Telegram/Lark/n8n mở rộng
+
+- **Quyết định:** Mọi chức năng nghiệp vụ phải thực hiện được trên website portal trước. Telegram/Lark/n8n chỉ được tích hợp sau như kênh mở rộng, automation, notification, hoặc document generation.
+- **Ví dụ áp dụng:** Với "thông báo khi có ứng viên mới", admin phải có cách nhận biết và xử lý ứng viên mới trên website trước; Telegram group notification là kênh push phụ, không phải workflow chính duy nhất.
+- **Lý do:** Website là nền tảng vận hành chính cho agent owner, members và admin. Nếu phụ thuộc Telegram trước, core workflow dễ bị vỡ khi webhook/env/n8n lỗi và khó kiểm thử end-to-end.
+- **Ảnh hưởng:** Task-list thêm `T-WEB-CORE-001`, `T-WEB-CORE-002`, `T-WEB-JOBPOS-001`. Các task document/n8n như Demand Letter, hợp đồng công ty Việt Nam, YCTD/contract nên gom thành phase sau core recruitment website.
+
+### [2026-05-31] Job positions phải discovery nghiệp vụ trước khi thiết kế schema
+
+- **Quyết định:** Không tạo migration/schema/UI cho job positions cho đến khi hỏi user và chốt business rules thực tế.
+- **Câu hỏi bắt buộc:** position theo order hay danh mục chung; ai gán cho candidate; 1 candidate có mấy position; field tối thiểu; quota tính theo order/position/agent-position.
+- **Lý do:** Đây là entity nghiệp vụ mới, nếu tự giả định sai sẽ kéo theo DB/API/UI/RLS/report sai.
+- **Ảnh hưởng:** Phiên sau bắt đầu bằng `T-WEB-JOBPOS-001` nếu làm job positions, không nhảy thẳng vào code.
+
+### [2026-05-31] Candidate queue dùng `/admin/candidates` Pending, không tạo inbox/dashboard riêng
+
+- **Quyết định:** Dùng filter Pending hiện có trên `/admin/candidates` làm queue chính để admin chấm ứng viên.
+- **Lý do:** Chấm ứng viên là workflow danh sách có volume lớn; đặt trong candidates list đúng hơn dashboard card hoặc inbox riêng.
+- **Ảnh hưởng:** `T-WEB-CORE-002` đóng ở mức UX decision. Nếu cần cải thiện sau thì làm ngay trong `/admin/candidates`: nhãn "Chờ chấm", sort mới nhất, count theo filter, link từ order detail sang pending candidates.
+
+### [2026-05-31] Business rules cho job positions
+
+- **Quyết định:** Job positions là danh mục dùng chung toàn hệ thống, được phân theo ngành nghề của order. Mỗi order có số lượng riêng cho từng position do admin nhập.
+- **Quy tắc gán:** Admin và agent đều gán được position cho candidate, nhưng chỉ sau khi candidate đã passed. Mỗi candidate chỉ có 1 position.
+- **Field tối thiểu:** Tên vị trí và số lượng.
+- **Quota:** Quota tổng vẫn theo order; position quota là phân bổ số lượng trong từng order, không thay thế quota order.
+- **Audit:** Code hiện có chỉ có `orders.job_type`/`job_type_en` dạng text tự do; chưa có position catalog, order-position quota, hoặc candidate-position assignment.
+- **Ảnh hưởng:** `T-WEB-JOBPOS-001` hoàn tất discovery. Task build tiếp theo là `T-WEB-JOBPOS-002`, có DB migration nên phải trình bày SQL và chờ user xác nhận trước khi chạy.
+
+### [2026-05-31] Job positions implementation dùng catalog + order quota + candidate assignment
+
+- **Quyết định:** Implement bằng `job_positions` catalog theo ngành nghề, `order_positions` cho quota theo từng order, và `candidates.position_id` cho assignment 1 vị trí/ứng viên.
+- **Lý do:** Giữ `orders.job_type` làm mô tả text hiện hữu, không phá workflow tài liệu/dịch thuật cũ; position mới phục vụ phân bổ sau khi candidate đã Passed.
+- **Guardrail:** Cấu hình quota position chỉ admin làm. Gán position đi qua API server-side và chỉ cho candidate `Passed`; agent/member chỉ gán được candidate thuộc owner/effective agent của mình.
+- **Ảnh hưởng:** Trước deploy phải chạy migration `20260531000001_add_job_positions.sql` trên Supabase và reload schema, nếu không code tham chiếu bảng/cột mới sẽ lỗi schema cache.
+
+---
+
 ## 2026-05-30 (session 7 — member owner production fix)
 
 ### [2026-05-30] Khép lại bug member không thấy order của owner agent

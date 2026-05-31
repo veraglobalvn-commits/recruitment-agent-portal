@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import type { Candidate, Order } from '@/lib/types';
+import type { Candidate, Order, JobPosition, OrderPositionSummary } from '@/lib/types';
 import CandidateCard from '@/components/agent/CandidateCard';
 import LoadingSkeleton from '@/components/ui/LoadingSkeleton';
 import MediaViewer from '@/components/ui/MediaViewer';
@@ -71,6 +71,9 @@ export default function OrderDetail() {
   const [addSaving, setAddSaving] = useState(false);
   const [fabMenuOpen, setFabMenuOpen] = useState(false);
   const fabRef = useRef<HTMLDivElement>(null);
+  const [positionIndustry, setPositionIndustry] = useState('');
+  const [orderPositions, setOrderPositions] = useState<OrderPositionSummary[]>([]);
+  const [positionOptions, setPositionOptions] = useState<JobPosition[]>([]);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -218,6 +221,7 @@ export default function OrderDetail() {
         pcc_link: r.pcc_link,
         health_cert_link: r.health_cert_link,
         interview_status: r.interview_status,
+        position_id: r.position_id ?? null,
         created_at: r.created_at,
         candidate_confirmed: r.candidate_confirmed ?? null,
         video_links: r.video_links ?? null,
@@ -252,6 +256,32 @@ export default function OrderDetail() {
     fetchCandidates();
   }, [orderId, fetchCandidates]);
 
+  const fetchOrderPositions = useCallback(async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) return;
+      const res = await fetch(`/api/orders/${encodeURIComponent(orderId)}/positions`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      const json = await res.json() as {
+        industry?: string;
+        order_positions?: OrderPositionSummary[];
+      };
+      if (!res.ok) return;
+      const quotas = json.order_positions ?? [];
+      setPositionIndustry(json.industry ?? '');
+      setOrderPositions(quotas);
+      setPositionOptions(quotas.filter((quota) => quota.quantity > 0).map((quota) => quota.position));
+    } catch {
+      // Keep candidate flow usable even if positions are unavailable.
+    }
+  }, [orderId]);
+
+  useEffect(() => {
+    if (!orderId) return;
+    fetchOrderPositions();
+  }, [orderId, fetchOrderPositions]);
+
   const focusedCandidateExists = useMemo(() => {
     if (!focusCandidateId) return false;
     return candidates.some((c) => c.id_ld === focusCandidateId);
@@ -283,6 +313,36 @@ export default function OrderDetail() {
       return updated;
     });
   }, [orderId]);
+
+  const handleCandidatePositionChange = useCallback(async (id: string, positionId: string | null) => {
+    const previous = candidates.find((candidate) => candidate.id_ld === id)?.position_id ?? null;
+    setCandidates((prev) => {
+      const updated = prev.map((candidate) => (candidate.id_ld === id ? { ...candidate, position_id: positionId } : candidate));
+      sessionStorage.setItem(`c_url_${orderId}`, JSON.stringify(updated));
+      return updated;
+    });
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error('Not authenticated');
+
+      const res = await fetch(`/api/candidates/${encodeURIComponent(id)}/position`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ position_id: positionId }),
+      });
+      const json = await res.json() as { error?: string };
+      if (!res.ok) throw new Error(json.error || 'Could not save position');
+      fetchOrderPositions();
+    } catch (err) {
+      setCandidates((prev) => {
+        const updated = prev.map((candidate) => (candidate.id_ld === id ? { ...candidate, position_id: previous } : candidate));
+        sessionStorage.setItem(`c_url_${orderId}`, JSON.stringify(updated));
+        return updated;
+      });
+      alert(`Position save failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }, [candidates, fetchOrderPositions, orderId]);
 
   const handleCandidateDelete = useCallback(async (id: string) => {
     try {
@@ -783,6 +843,28 @@ export default function OrderDetail() {
           </div>
         )}
 
+        {orderPositions.length > 0 && (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+            <div className="flex items-center justify-between gap-3 mb-3">
+              <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">Positions</h3>
+              {positionIndustry && <span className="text-xs text-gray-400 truncate">{positionIndustry}</span>}
+            </div>
+            <div className="space-y-2">
+              {orderPositions.map((quota) => {
+                const overQuota = quota.quantity > 0 && quota.assigned_count > quota.quantity;
+                return (
+                  <div key={quota.id} className="flex items-center justify-between gap-3 rounded-lg bg-gray-50 px-3 py-2">
+                    <span className="text-sm font-medium text-slate-700 truncate">{quota.position.name}</span>
+                    <span className={`text-xs font-semibold ${overQuota ? 'text-red-600' : 'text-gray-500'}`}>
+                      {quota.assigned_count}/{quota.quantity}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Upload message */}
         {uploadMsg && (
           <div className="p-3 bg-white border border-gray-200 rounded-xl shadow-sm text-center text-sm font-medium">
@@ -831,6 +913,8 @@ export default function OrderDetail() {
                   canSetStatus={false}
                   isFocused={focusCandidateId === c.id_ld}
                   autoOpenEdit={autoEditCandidateId === c.id_ld}
+                  positionOptions={positionOptions}
+                  onPositionChange={handleCandidatePositionChange}
                 />
               ))}
             </div>

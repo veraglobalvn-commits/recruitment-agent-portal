@@ -60,6 +60,7 @@ export interface Candidate {
   id_ld: string;
   order_id: string | null;
   agent_id: string | null;
+  position_id: string | null;
   full_name: string | null;
   pp_no: string | null;
   dob: string | null;
@@ -80,6 +81,29 @@ export interface Candidate {
   created_at?: string | null;
   candidate_confirmed?: CandidateConfirmed | null;
   video_links?: string[] | null;
+}
+
+export interface JobPosition {
+  id: string;
+  industry: string;
+  name: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface OrderPosition {
+  id: string;
+  order_id: string;
+  position_id: string;
+  quantity: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface OrderPositionSummary extends OrderPosition {
+  position: JobPosition;
+  assigned_count: number;
 }
 
 export interface DashboardData {

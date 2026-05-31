@@ -56,5 +56,6 @@
 |---|---|
 | Agent ID có space (ví dụ "GTA 2026") làm `.contains()` sai | Dùng `.filter('agent_ids', 'cs', '{"GTA 2026"}')` thay vì `.contains()` |
 | `data \|\| []` không bắt lỗi Supabase | Luôn check `res.error` trước khi dùng `res.data` |
+| List page select/order theo cột không tồn tại làm Supabase trả lỗi rồi UI hiện rỗng | Với danh sách admin, verify schema trước khi thêm cột vào `select`/`order`; không catch rỗng, phải hiển thị/log lỗi tải dữ liệu |
 | Hai push liên tiếp, Vercel bỏ qua push sau | Chờ deploy xong mới push tiếp, hoặc dùng empty commit để trigger lại |
 | Column mới trong code nhưng chưa có trong DB | Chạy ALTER TABLE + NOTIFY pgrst trước khi deploy |

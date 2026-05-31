@@ -9,6 +9,13 @@ function getAdminClient() {
   return createClient(url, key);
 }
 
+function getWebhookUrl(entityType: 'order' | 'company') {
+  if (process.env.N8N_TRANSLATE_URL) return process.env.N8N_TRANSLATE_URL;
+  return entityType === 'order'
+    ? process.env.N8N_TRANSLATE_ORDER_URL
+    : process.env.N8N_TRANSLATE_COMPANY_URL;
+}
+
 export async function POST(req: NextRequest) {
   const auth = await getAdminUser(req);
   if (!auth) return unauthorizedResponse('Admin access required');
@@ -48,21 +55,38 @@ export async function POST(req: NextRequest) {
         .select()
         .single();
       
-      if (!insertError && request) {
-        requestIds.push(request.id);
-        const url = process.env.N8N_TRANSLATE_URL || process.env.N8N_TRANSLATE_ORDER_URL;
-        if (url) {
-          fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              request_id: request.id,
-              entity_type: 'order',
-              entity_id: request.entity_id,
-              fields_to_translate: request.fields_to_translate
-            }),
-          }).catch(err => console.error('[translate] n8n order error:', err));
-        }
+      if (insertError || !request) throw insertError || new Error('Failed to create order translation request');
+
+      requestIds.push(request.id);
+      const url = getWebhookUrl('order');
+      if (!url) {
+        await supabase.from('translation_requests').update({
+          status: 'failed',
+          error_message: 'N8N translate webhook URL is not configured',
+          completed_at: new Date().toISOString(),
+        }).eq('id', request.id);
+        throw new Error('N8N translate webhook URL is not configured');
+      }
+
+      const webhookRes = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          request_id: request.id,
+          entity_type: 'order',
+          entity_id: request.entity_id,
+          fields_to_translate: request.fields_to_translate
+        }),
+      });
+
+      if (!webhookRes.ok) {
+        const message = `N8N translate webhook failed with status ${webhookRes.status}`;
+        await supabase.from('translation_requests').update({
+          status: 'failed',
+          error_message: message,
+          completed_at: new Date().toISOString(),
+        }).eq('id', request.id);
+        throw new Error(message);
       }
     })());
   }
@@ -80,26 +104,48 @@ export async function POST(req: NextRequest) {
         .select()
         .single();
       
-      if (!insertError && request) {
-        requestIds.push(request.id);
-        const url = process.env.N8N_TRANSLATE_URL || process.env.N8N_TRANSLATE_ORDER_URL || process.env.N8N_TRANSLATE_COMPANY_URL;
-        if (url) {
-          fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              request_id: request.id,
-              entity_type: 'company',
-              entity_id: request.entity_id,
-              fields_to_translate: request.fields_to_translate
-            }),
-          }).catch(err => console.error('[translate] n8n company error:', err));
-        }
+      if (insertError || !request) throw insertError || new Error('Failed to create company translation request');
+
+      requestIds.push(request.id);
+      const url = getWebhookUrl('company');
+      if (!url) {
+        await supabase.from('translation_requests').update({
+          status: 'failed',
+          error_message: 'N8N translate webhook URL is not configured',
+          completed_at: new Date().toISOString(),
+        }).eq('id', request.id);
+        throw new Error('N8N translate webhook URL is not configured');
+      }
+
+      const webhookRes = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          request_id: request.id,
+          entity_type: 'company',
+          entity_id: request.entity_id,
+          fields_to_translate: request.fields_to_translate
+        }),
+      });
+
+      if (!webhookRes.ok) {
+        const message = `N8N translate webhook failed with status ${webhookRes.status}`;
+        await supabase.from('translation_requests').update({
+          status: 'failed',
+          error_message: message,
+          completed_at: new Date().toISOString(),
+        }).eq('id', request.id);
+        throw new Error(message);
       }
     })());
   }
 
-  await Promise.all(promises);
+  try {
+    await Promise.all(promises);
+  } catch (err) {
+    console.error('[translate] request failed:', err);
+    return NextResponse.json({ error: err instanceof Error ? err.message : 'Failed to trigger translation' }, { status: 500 });
+  }
 
   if (requestIds.length === 0) {
     return NextResponse.json({ error: 'Failed to create translation requests' }, { status: 500 });

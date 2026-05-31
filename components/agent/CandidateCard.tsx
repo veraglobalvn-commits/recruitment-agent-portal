@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import type { Candidate } from '@/lib/types';
+import type { Candidate, JobPosition } from '@/lib/types';
 import { supabase } from '@/lib/supabase';
 
 interface CandidateCardProps {
@@ -25,6 +25,8 @@ interface CandidateCardProps {
   onToggleSelect?: (id: string, selected: boolean) => void;
   isFocused?: boolean;
   autoOpenEdit?: boolean;
+  positionOptions?: JobPosition[];
+  onPositionChange?: (id: string, positionId: string | null) => void;
 }
 
 export default function CandidateCard({
@@ -48,6 +50,8 @@ export default function CandidateCard({
   onToggleSelect,
   isFocused = false,
   autoOpenEdit = false,
+  positionOptions,
+  onPositionChange,
 }: CandidateCardProps) {
 
   const [editing, setEditing] = useState(false);
@@ -105,6 +109,8 @@ export default function CandidateCard({
 
   // Passed candidates are locked — enforced at API level too
   const canDelete = candidate.interview_status !== 'Passed';
+  const isPassed = candidate.interview_status === 'Passed';
+  const selectedPosition = positionOptions?.find((position) => position.id === candidate.position_id);
 
   const saveEdit = async () => {
     setSaving(true);
@@ -369,6 +375,30 @@ export default function CandidateCard({
           </>
         )}
       </div>
+
+      {positionOptions && positionOptions.length > 0 && (
+        <div className="px-4 pb-3">
+          {isPassed && onPositionChange ? (
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Position</label>
+              <select
+                value={candidate.position_id ?? ''}
+                onChange={(e) => onPositionChange(candidate.id_ld, e.target.value || null)}
+                className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[44px]"
+              >
+                <option value="">Select position</option>
+                {positionOptions.map((position) => (
+                  <option key={position.id} value={position.id}>{position.name}</option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <div className="text-xs bg-gray-50 border border-gray-100 rounded-lg px-3 py-2 text-gray-500">
+              Position: {selectedPosition?.name ?? (isPassed ? 'Not assigned' : 'Available after Passed')}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Doc Buttons: Video, Passport, PCC, Health Cert */}
       <div className="px-4 pb-4 space-y-2">

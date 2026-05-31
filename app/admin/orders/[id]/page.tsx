@@ -3,12 +3,13 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import type { Candidate, AdminOrder, AgentOption, OrderHandover, OrderPayment, OrderDocLink } from '@/lib/types';
+import type { Candidate, AdminOrder, AgentOption, OrderHandover, OrderPayment, OrderDocLink, JobPosition, OrderPositionSummary } from '@/lib/types';
 import { fetchActiveAgents } from '@/lib/query-helpers';
 import CandidateCard from '@/components/agent/CandidateCard';
 import StatusPill from '@/components/ui/StatusPill';
 import ProgressBar from '@/components/ui/ProgressBar';
 import VideoPlayer from '@/components/ui/VideoPlayer';
+import ChangeOrderModal from '@/components/admin/ChangeOrderModal';
 import Link from 'next/link';
 import { useAdminContext } from '@/lib/admin-context';
 
@@ -23,6 +24,12 @@ const DORMITORY_OPTIONS = ['Miễn phí', 'Có phí', 'Không hỗ trợ'];
 const PROBATION_OPTIONS = ['Không', '1 tháng', '2 tháng', '3 tháng', '6 tháng'];
 const DEPARTURE_STATUS_OPTIONS: OrderHandover['departure_status'][] = ['Chưa xuất cảnh', 'Đã xuất cảnh', 'Đã bàn giao'];
 const PAYMENT_STATUS_OPTIONS: OrderHandover['payment_status'][] = ['Chưa TT', 'Đã TT'];
+
+interface OrderBrief {
+  id: string;
+  company_name: string | null;
+  job_type: string | null;
+}
 
 import { fmtVND, fmtUSD } from '@/lib/formatters';
 
@@ -48,6 +55,7 @@ export default function OrderDetailPage() {
   const [enLegalRep, setEnLegalRep] = useState<string>('');
   const [enTitle, setEnTitle] = useState<string>('');
   const [agents, setAgents] = useState<AgentOption[]>([]);
+  const [orders, setOrders] = useState<OrderBrief[]>([]);
   const [agentLaborAllocations, setAgentLaborAllocations] = useState<Record<string, string>>({});
   const [handovers, setHandovers] = useState<OrderHandover[]>([]);
   const [loading, setLoading] = useState(true);
@@ -58,6 +66,7 @@ export default function OrderDetailPage() {
   const [playingVideo, setPlayingVideo] = useState<string | null>(null);
   const [showAgentDropdown, setShowAgentDropdown] = useState(false);
   const [showHandoverPicker, setShowHandoverPicker] = useState(false);
+  const [showChangeOrderModal, setShowChangeOrderModal] = useState(false);
   const [pickerSelected, setPickerSelected] = useState<string[]>([]);
   const [expandedHandovers, setExpandedHandovers] = useState<Set<string>>(new Set());
   const [selectedCandidates, setSelectedCandidates] = useState<string[]>([]);
@@ -65,11 +74,19 @@ export default function OrderDetailPage() {
   const [addingPaymentParty, setAddingPaymentParty] = useState<'company' | 'agent' | null>(null);
   const [newPayment, setNewPayment] = useState<Partial<OrderPayment>>({});
   const [translating, setTranslating] = useState(false);
+  const [translateMsg, setTranslateMsg] = useState<string | null>(null);
   const [isEnOpen, setIsEnOpen] = useState(false);
   const [docLinks, setDocLinks] = useState<OrderDocLink[]>([]);
   const [yctdLoading, setYctdLoading] = useState<Record<string, boolean>>({});
   const [contractType, setContractType] = useState<1 | 2>(1);
   const [contractLoading, setContractLoading] = useState(false);
+  const [positionIndustry, setPositionIndustry] = useState('');
+  const [jobPositions, setJobPositions] = useState<JobPosition[]>([]);
+  const [orderPositions, setOrderPositions] = useState<OrderPositionSummary[]>([]);
+  const [positionQuantities, setPositionQuantities] = useState<Record<string, string>>({});
+  const [newPositionName, setNewPositionName] = useState('');
+  const [positionMsg, setPositionMsg] = useState<string | null>(null);
+  const [savingPositionId, setSavingPositionId] = useState<string | null>(null);
 
   const videoInputRef = useRef<HTMLInputElement>(null);
 
@@ -125,7 +142,7 @@ export default function OrderDetailPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [ordRes, candRes, activeAgents, agencyRes, handRes, payRes, policyRes, oaRes] = await Promise.all([
+      const [ordRes, candRes, activeAgents, agencyRes, handRes, payRes, policyRes, oaRes, ordersRes] = await Promise.all([
         supabase.from('orders').select('*, companies!orders_company_id_fkey(en_company_name, en_industry, en_address, en_business_type, en_legal_rep, en_title)').eq('id', id).single(),
         supabase.from('candidates').select('*').eq('order_id', id),
         fetchActiveAgents('id, full_name, short_name, agency_id'),
@@ -134,6 +151,7 @@ export default function OrderDetailPage() {
         supabase.from('order_payments').select('*').eq('order_id', id).order('created_at'),
         supabase.from('policy_settings').select('key, value').in('key', ['default_fee_vnd', 'default_fee_usd']),
         supabase.from('order_agents').select('*').eq('order_id', id),
+        supabase.from('orders').select('id, company_name, job_type'),
       ]);
       const policyMap = Object.fromEntries(((policyRes.data ?? []) as { key: string; value: string }[]).map(r => [r.key, r.value]));
 
@@ -199,6 +217,7 @@ export default function OrderDetailPage() {
       setAgentLaborAllocations(allocations);
       setHandovers((handRes.data ?? []) as OrderHandover[]);
       setPayments((payRes.data ?? []) as OrderPayment[]);
+      setOrders((ordersRes.data ?? []) as OrderBrief[]);
       setDirty(false);
     } catch {
       // data stays empty
@@ -209,11 +228,125 @@ export default function OrderDetailPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  const handleTranslateSilent = useCallback(async () => {
-    setTranslating(true);
+  const loadOrderPositions = useCallback(async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) return;
+
+      const res = await fetch(`/api/orders/${encodeURIComponent(id)}/positions`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      const json = await res.json() as {
+        industry?: string;
+        positions?: JobPosition[];
+        order_positions?: OrderPositionSummary[];
+        error?: string;
+      };
+      if (!res.ok) throw new Error(json.error || 'Không tải được vị trí');
+
+      const quotas = json.order_positions ?? [];
+      setPositionIndustry(json.industry ?? '');
+      setJobPositions(json.positions ?? []);
+      setOrderPositions(quotas);
+      setPositionQuantities(Object.fromEntries(quotas.map((quota) => [quota.position_id, String(quota.quantity)])));
+    } catch (err) {
+      setPositionMsg(`❌ ${err instanceof Error ? err.message : 'Không tải được vị trí'}`);
+    }
+  }, [id]);
+
+  useEffect(() => { loadOrderPositions(); }, [loadOrderPositions]);
+
+  const handleAddPosition = useCallback(async () => {
+    const name = newPositionName.trim();
+    if (!name) return;
+
+    setPositionMsg(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error('Chưa đăng nhập');
+
+      const res = await fetch(`/api/orders/${encodeURIComponent(id)}/positions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ name, industry: positionIndustry }),
+      });
+      const json = await res.json() as { data?: JobPosition; error?: string };
+      if (!res.ok || !json.data) throw new Error(json.error || 'Không tạo được vị trí');
+
+      setJobPositions((prev) => prev.some((position) => position.id === json.data!.id)
+        ? prev
+        : [...prev, json.data!].sort((a, b) => a.name.localeCompare(b.name)));
+      setNewPositionName('');
+      setPositionMsg('✅ Đã thêm vị trí');
+      setTimeout(() => setPositionMsg(null), 2500);
+    } catch (err) {
+      setPositionMsg(`❌ ${err instanceof Error ? err.message : 'Lỗi tạo vị trí'}`);
+    }
+  }, [id, newPositionName, positionIndustry]);
+
+  const handleSavePositionQuota = useCallback(async (positionId: string) => {
+    const rawValue = positionQuantities[positionId] ?? '';
+    const quantity = rawValue ? parseInt(rawValue, 10) : 0;
+    if (!Number.isFinite(quantity) || quantity < 0) {
+      setPositionMsg('❌ Số lượng không hợp lệ');
+      return;
+    }
+
+    setSavingPositionId(positionId);
+    setPositionMsg(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error('Chưa đăng nhập');
+
+      const res = await fetch(`/api/orders/${encodeURIComponent(id)}/positions`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ position_id: positionId, quantity }),
+      });
+      const json = await res.json() as { error?: string };
+      if (!res.ok) throw new Error(json.error || 'Không lưu được số lượng');
+
+      await loadOrderPositions();
+      setPositionMsg('✅ Đã lưu số lượng');
+      setTimeout(() => setPositionMsg(null), 2500);
+    } catch (err) {
+      setPositionMsg(`❌ ${err instanceof Error ? err.message : 'Lỗi lưu số lượng'}`);
+    } finally {
+      setSavingPositionId(null);
+    }
+  }, [id, loadOrderPositions, positionQuantities]);
+
+  const handleCandidatePositionChange = useCallback(async (candidateId: string, positionId: string | null) => {
+    const previous = candidates.find((candidate) => candidate.id_ld === candidateId)?.position_id ?? null;
+    setCandidates((prev) => prev.map((candidate) => candidate.id_ld === candidateId ? { ...candidate, position_id: positionId } : candidate));
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error('Chưa đăng nhập');
+
+      const res = await fetch(`/api/candidates/${encodeURIComponent(candidateId)}/position`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ position_id: positionId }),
+      });
+      const json = await res.json() as { error?: string };
+      if (!res.ok) throw new Error(json.error || 'Không lưu được vị trí ứng viên');
+      loadOrderPositions();
+    } catch (err) {
+      setCandidates((prev) => prev.map((candidate) => candidate.id_ld === candidateId ? { ...candidate, position_id: previous } : candidate));
+      alert(`Lỗi: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }, [candidates, loadOrderPositions]);
+
+  const handleTranslateSilent = useCallback(async () => {
+    setTranslating(true);
+    setTranslateMsg('Đang gửi yêu cầu dịch...');
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        setTranslateMsg('❌ Chưa đăng nhập');
+        return;
+      }
       const probationMonths = form.probation !== 'Không' ? parseInt(form.probation) : null;
       const res = await fetch('/api/translate', {
         method: 'POST',
@@ -233,14 +366,24 @@ export default function OrderDetailPage() {
         }),
       });
       if (!res.ok) {
-        console.error('[translate] API error:', res.status, await res.text());
+        const errorText = await res.text();
+        console.error('[translate] API error:', res.status, errorText);
+        try {
+          const parsed = JSON.parse(errorText);
+          setTranslateMsg(`❌ ${parsed.error || 'Không gửi được yêu cầu dịch'}`);
+        } catch {
+          setTranslateMsg('❌ Không gửi được yêu cầu dịch');
+        }
         return;
       }
       const { request_ids } = await res.json() as { request_ids: string[] };
+      setTranslateMsg('Đang chờ n8n dịch...');
 
       let attempts = 0;
       const maxAttempts = 30;
       const completedSet = new Set<string>();
+      let hasFailure = false;
+      let hasSuccess = false;
 
       while (completedSet.size < request_ids.length && attempts < maxAttempts) {
         await new Promise(resolve => setTimeout(resolve, 2000));
@@ -265,6 +408,7 @@ export default function OrderDetailPage() {
             completedSet.add(reqId);
 
             if (statusData.status === 'completed') {
+              hasSuccess = true;
               const tdata = statusData.translated_data || {};
 
               if (statusData.entity_type === 'order') {
@@ -299,12 +443,22 @@ export default function OrderDetailPage() {
               }
             } else if (statusData.status === 'failed') {
               console.error(`[translate] n8n failed for request ${reqId}`);
+              hasFailure = true;
+              setTranslateMsg(`❌ ${statusData.error_message || 'n8n dịch thất bại'}`);
             }
           }
         }
       }
+
+      if (completedSet.size < request_ids.length) {
+        setTranslateMsg('❌ Dịch chưa hoàn tất sau 60 giây. Kiểm tra n8n hoặc thử lại.');
+      } else if (hasSuccess && !hasFailure) {
+        setTranslateMsg('✅ Đã dịch xong');
+        setTimeout(() => setTranslateMsg(null), 3000);
+      }
     } catch (err) {
       console.error('[translate] error:', err);
+      setTranslateMsg(`❌ ${err instanceof Error ? err.message : 'Lỗi dịch'}`);
     } finally {
       setTranslating(false);
     }
@@ -385,10 +539,11 @@ export default function OrderDetailPage() {
     try {
       const { error } = await supabase.from('candidates').update({ interview_status: status }).eq('id_ld', candidateId);
       if (error) throw new Error(error.message);
+      if (status === 'Failed') handleCandidatePositionChange(candidateId, null);
     } catch (err) {
       alert(`Lỗi: ${err instanceof Error ? err.message : String(err)}`);
     }
-  }, []);
+  }, [handleCandidatePositionChange]);
 
   const upsertOrderAgent = useCallback(async (agentId: string, laborNumber: number) => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -620,6 +775,15 @@ export default function OrderDetailPage() {
     }
   };
 
+  const handleChangeOrderMoved = useCallback((_targetOrderId: string, warnings: string[]) => {
+    setCandidates((prev) => prev.filter((c) => !selectedCandidates.includes(c.id_ld)));
+    setSelectedCandidates([]);
+    setShowChangeOrderModal(false);
+    if (warnings.length > 0) {
+      alert(warnings.join('\n'));
+    }
+  }, [selectedCandidates]);
+
   // Payment pct — use order_payments table
   const totalPaidVnd = payments.filter(p => p.payment_party === 'company' && p.currency === 'VND').reduce((s, p) => s + Number(p.amount), 0);
   const totalPaidAgent = payments.filter(p => p.payment_party === 'agent').reduce((s, p) => s + Number(p.amount), 0);
@@ -680,11 +844,25 @@ export default function OrderDetailPage() {
   // Candidate picker modal: candidates not yet in any handover
   const alreadyInHandover = new Set(handovers.flatMap(h => h.candidate_ids));
   const availableCandidates = candidates.filter(c => !alreadyInHandover.has(c.id_ld));
+  const assignablePositions = orderPositions
+    .filter((quota) => quota.quantity > 0)
+    .map((quota) => quota.position);
+  const orderPositionByPositionId = new Map(orderPositions.map((quota) => [quota.position_id, quota]));
 
   return (
     <div className="pb-24">
       {playingVideo && <VideoPlayer url={playingVideo} onClose={() => setPlayingVideo(null)} />}
       <input type="file" accept="video/*" ref={videoInputRef} onChange={handleVideoChange} className="hidden" />
+
+      <ChangeOrderModal
+        open={showChangeOrderModal}
+        orders={orders}
+        selectedCount={selectedCandidates.length}
+        excludedOrderIds={[id]}
+        candidateIds={selectedCandidates}
+        onClose={() => setShowChangeOrderModal(false)}
+        onMoved={handleChangeOrderMoved}
+      />
 
       {/* Candidate picker modal */}
       {showHandoverPicker && (
@@ -792,6 +970,76 @@ export default function OrderDetailPage() {
               <span className="font-semibold text-blue-600">{fmtVND(totalPaidAgent)}</span>
               {totalFeeBdNum > 0 && <span className="text-gray-400"> / ${fmtUSD(totalFeeBdNum)}</span>}
             </div>
+          </div>
+        </div>
+
+        {/* Vị trí tuyển dụng */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="px-4 py-3 border-b border-gray-50 flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold text-slate-700">Vị trí tuyển dụng</h2>
+              <p className="text-xs text-gray-400 mt-0.5">{positionIndustry || 'Chưa xác định ngành nghề'}</p>
+            </div>
+            {positionMsg && <span className={`text-xs font-medium ${positionMsg.startsWith('❌') ? 'text-red-600' : 'text-green-600'}`}>{positionMsg}</span>}
+          </div>
+          <div className="p-4 space-y-3">
+            <div className="flex flex-col sm:flex-row gap-2">
+              <input
+                type="text"
+                value={newPositionName}
+                onChange={(e) => setNewPositionName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleAddPosition(); }}
+                placeholder="Tên vị trí mới"
+                className={inputClsBase}
+              />
+              <button
+                onClick={handleAddPosition}
+                disabled={!newPositionName.trim()}
+                className="sm:w-32 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-semibold rounded-lg min-h-[44px]"
+              >
+                Thêm
+              </button>
+            </div>
+
+            {jobPositions.length === 0 ? (
+              <p className="text-sm text-gray-400 text-center py-4">Chưa có vị trí cho ngành nghề này</p>
+            ) : (
+              <div className="space-y-2">
+                {jobPositions.map((position) => {
+                  const quota = orderPositionByPositionId.get(position.id);
+                  const assignedCount = quota?.assigned_count ?? 0;
+                  const quantity = quota?.quantity ?? 0;
+                  const overQuota = quantity > 0 && assignedCount > quantity;
+
+                  return (
+                    <div key={position.id} className={`grid grid-cols-1 sm:grid-cols-[1fr_120px_120px] gap-2 items-center p-3 rounded-xl border ${overQuota ? 'border-red-200 bg-red-50' : 'border-gray-100 bg-gray-50'}`}>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-slate-800 truncate">{position.name}</p>
+                        <p className={`text-xs ${overQuota ? 'text-red-600' : 'text-gray-500'}`}>
+                          Đã gán {assignedCount}{quantity > 0 ? ` / ${quantity}` : ''}
+                        </p>
+                      </div>
+                      <input
+                        type="number"
+                        min="0"
+                        value={positionQuantities[position.id] ?? ''}
+                        onChange={(e) => setPositionQuantities((prev) => ({ ...prev, [position.id]: e.target.value }))}
+                        onBlur={() => handleSavePositionQuota(position.id)}
+                        className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[44px]"
+                        placeholder="Số lượng"
+                      />
+                      <button
+                        onClick={() => handleSavePositionQuota(position.id)}
+                        disabled={savingPositionId === position.id}
+                        className="text-xs bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-100 min-h-[44px] disabled:opacity-50"
+                      >
+                        {savingPositionId === position.id ? 'Đang lưu...' : 'Lưu số lượng'}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
 
@@ -1078,6 +1326,11 @@ export default function OrderDetailPage() {
               {translating ? '⏳ Đang dịch...' : '🌐 Dịch'}
             </button>
           </div>
+          {translateMsg && (
+            <div className={`px-4 py-2 text-xs border-b border-gray-50 ${translateMsg.startsWith('❌') ? 'text-red-600 bg-red-50' : translateMsg.startsWith('✅') ? 'text-green-700 bg-green-50' : 'text-slate-600 bg-slate-50'}`}>
+              {translateMsg}
+            </div>
+          )}
 
           {isEnOpen && (
             <div className="p-4 space-y-3">
@@ -1520,6 +1773,12 @@ export default function OrderDetailPage() {
                 >
                   + Thêm vào lô bàn giao
                 </button>
+                <button
+                  onClick={() => setShowChangeOrderModal(true)}
+                  className="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700 min-h-[32px]"
+                >
+                  Chuyển đơn
+                </button>
               </div>
             </div>
           )}
@@ -1529,28 +1788,23 @@ export default function OrderDetailPage() {
             ) : (
               <div className="space-y-3">
                 {candidates.map((c) => (
-                  <div key={c.id_ld} className="flex items-start gap-2">
-                    <input
-                      type="checkbox"
-                      checked={selectedCandidates.includes(c.id_ld)}
-                      onChange={() => setSelectedCandidates(prev =>
-                        prev.includes(c.id_ld) ? prev.filter(x => x !== c.id_ld) : [...prev, c.id_ld]
-                      )}
-                      className="mt-4 rounded text-blue-600 flex-shrink-0"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <CandidateCard
-                        candidate={c}
-                        orderId={id}
-                        onStatusChange={handleStatusChange}
-                        onVideoUploadClick={handleVideoUploadClick}
-                        onCandidateUpdate={handleCandidateUpdate}
-                        isVideoUploading={videoUploadingCandidate === c.id_ld}
-                        currentStatus={c.interview_status}
-                        onVideoPlay={(url) => setPlayingVideo(url)}
-                      />
-                    </div>
-                  </div>
+                  <CandidateCard
+                    key={c.id_ld}
+                    candidate={c}
+                    orderId={id}
+                    onStatusChange={handleStatusChange}
+                    onVideoUploadClick={handleVideoUploadClick}
+                    onCandidateUpdate={handleCandidateUpdate}
+                    isVideoUploading={videoUploadingCandidate === c.id_ld}
+                    currentStatus={c.interview_status}
+                    onVideoPlay={(url) => setPlayingVideo(url)}
+                    isSelected={selectedCandidates.includes(c.id_ld)}
+                    onToggleSelect={(candidateId, checked) => setSelectedCandidates((prev) => (
+                      checked ? [...prev, candidateId] : prev.filter((selectedId) => selectedId !== candidateId)
+                    ))}
+                    positionOptions={assignablePositions}
+                    onPositionChange={handleCandidatePositionChange}
+                  />
                 ))}
               </div>
             )}
