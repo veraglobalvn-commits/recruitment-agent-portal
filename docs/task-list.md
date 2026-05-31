@@ -130,10 +130,10 @@ Tập trung hoàn thiện toàn bộ chức năng vận hành trên website (por
 
 ---
 
-### [T-WEB-JOBPOS-002] Build website job positions flow — IMPLEMENTED + MIGRATED (2026-05-31)
+### [T-WEB-JOBPOS-002] Build website job positions flow — DEPLOYED, PENDING UAT (2026-05-31)
 - Type: Feature/DB
 - Agent: Codex
-- Status: **implemented + migrated, pending UAT** — migration đã chạy trên Supabase; cần test admin/agent bằng tài khoản thật
+- Status: **deployed to production, pending UAT** — production ở commit `9866f10`; migration đã chạy trên Supabase; cần test admin/agent bằng tài khoản thật
 - Description: Thêm danh mục vị trí toàn hệ thống, cấu hình số lượng vị trí theo từng order, và gán 1 vị trí cho candidate sau khi candidate passed.
 
 **Expected scope:**
@@ -159,6 +159,7 @@ Tập trung hoàn thiện toàn bộ chức năng vận hành trên website (por
 - Agent order detail hiển thị quota/assigned count theo position.
 - Migration run: `supabase/migrations/20260531000001_add_job_positions.sql`.
 - Verify: PostgREST trả 200 cho `job_positions`, `order_positions`, và `candidates.position_id`.
+- Deploy verify: VPS `/var/www/portal` chạy commit `9866f10`; `npm run build` pass; portal service active; health check trả 200; `TELEGRAM_BRIDGE_SECRET` khớp n8n.
 - Pending: UAT admin/agent bằng tài khoản thật.
 
 ---

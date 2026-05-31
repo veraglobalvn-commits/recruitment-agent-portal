@@ -8,6 +8,14 @@
 
 ## 2026-05-31 (session 8 — website-first operating plan)
 
+### [2026-05-31] Deploy production commit `9866f10` và dọn dirty worktree
+
+- **Quyết định:** Push và deploy commit `9866f10` lên production VPS `/var/www/portal`. Trước khi pull, stash toàn bộ dirty files cũ trên VPS vào `stash@{0}: codex-pre-9866f10-deploy`.
+- **Lý do:** Local/docs đã ghi trạng thái bulk move candidates + job positions là implemented/migrated, nhưng production vẫn ở `e057427` và VPS có dirty code. Nếu không chốt bằng commit/deploy sạch, phiên sau dễ nhầm trạng thái giữa local, remote, và runtime.
+- **Verify sau deploy:** `origin/main` = local = VPS đều ở `9866f10`; `npm run build` pass trên VPS; `systemctl restart portal` thành công; portal active trên port `3001`; health check `https://portal.veraglobal.vn/` trả 200; PostgREST check `job_positions`, `order_positions`, `candidates.position_id` đều trả 200; `TELEGRAM_BRIDGE_SECRET` giữa portal và n8n khớp.
+- **Cảnh báo cho phiên sau:** Không drop stash `codex-pre-9866f10-deploy` khi chưa review vì trong đó có dirty VPS files trước deploy (`app/admin/orders/[id]/page.tsx`, `app/api/translate/route.ts`, `.env.local.bak_translate_20260531035542`, `deploy/telegram-bot-api/docker-compose.yml.bak`). Còn stash cũ `codex-pre-main-deploy` từ phiên 2026-05-30.
+- **Cảnh báo không block deploy:** `npm ci` báo 7 vulnerabilities trong dependency tree hiện tại; `next build` có warning cache webpack transient nhưng build pass. Chưa xử lý dependency audit trong phiên này.
+
 ### [2026-05-31] Website phải hoàn chỉnh nghiệp vụ trước khi tích hợp Telegram/Lark/n8n mở rộng
 
 - **Quyết định:** Mọi chức năng nghiệp vụ phải thực hiện được trên website portal trước. Telegram/Lark/n8n chỉ được tích hợp sau như kênh mở rộng, automation, notification, hoặc document generation.
