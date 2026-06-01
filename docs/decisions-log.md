@@ -8,6 +8,18 @@
 
 ## 2026-05-31 (session 8 — website-first operating plan)
 
+### [2026-05-31] Proposal workflow và communication style
+
+- **Quyết định:** Với product/UX/nghiệp vụ, agent phải nghiên cứu context hiện có và benchmark bên ngoài trước khi đề xuất; đồng thời giao tiếp ngắn gọn, chỉ giữ thông tin có giá trị.
+- **Lý do:** User đánh giá cao cách nghiên cứu/đề xuất/khai thác nhu cầu, nhưng yêu cầu bỏ giải thích vòng vo và từ thừa.
+- **Ảnh hưởng:** Các phiên sau phải nêu căn cứ, confidence, câu hỏi còn mở; phần trình bày phải cô đọng.
+
+### [2026-05-31] UX/UI approval gate trước khi implement
+
+- **Quyết định:** Mọi thay đổi UI/UX nhìn thấy được phải được user duyệt riêng trước khi implement. Agent phải trình bày placement, user flow, fields/actions và responsive behavior rồi chờ xác nhận rõ ràng.
+- **Lý do:** UAT job positions cho thấy chức năng đúng nghiệp vụ nhưng UX/UI của section "Vị trí tuyển dụng" trong chi tiết đơn hàng không đúng ý user.
+- **Ảnh hưởng:** Từ phiên sau, discovery/business-rule approval chỉ cho phép thiết kế schema/API hoặc plan; không được tự build UI cho đến khi user duyệt UX/UI.
+
 ### [2026-05-31] Deploy production commit `9866f10` và dọn dirty worktree
 
 - **Quyết định:** Push và deploy commit `9866f10` lên production VPS `/var/www/portal`. Trước khi pull, stash toàn bộ dirty files cũ trên VPS vào `stash@{0}: codex-pre-9866f10-deploy`.
@@ -38,12 +50,20 @@
 
 ### [2026-05-31] Business rules cho job positions
 
-- **Quyết định:** Job positions là danh mục dùng chung toàn hệ thống, được phân theo ngành nghề của order. Mỗi order có số lượng riêng cho từng position do admin nhập.
+- **Quyết định:** Job positions là danh mục dùng chung toàn hệ thống, được phân theo ngành nghề song ngữ. Ngành nghề của order do admin chọn thủ công trên order, không suy ra tự động từ company/order text.
 - **Quy tắc gán:** Admin và agent đều gán được position cho candidate, nhưng chỉ sau khi candidate đã passed. Mỗi candidate chỉ có 1 position.
-- **Field tối thiểu:** Tên vị trí và số lượng.
-- **Quota:** Quota tổng vẫn theo order; position quota là phân bổ số lượng trong từng order, không thay thế quota order.
+- **Field tối thiểu:** Ngành nghề VI/EN; vị trí VI/EN; tỷ trọng mặc định % cho position. Danh mục position không có số lượng.
+- **Quota:** Quota tổng vẫn theo order; mỗi order chọn một phần hoặc toàn bộ positions thuộc ngành nghề, và số lượng tuyển dụng nằm ở từng order-position.
+- **Tỷ trọng:** `default_weight_percent` tính theo `orders.total_labor`, dùng để tham khảo khi assign và warning nếu số ứng viên đã assign vượt tỷ trọng mặc định. UI cần hiển thị số lượng ứng viên khả dụng còn có thể assign cho mỗi vị trí trong order.
+- **Làm tròn:** Khi chuyển tỷ trọng % thành số lượng tham khảo, phải làm tròn tương đối theo tổng và phân bổ thực tế; không dùng làm tròn tuyệt đối cứng gây lệch tổng hoặc cảnh báo sai.
 - **Audit:** Code hiện có chỉ có `orders.job_type`/`job_type_en` dạng text tự do; chưa có position catalog, order-position quota, hoặc candidate-position assignment.
 - **Ảnh hưởng:** `T-WEB-JOBPOS-001` hoàn tất discovery. Task build tiếp theo là `T-WEB-JOBPOS-002`, có DB migration nên phải trình bày SQL và chờ user xác nhận trước khi chạy.
+
+### [2026-05-31] Job positions UX rework plan approved
+
+- **Quyết định:** Rework job positions thành page riêng `/admin/job-positions`, menu label "Vị trí tuyển dụng". Order detail chỉ chọn ngành nghề thủ công, chọn positions thuộc ngành đó, nhập quota từng order-position, và assign candidate vào positions đã chọn.
+- **Lý do:** UX hiện tại trong order detail trộn catalog management với order configuration.
+- **Ảnh hưởng:** Phiên sau không tiếp tục vá section hiện tại; phải thiết kế lại theo page riêng + order configuration. Trước khi implement vẫn phải trình UX/UI chi tiết để user duyệt.
 
 ### [2026-05-31] Job positions implementation dùng catalog + order quota + candidate assignment
 

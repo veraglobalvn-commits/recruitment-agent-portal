@@ -7,6 +7,8 @@
 ## Quy trình làm việc
 
 - **Không chạy trước khi có kế hoạch được duyệt.** DB migrations luôn cần xác nhận của người dùng trước. Bug nghiêm trọng (mất dữ liệu) có thể fix ngay nhưng phải thông báo trước.
+- **Product/UX proposal phải có nghiên cứu.** Trước khi đề xuất hướng product/UX/nghiệp vụ, phải audit context hiện có, benchmark bên ngoài, nêu căn cứ, độ tự tin và câu hỏi còn mở.
+- **UX/UI phải được user duyệt trước khi implement.** Với mọi feature thay đổi màn hình, form, table, card, modal, navigation, hoặc workflow layout: trước tiên trình bày placement, user flow, fields/actions, responsive behavior và chờ user xác nhận rõ ràng. Duyệt business rules/schema/API không được coi là duyệt UX/UI.
 - **Không cố với cùng một cách ≥ 3 lần.** Nếu thử 3 lần vẫn lỗi → dừng lại, so sánh định lượng các hướng khác, chọn hướng điểm cao nhất.
 - **DB-before-deploy:** Mọi feature thêm cột DB mới PHẢI cung cấp đủ 3 thứ trước khi commit:
   1. `ALTER TABLE ... ADD COLUMN IF NOT EXISTS ...`
@@ -31,6 +33,7 @@
 
 ## Code Quality
 
+- **Giao tiếp ngắn gọn.** Báo cáo chỉ giữ thông tin có giá trị; không giải thích vòng vo, không dùng từ thừa.
 - **DB code phải test end-to-end.** Sau khi code xong feature đọc/ghi DB, phải verify thực tế với database thật (query check, UI check, data flow) trước khi đánh dấu xong.
 - **Chạy `npx tsc --noEmit`** ngay sau mỗi phiên sửa — phải 0 lỗi.
 - **Kiểm tra code thừa** sau khi sửa lớn (đọc cuối file để xác nhận không có orphaned code).
@@ -59,3 +62,9 @@
 | List page select/order theo cột không tồn tại làm Supabase trả lỗi rồi UI hiện rỗng | Với danh sách admin, verify schema trước khi thêm cột vào `select`/`order`; không catch rỗng, phải hiển thị/log lỗi tải dữ liệu |
 | Hai push liên tiếp, Vercel bỏ qua push sau | Chờ deploy xong mới push tiếp, hoặc dùng empty commit để trigger lại |
 | Column mới trong code nhưng chưa có trong DB | Chạy ALTER TABLE + NOTIFY pgrst trước khi deploy |
+## Transcript hygiene khi dùng tool
+
+- Không in nội dung file/code/diff/output dài ra transcript.
+- Tránh `cat`, `sed`, `grep -n`, `git diff` nếu output chứa code hoặc nội dung file.
+- Ưu tiên `codegraph context --no-code`, `git diff --name-only`, `git diff --stat`, `git status --short`, `find`, `wc`.
+- Khi cần đọc code để sửa, giữ phạm vi tối thiểu và không quote lại; báo cáo bằng tên file, việc đã làm, kết quả verify.

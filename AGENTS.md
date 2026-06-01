@@ -184,3 +184,10 @@ PORTAL=$(grep TELEGRAM_BRIDGE_SECRET /var/www/portal/.env.local | cut -d= -f2)
 ### Remote deploy automation key (local machine)
 - SSH deploy automation uses local key:
   - `/Users/apple/.ssh/sukien_bd2026_deploy`
+## Transcript hygiene — bắt buộc khi dùng tool
+
+- Không chạy `cat`, `sed`, `grep -n`, `git diff`, hoặc command tương tự nếu output sẽ in nội dung code/file ra transcript.
+- Khi cần audit file, ưu tiên lệnh chỉ in metadata: `git status --short`, `git diff --name-only`, `git diff --stat`, `find`, `wc`, `codegraph context --no-code`.
+- Nếu bắt buộc phải đọc nội dung để sửa code, chỉ đọc phạm vi tối thiểu và không relay nội dung đó trong chat; sau đó báo cáo bằng tên file + mục đích + kết quả.
+- Không chạy command tạo output dài trực tiếp ra chat. Với build/test, chỉ relay kết quả pass/fail và lỗi ngắn cần hành động.
+- Không paste terminal output, code snippet, diff, hay nội dung file vào final/intermediate updates trừ khi user yêu cầu rõ ràng.

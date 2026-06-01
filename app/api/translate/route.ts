@@ -98,7 +98,7 @@ export async function POST(req: NextRequest) {
         .insert({
           entity_type: 'company',
           entity_id: body.company_id!,
-          fields_to_translate: ['company_name', 'industry', 'address', 'business_type', 'legal_rep', 'legal_rep_title'],
+          fields_to_translate: ['company_name', 'address', 'business_type', 'legal_rep', 'legal_rep_title'],
           status: 'pending'
         })
         .select()

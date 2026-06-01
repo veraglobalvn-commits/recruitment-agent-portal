@@ -17,6 +17,7 @@ const NAV = [
   { href: '/admin', label: 'Tổng quan', icon: '📊' },
   { href: '/admin/companies', label: 'Công ty VN', icon: '🏭' },
   { href: '/admin/orders', label: 'Đơn hàng', icon: '📋' },
+  { href: '/admin/job-positions', label: 'Vị trí tuyển dụng', icon: '🧭' },
   { href: '/admin/agencies', label: 'Đại lý', icon: '🏢' },
   { href: '/admin/users', label: 'Tài khoản', icon: '🔑' },
   { href: '/admin/candidates', label: 'Ứng viên', icon: '🧑‍💼' },

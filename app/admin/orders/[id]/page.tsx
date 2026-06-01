@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import type { Candidate, AdminOrder, AgentOption, OrderHandover, OrderPayment, OrderDocLink, JobPosition, OrderPositionSummary } from '@/lib/types';
+import type { Candidate, AdminOrder, AgentOption, OrderHandover, OrderPayment, OrderDocLink, JobIndustry, JobPosition, OrderPositionSummary } from '@/lib/types';
 import { fetchActiveAgents } from '@/lib/query-helpers';
 import CandidateCard from '@/components/agent/CandidateCard';
 import StatusPill from '@/components/ui/StatusPill';
@@ -38,6 +38,16 @@ function RecruitmentPill({ status, laborMissing }: { status: string; laborMissin
   if (status === 'Finished' || laborMissing === 0) return <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-green-100 text-green-700">Đã tuyển xong</span>;
   if (status === 'Not Started') return <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-gray-100 text-gray-600">Chưa tuyển</span>;
   return <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-amber-100 text-amber-700">Đang tuyển</span>;
+}
+
+function getPositionLabel(position: JobPosition) {
+  return position.name_vi || position.name || '—';
+}
+
+function getSuggestedPositionQuantity(totalLabor: number, defaultWeightPercent: number | null) {
+  const percent = Number(defaultWeightPercent ?? 0);
+  if (!Number.isFinite(totalLabor) || totalLabor <= 0 || !Number.isFinite(percent) || percent <= 0) return 0;
+  return Math.round((totalLabor / 0.2) * (percent / 100));
 }
 
 export default function OrderDetailPage() {
@@ -81,12 +91,14 @@ export default function OrderDetailPage() {
   const [contractType, setContractType] = useState<1 | 2>(1);
   const [contractLoading, setContractLoading] = useState(false);
   const [positionIndustry, setPositionIndustry] = useState('');
+  const [positionIndustryId, setPositionIndustryId] = useState('');
+  const [jobIndustries, setJobIndustries] = useState<JobIndustry[]>([]);
   const [jobPositions, setJobPositions] = useState<JobPosition[]>([]);
   const [orderPositions, setOrderPositions] = useState<OrderPositionSummary[]>([]);
   const [positionQuantities, setPositionQuantities] = useState<Record<string, string>>({});
-  const [newPositionName, setNewPositionName] = useState('');
   const [positionMsg, setPositionMsg] = useState<string | null>(null);
   const [savingPositionId, setSavingPositionId] = useState<string | null>(null);
+  const [selectedCatalogPositionId, setSelectedCatalogPositionId] = useState('');
 
   const videoInputRef = useRef<HTMLInputElement>(null);
 
@@ -228,6 +240,21 @@ export default function OrderDetailPage() {
 
   useEffect(() => { load(); }, [load]);
 
+  const savePositionQuantityMap = useCallback(async (quantities: Record<string, number>) => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) throw new Error('Chưa đăng nhập');
+
+    await Promise.all(Object.entries(quantities).map(async ([positionId, quantity]) => {
+      const res = await fetch(`/api/orders/${encodeURIComponent(id)}/positions`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ position_id: positionId, quantity }),
+      });
+      const json = await res.json() as { error?: string };
+      if (!res.ok) throw new Error(json.error || 'Không lưu được số lượng');
+    }));
+  }, [id]);
+
   const loadOrderPositions = useCallback(async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -238,6 +265,8 @@ export default function OrderDetailPage() {
       });
       const json = await res.json() as {
         industry?: string;
+        industry_id?: string | null;
+        industries?: JobIndustry[];
         positions?: JobPosition[];
         order_positions?: OrderPositionSummary[];
         error?: string;
@@ -246,6 +275,8 @@ export default function OrderDetailPage() {
 
       const quotas = json.order_positions ?? [];
       setPositionIndustry(json.industry ?? '');
+      setPositionIndustryId(json.industry_id ?? '');
+      setJobIndustries(json.industries ?? []);
       setJobPositions(json.positions ?? []);
       setOrderPositions(quotas);
       setPositionQuantities(Object.fromEntries(quotas.map((quota) => [quota.position_id, String(quota.quantity)])));
@@ -256,43 +287,9 @@ export default function OrderDetailPage() {
 
   useEffect(() => { loadOrderPositions(); }, [loadOrderPositions]);
 
-  const handleAddPosition = useCallback(async () => {
-    const name = newPositionName.trim();
-    if (!name) return;
-
-    setPositionMsg(null);
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) throw new Error('Chưa đăng nhập');
-
-      const res = await fetch(`/api/orders/${encodeURIComponent(id)}/positions`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-        body: JSON.stringify({ name, industry: positionIndustry }),
-      });
-      const json = await res.json() as { data?: JobPosition; error?: string };
-      if (!res.ok || !json.data) throw new Error(json.error || 'Không tạo được vị trí');
-
-      setJobPositions((prev) => prev.some((position) => position.id === json.data!.id)
-        ? prev
-        : [...prev, json.data!].sort((a, b) => a.name.localeCompare(b.name)));
-      setNewPositionName('');
-      setPositionMsg('✅ Đã thêm vị trí');
-      setTimeout(() => setPositionMsg(null), 2500);
-    } catch (err) {
-      setPositionMsg(`❌ ${err instanceof Error ? err.message : 'Lỗi tạo vị trí'}`);
-    }
-  }, [id, newPositionName, positionIndustry]);
-
-  const handleSavePositionQuota = useCallback(async (positionId: string) => {
-    const rawValue = positionQuantities[positionId] ?? '';
-    const quantity = rawValue ? parseInt(rawValue, 10) : 0;
-    if (!Number.isFinite(quantity) || quantity < 0) {
-      setPositionMsg('❌ Số lượng không hợp lệ');
-      return;
-    }
-
-    setSavingPositionId(positionId);
+  const handleSaveOrderIndustry = useCallback(async (industryId: string) => {
+    setPositionIndustryId(industryId);
+    setSelectedCatalogPositionId('');
     setPositionMsg(null);
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -301,20 +298,64 @@ export default function OrderDetailPage() {
       const res = await fetch(`/api/orders/${encodeURIComponent(id)}/positions`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-        body: JSON.stringify({ position_id: positionId, quantity }),
+        body: JSON.stringify({ industry_id: industryId || null }),
       });
       const json = await res.json() as { error?: string };
-      if (!res.ok) throw new Error(json.error || 'Không lưu được số lượng');
+      if (!res.ok) throw new Error(json.error || 'Không lưu được ngành nghề');
 
       await loadOrderPositions();
-      setPositionMsg('✅ Đã lưu số lượng');
+      setPositionMsg('✅ Đã lưu ngành nghề');
+      setTimeout(() => setPositionMsg(null), 2500);
+    } catch (err) {
+      setPositionMsg(`❌ ${err instanceof Error ? err.message : 'Lỗi lưu ngành nghề'}`);
+      await loadOrderPositions();
+    }
+  }, [id, loadOrderPositions]);
+
+  const handleSavePositionQuantities = useCallback(async () => {
+    const quantities: Record<string, number> = {};
+    for (const quota of orderPositions) {
+      const rawValue = positionQuantities[quota.position_id] ?? '';
+      const quantity = rawValue ? parseInt(rawValue, 10) : 0;
+      if (!Number.isFinite(quantity) || quantity < 0) {
+        setPositionMsg('❌ Số lượng không hợp lệ');
+        return;
+      }
+      quantities[quota.position_id] = quantity;
+    }
+
+    setSavingPositionId('__bulk__');
+    setPositionMsg(null);
+    try {
+      await savePositionQuantityMap(quantities);
+      await loadOrderPositions();
+      setPositionMsg('✅ Đã lưu thay đổi');
       setTimeout(() => setPositionMsg(null), 2500);
     } catch (err) {
       setPositionMsg(`❌ ${err instanceof Error ? err.message : 'Lỗi lưu số lượng'}`);
     } finally {
       setSavingPositionId(null);
     }
-  }, [id, loadOrderPositions, positionQuantities]);
+  }, [loadOrderPositions, orderPositions, positionQuantities, savePositionQuantityMap]);
+
+  const handleResetPositionQuantities = useCallback(() => {
+    setPositionQuantities(Object.fromEntries(orderPositions.map((quota) => [quota.position_id, String(quota.quantity)])));
+    setPositionMsg(null);
+  }, [orderPositions]);
+
+  const handleRecalculatePositionQuotas = useCallback(() => {
+    if (totalLabor <= 0 || orderPositions.length === 0) return;
+
+    const suggestedQuantities = Object.fromEntries(
+      orderPositions.map((quota) => [
+        quota.position_id,
+        String(getSuggestedPositionQuantity(totalLabor, quota.position.default_weight_percent)),
+      ]),
+    );
+
+    setPositionQuantities(suggestedQuantities);
+    setPositionMsg('Có thay đổi chưa lưu');
+  }, [orderPositions, totalLabor]);
 
   const handleCandidatePositionChange = useCallback(async (candidateId: string, positionId: string | null) => {
     const previous = candidates.find((candidate) => candidate.id_ld === candidateId)?.position_id ?? null;
@@ -848,6 +889,69 @@ export default function OrderDetailPage() {
     .filter((quota) => quota.quantity > 0)
     .map((quota) => quota.position);
   const orderPositionByPositionId = new Map(orderPositions.map((quota) => [quota.position_id, quota]));
+  const selectedPositionIds = new Set(orderPositions.map((quota) => quota.position_id));
+  const availableCatalogPositions = jobPositions.filter((position) => !selectedPositionIds.has(position.id));
+  const positionQuantityTotal = orderPositions.reduce((sum, quota) => {
+    const rawValue = positionQuantities[quota.position_id] ?? String(quota.quantity ?? '');
+    const quantity = rawValue ? parseInt(rawValue, 10) : 0;
+    return sum + (Number.isFinite(quantity) && quantity > 0 ? quantity : 0);
+  }, 0);
+  const positionQuantityDiff = totalLabor - positionQuantityTotal;
+  const hasPositionQuantityChanges = orderPositions.some((quota) => (positionQuantities[quota.position_id] ?? '') !== String(quota.quantity));
+
+  const handleAddOrderPosition = async () => {
+    const position = jobPositions.find((item) => item.id === selectedCatalogPositionId);
+    if (!position) {
+      setPositionMsg('❌ Chọn vị trí cần thêm');
+      return;
+    }
+
+    const suggested = getSuggestedPositionQuantity(totalLabor, position.default_weight_percent);
+    const initialQuantity = suggested > 0 ? suggested : (totalLabor > 0 ? 1 : 0);
+    setSavingPositionId(position.id);
+    setPositionMsg(null);
+    try {
+      await savePositionQuantityMap({ [position.id]: initialQuantity });
+      setPositionQuantities((prev) => ({ ...prev, [position.id]: String(initialQuantity) }));
+      setSelectedCatalogPositionId('');
+      await loadOrderPositions();
+      setPositionMsg('✅ Đã thêm vị trí vào đơn hàng');
+      setTimeout(() => setPositionMsg(null), 2500);
+    } catch (err) {
+      setPositionMsg(`❌ ${err instanceof Error ? err.message : 'Không thêm được vị trí'}`);
+    } finally {
+      setSavingPositionId(null);
+    }
+  };
+
+  const handleDeletePositionQuota = async (positionId: string) => {
+    const quota = orderPositionByPositionId.get(positionId);
+    const assignedCount = quota?.assigned_count ?? 0;
+    const message = assignedCount > 0
+      ? `Xoá vị trí này khỏi đơn hàng? ${assignedCount} ứng viên đang gán vị trí này sẽ được bỏ gán.`
+      : 'Xoá vị trí này khỏi đơn hàng?';
+    if (!confirm(message)) return;
+
+    setSavingPositionId(positionId);
+    setPositionMsg(null);
+    try {
+      await savePositionQuantityMap({ [positionId]: 0 });
+      setOrderPositions((prev) => prev.filter((quota) => quota.position_id !== positionId));
+      setPositionQuantities((prev) => {
+        const next = { ...prev };
+        delete next[positionId];
+        return next;
+      });
+      await loadOrderPositions();
+      setCandidates((prev) => prev.map((candidate) => candidate.position_id === positionId ? { ...candidate, position_id: null } : candidate));
+      setPositionMsg('✅ Đã xoá vị trí khỏi đơn hàng');
+      setTimeout(() => setPositionMsg(null), 2500);
+    } catch (err) {
+      setPositionMsg(`❌ ${err instanceof Error ? err.message : 'Không xoá được vị trí'}`);
+    } finally {
+      setSavingPositionId(null);
+    }
+  };
 
   return (
     <div className="pb-24">
@@ -970,76 +1074,6 @@ export default function OrderDetailPage() {
               <span className="font-semibold text-blue-600">{fmtVND(totalPaidAgent)}</span>
               {totalFeeBdNum > 0 && <span className="text-gray-400"> / ${fmtUSD(totalFeeBdNum)}</span>}
             </div>
-          </div>
-        </div>
-
-        {/* Vị trí tuyển dụng */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-          <div className="px-4 py-3 border-b border-gray-50 flex items-center justify-between gap-3">
-            <div>
-              <h2 className="text-sm font-semibold text-slate-700">Vị trí tuyển dụng</h2>
-              <p className="text-xs text-gray-400 mt-0.5">{positionIndustry || 'Chưa xác định ngành nghề'}</p>
-            </div>
-            {positionMsg && <span className={`text-xs font-medium ${positionMsg.startsWith('❌') ? 'text-red-600' : 'text-green-600'}`}>{positionMsg}</span>}
-          </div>
-          <div className="p-4 space-y-3">
-            <div className="flex flex-col sm:flex-row gap-2">
-              <input
-                type="text"
-                value={newPositionName}
-                onChange={(e) => setNewPositionName(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') handleAddPosition(); }}
-                placeholder="Tên vị trí mới"
-                className={inputClsBase}
-              />
-              <button
-                onClick={handleAddPosition}
-                disabled={!newPositionName.trim()}
-                className="sm:w-32 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-semibold rounded-lg min-h-[44px]"
-              >
-                Thêm
-              </button>
-            </div>
-
-            {jobPositions.length === 0 ? (
-              <p className="text-sm text-gray-400 text-center py-4">Chưa có vị trí cho ngành nghề này</p>
-            ) : (
-              <div className="space-y-2">
-                {jobPositions.map((position) => {
-                  const quota = orderPositionByPositionId.get(position.id);
-                  const assignedCount = quota?.assigned_count ?? 0;
-                  const quantity = quota?.quantity ?? 0;
-                  const overQuota = quantity > 0 && assignedCount > quantity;
-
-                  return (
-                    <div key={position.id} className={`grid grid-cols-1 sm:grid-cols-[1fr_120px_120px] gap-2 items-center p-3 rounded-xl border ${overQuota ? 'border-red-200 bg-red-50' : 'border-gray-100 bg-gray-50'}`}>
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-slate-800 truncate">{position.name}</p>
-                        <p className={`text-xs ${overQuota ? 'text-red-600' : 'text-gray-500'}`}>
-                          Đã gán {assignedCount}{quantity > 0 ? ` / ${quantity}` : ''}
-                        </p>
-                      </div>
-                      <input
-                        type="number"
-                        min="0"
-                        value={positionQuantities[position.id] ?? ''}
-                        onChange={(e) => setPositionQuantities((prev) => ({ ...prev, [position.id]: e.target.value }))}
-                        onBlur={() => handleSavePositionQuota(position.id)}
-                        className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[44px]"
-                        placeholder="Số lượng"
-                      />
-                      <button
-                        onClick={() => handleSavePositionQuota(position.id)}
-                        disabled={savingPositionId === position.id}
-                        className="text-xs bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-100 min-h-[44px] disabled:opacity-50"
-                      >
-                        {savingPositionId === position.id ? 'Đang lưu...' : 'Lưu số lượng'}
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
           </div>
         </div>
 
@@ -1709,6 +1743,152 @@ export default function OrderDetailPage() {
               </div>
             </div>
           )}
+        </div>
+
+        {/* Vị trí tuyển dụng */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="px-4 py-3 border-b border-gray-50 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="min-w-0">
+              <h2 className="text-sm font-semibold text-slate-700">Vị trí tuyển dụng</h2>
+              <p className="text-xs text-gray-400 mt-0.5">{positionIndustry || 'Chưa xác định ngành nghề'}</p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-600">Tổng vị trí: {positionQuantityTotal}</span>
+              <span className={`rounded-full px-2.5 py-1 font-medium ${positionQuantityDiff === 0 ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                {positionQuantityDiff === 0 ? 'Khớp tổng cần tuyển' : `Chênh ${positionQuantityDiff > 0 ? '+' : ''}${positionQuantityDiff}`}
+              </span>
+              {hasPositionQuantityChanges && <span className="rounded-full bg-blue-100 px-2.5 py-1 font-medium text-blue-700">Có thay đổi chưa lưu</span>}
+              {positionMsg && <span className={`font-medium ${positionMsg.startsWith('❌') ? 'text-red-600' : positionMsg.includes('chưa lưu') ? 'text-blue-600' : 'text-green-600'}`}>{positionMsg}</span>}
+            </div>
+          </div>
+          <div className="p-4 space-y-3">
+            <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_auto] lg:items-end">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Ngành nghề tuyển dụng</label>
+                <select
+                  value={positionIndustryId}
+                  onChange={(e) => handleSaveOrderIndustry(e.target.value)}
+                  className={`${inputClsBase} bg-white`}
+                >
+                  <option value="">Chọn ngành nghề</option>
+                  {jobIndustries.map((industry) => (
+                    <option key={industry.id} value={industry.id}>{industry.name_vi}</option>
+                  ))}
+                </select>
+              </div>
+              <button
+                type="button"
+                onClick={handleRecalculatePositionQuotas}
+                disabled={!positionIndustryId || totalLabor <= 0 || orderPositions.length === 0 || savingPositionId === '__bulk__'}
+                className="min-h-[44px] rounded-lg border border-gray-200 bg-white px-3 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              >
+                {savingPositionId === '__bulk__' ? 'Đang tính...' : 'Tính lại theo tỷ trọng'}
+              </button>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2 rounded-xl bg-slate-50 p-3 text-xs text-slate-600">
+              <div><span className="block text-gray-400">Cần tuyển</span><strong className="text-slate-800">{totalLabor}</strong></div>
+              <div><span className="block text-gray-400">Theo vị trí</span><strong className="text-slate-800">{positionQuantityTotal}</strong></div>
+              <div><span className="block text-gray-400">Chênh lệch</span><strong className={positionQuantityDiff === 0 ? 'text-green-700' : 'text-amber-700'}>{positionQuantityDiff > 0 ? '+' : ''}{positionQuantityDiff}</strong></div>
+            </div>
+
+            {hasPositionQuantityChanges && (
+              <div className="flex flex-col gap-2 rounded-xl border border-blue-100 bg-blue-50 p-3 sm:flex-row sm:items-center sm:justify-between">
+                <span className="text-xs font-medium text-blue-700">Có thay đổi số lượng chưa lưu</span>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={handleResetPositionQuantities}
+                    disabled={savingPositionId === '__bulk__'}
+                    className="min-h-[36px] rounded-lg border border-blue-200 bg-white px-3 text-xs font-medium text-blue-700 hover:bg-blue-50 disabled:opacity-50"
+                  >
+                    Huỷ thay đổi
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSavePositionQuantities}
+                    disabled={savingPositionId === '__bulk__'}
+                    className="min-h-[36px] rounded-lg bg-blue-600 px-3 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    {savingPositionId === '__bulk__' ? 'Đang lưu...' : 'Lưu thay đổi'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {!positionIndustryId ? (
+              <p className="text-sm text-gray-400 text-center py-4">Chọn ngành nghề để cấu hình vị trí cho đơn hàng</p>
+            ) : jobPositions.length === 0 ? (
+              <p className="text-sm text-gray-400 text-center py-4">Chưa có vị trí trong danh mục ngành này</p>
+            ) : (
+              <>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto]">
+                  <select
+                    value={selectedCatalogPositionId}
+                    onChange={(e) => setSelectedCatalogPositionId(e.target.value)}
+                    className={`${inputClsBase} bg-white`}
+                  >
+                    <option value="">Chọn vị trí từ danh mục</option>
+                    {availableCatalogPositions.map((position) => (
+                      <option key={position.id} value={position.id}>{getPositionLabel(position)}</option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={handleAddOrderPosition}
+                    disabled={!selectedCatalogPositionId || savingPositionId === selectedCatalogPositionId || savingPositionId === '__bulk__'}
+                    className="min-h-[44px] rounded-lg bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    {savingPositionId === selectedCatalogPositionId ? 'Đang thêm...' : 'Thêm vị trí'}
+                  </button>
+                </div>
+
+                {orderPositions.length === 0 ? (
+                  <p className="text-sm text-gray-400 text-center py-4">Chưa chọn vị trí nào cho đơn hàng này</p>
+                ) : (
+                  <div className="divide-y divide-gray-100 rounded-xl border border-gray-100 overflow-hidden">
+                    {orderPositions.map((quota) => {
+                      const position = quota.position;
+                      const assignedCount = quota.assigned_count ?? 0;
+                      const quantity = positionQuantities[quota.position_id] ? parseInt(positionQuantities[quota.position_id], 10) : quota.quantity;
+                      const safeQuantity = Number.isFinite(quantity) ? quantity : 0;
+                      const suggested = getSuggestedPositionQuantity(totalLabor, position.default_weight_percent);
+                      const overQuota = safeQuantity > 0 && assignedCount > safeQuantity;
+
+                      return (
+                        <div key={quota.position_id} className={`grid grid-cols-1 gap-2 p-3 sm:grid-cols-[minmax(0,1fr)_90px_130px_64px_64px] sm:items-center ${overQuota ? 'bg-red-50' : 'bg-white'}`}>
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-slate-800 truncate">{getPositionLabel(position)}</p>
+                            <p className={`text-xs ${overQuota ? 'text-red-600' : 'text-gray-500'}`}>
+                              Đã gán {assignedCount} · Gợi ý {suggested} · Tỷ trọng {position.default_weight_percent ?? 0}%
+                            </p>
+                          </div>
+                          <div className="text-xs text-gray-500 sm:text-center">Đã gán <span className="font-semibold text-slate-700">{assignedCount}</span></div>
+                          <input
+                            type="number"
+                            min="0"
+                            value={positionQuantities[quota.position_id] ?? ''}
+                            onChange={(e) => setPositionQuantities((prev) => ({ ...prev, [quota.position_id]: e.target.value }))}
+                            className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[40px]"
+                            placeholder="Số lượng"
+                          />
+                          <div className="hidden sm:block" />
+                          <button
+                            type="button"
+                            onClick={() => handleDeletePositionQuota(quota.position_id)}
+                            disabled={savingPositionId === quota.position_id || savingPositionId === '__bulk__'}
+                            className="min-h-[40px] rounded-lg border border-red-100 bg-white text-xs text-red-600 hover:bg-red-50 disabled:opacity-40"
+                          >
+                            Xoá
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
         </div>
 
         {/* Ứng viên */}

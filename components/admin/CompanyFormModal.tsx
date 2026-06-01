@@ -19,7 +19,6 @@ interface OcrParsed {
   address: string;
   phone: string;
   email: string;
-  industry: string;
   regAuthority: string;
   regDate: string;
 }
@@ -33,7 +32,6 @@ const EMPTY_FORM = {
   address: '',
   phone: '',
   email: '',
-  industry: '',
   business_reg_authority: '',
   business_reg_date: '',
 };
@@ -110,7 +108,6 @@ export default function CompanyFormModal({ onClose, onSaved }: CompanyFormModalP
         address: p.address || '',
         phone: p.phone || '',
         email: p.email || '',
-        industry: p.industry || '',
         business_reg_authority: p.regAuthority || '',
         business_reg_date: p.regDate || '',
       });
@@ -154,7 +151,6 @@ export default function CompanyFormModal({ onClose, onSaved }: CompanyFormModalP
         address: form.address.trim() || null,
         phone: form.phone.trim() || null,
         email: form.email.trim() || null,
-        industry: form.industry.trim() || null,
         business_reg_authority: form.business_reg_authority.trim() || null,
         business_reg_date: form.business_reg_date.trim() || null,
         company_media: [],
@@ -300,7 +296,6 @@ export default function CompanyFormModal({ onClose, onSaved }: CompanyFormModalP
                 <Field label="SĐT" value={form.phone} onChange={(v) => set('phone', v)} placeholder="0901..." />
                 <Field label="Email" value={form.email} onChange={(v) => set('email', v)} placeholder="contact@..." />
               </div>
-              <Field label="Ngành nghề" value={form.industry} onChange={(v) => set('industry', v)} placeholder="Xây dựng, Điện tử..." />
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Cơ quan cấp ĐKKD" value={form.business_reg_authority} onChange={(v) => set('business_reg_authority', v)} placeholder="Sở KH&ĐT..." />
                 <Field label="Ngày cấp" value={form.business_reg_date} onChange={(v) => set('business_reg_date', v)} placeholder="01/01/2020" />

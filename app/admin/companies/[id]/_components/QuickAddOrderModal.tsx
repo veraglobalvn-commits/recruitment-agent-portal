@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import type { JobIndustry } from '@/lib/types';
 
 async function generateOrderId(shortName: string | null): Promise<string> {
   const now = new Date();
@@ -33,17 +34,29 @@ export default function QuickAddOrderModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const [form, setForm] = useState({ job_type: 'Lao động phổ thông', total_labor: '', status: 'Đang tuyển' });
+  const [industries, setIndustries] = useState<JobIndustry[]>([]);
+  const [form, setForm] = useState({ industry_id: '', job_type: 'Lao động phổ thông', total_labor: '', status: 'Đang tuyển' });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    supabase
+      .from('job_industries')
+      .select('*')
+      .eq('is_active', true)
+      .order('name_vi')
+      .then(({ data }) => setIndustries((data ?? []) as JobIndustry[]));
+  }, []);
+
   const handleSave = async () => {
+    if (!form.industry_id) { setError('Chọn ngành nghề tuyển dụng là bắt buộc'); return; }
     if (!form.job_type.trim()) { setError('Vị trí công việc là bắt buộc'); return; }
     setSaving(true);
     const orderId = await generateOrderId(companyShortName);
     const { error: dbErr } = await supabase.from('orders').insert({
       id: orderId,
       company_id: companyId,
+      industry_id: form.industry_id,
       company_name: companyName,
       job_type: form.job_type.trim(),
       total_labor: form.total_labor ? parseInt(form.total_labor) : null,
@@ -66,6 +79,19 @@ export default function QuickAddOrderModal({
         <p className="text-xs text-gray-500 mb-4">Công ty: <strong>{companyName}</strong></p>
         {error && <p className="text-red-600 text-sm mb-3">{error}</p>}
         <div className="space-y-3">
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Ngành nghề tuyển dụng <span className="text-red-500">*</span></label>
+            <select
+              value={form.industry_id}
+              onChange={(e) => setForm(f => ({ ...f, industry_id: e.target.value }))}
+              className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 min-h-[44px] focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white"
+            >
+              <option value="">Chọn ngành nghề</option>
+              {industries.map((industry) => (
+                <option key={industry.id} value={industry.id}>{industry.name_vi}</option>
+              ))}
+            </select>
+          </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">Vị trí / Loại lao động <span className="text-red-500">*</span></label>
             <input type="text" value={form.job_type} onChange={(e) => setForm(f => ({ ...f, job_type: e.target.value }))}

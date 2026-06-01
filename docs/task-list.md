@@ -111,11 +111,15 @@ Tập trung hoàn thiện toàn bộ chức năng vận hành trên website (por
 - Description: Hỏi user để chốt nghiệp vụ job positions trước khi thiết kế DB/API/UI.
 
 **Business rules confirmed (2026-05-31):**
-- Job positions là danh mục dùng chung toàn hệ thống, nhưng chia theo ngành nghề của đơn hàng.
+- Job positions là danh mục dùng chung toàn hệ thống, được nhóm theo ngành nghề song ngữ.
 - Admin và agent đều được gán position cho candidate, nhưng chỉ sau khi candidate đã passed.
 - Mỗi candidate chỉ có 1 position.
-- Field giai đoạn đầu: tên vị trí, số lượng.
-- Quota tổng vẫn tính theo order. Mỗi order có số lượng riêng cho từng position, admin fill số lượng position cho order đó.
+- Field danh mục position: tên vị trí VI/EN, tỷ trọng mặc định %, không có số lượng.
+- Ngành nghề cần quản lý song ngữ VI/EN; không tiếp tục phụ thuộc dịch tự động mỗi lần thêm order/company.
+- Mỗi order chọn một phần hoặc toàn bộ positions thuộc ngành nghề đã chọn thủ công trên order.
+- Quota tổng vẫn tính theo order. Mỗi order-position có số lượng tuyển dụng riêng, admin fill số lượng tại order đó.
+- Tỷ trọng mặc định tính theo `orders.total_labor`, dùng để tham khảo khi assign và warning nếu số ứng viên đã assign vượt tỷ trọng default.
+- UI phải hiển thị số lượng ứng viên khả dụng còn có thể assign cho mỗi vị trí trong order.
 
 **Audit result:**
 - Code hiện có dùng `orders.job_type`/`job_type_en` dạng text tự do để mô tả loại lao động/vị trí trên order.
@@ -130,14 +134,27 @@ Tập trung hoàn thiện toàn bộ chức năng vận hành trên website (por
 
 ---
 
-### [T-WEB-JOBPOS-002] Build website job positions flow — DEPLOYED, PENDING UAT (2026-05-31)
+### [T-WEB-JOBPOS-002] Build website job positions flow — NEEDS UX REWORK (2026-05-31)
 - Type: Feature/DB
 - Agent: Codex
-- Status: **deployed to production, pending UAT** — production ở commit `9866f10`; migration đã chạy trên Supabase; cần test admin/agent bằng tài khoản thật
+- Status: **deployed but UX rejected; rework plan approved for next session** — production ở commit `9866f10`; migration đã chạy trên Supabase; cần rework UX/schema theo plan mới
 - Description: Thêm danh mục vị trí toàn hệ thống, cấu hình số lượng vị trí theo từng order, và gán 1 vị trí cho candidate sau khi candidate passed.
 
+**Approved rework plan (2026-05-31):**
+- Tạo page riêng `/admin/job-positions`, menu label **Vị trí tuyển dụng**.
+- Quản lý danh mục ngành nghề song ngữ VI/EN.
+- Quản lý danh mục position song ngữ VI/EN theo ngành nghề.
+- Position catalog có `default_weight_percent` dạng %, không có số lượng tuyển dụng.
+- Order chọn thủ công ngành nghề.
+- Trong order detail, admin chọn một phần hoặc toàn bộ positions thuộc ngành nghề đã chọn và nhập số lượng tuyển dụng riêng cho từng order-position.
+- Tỷ trọng mặc định tính theo `orders.total_labor`, dùng để tham khảo khi assign candidate và warning nếu assigned count vượt ngưỡng default.
+- Khi tính ngưỡng từ %, xử lý làm tròn tương đối theo tổng và phân bổ thực tế; không áp dụng làm tròn tuyệt đối cứng gây lệch tổng hoặc warning sai.
+- UI hiển thị số lượng ứng viên khả dụng còn có thể assign cho mỗi vị trí trong order.
+- Candidate passed được gán 1 position trong list position đã chọn của order.
+- Không implement UI mới nếu chưa trình UX/UI chi tiết và được user duyệt lại.
+
 **Expected scope:**
-- DB: position catalog theo ngành nghề, order-position quota, candidate position assignment.
+- DB: industry catalog song ngữ, position catalog song ngữ theo industry kèm default weight %, order-position quota, candidate position assignment.
 - Admin: quản lý position catalog; fill số lượng từng position trong order.
 - Admin/Agent: gán position cho candidate đã passed.
 - Validation: không cho gán position cho candidate chưa passed; mỗi candidate tối đa 1 position.
@@ -161,6 +178,7 @@ Tập trung hoàn thiện toàn bộ chức năng vận hành trên website (por
 - Verify: PostgREST trả 200 cho `job_positions`, `order_positions`, và `candidates.position_id`.
 - Deploy verify: VPS `/var/www/portal` chạy commit `9866f10`; `npm run build` pass; portal service active; health check trả 200; `TELEGRAM_BRIDGE_SECRET` khớp n8n.
 - Pending: UAT admin/agent bằng tài khoản thật.
+- Rework note: UX hiện tại trong order detail không đúng ý user vì trộn quản lý catalog với cấu hình order. Phiên sau cần refactor theo approved rework plan ở trên.
 
 ---
 
@@ -378,3 +396,11 @@ Tập trung hoàn thiện toàn bộ chức năng vận hành trên website (por
 - Task mới → PM thêm vào P1/P2/P3 theo độ ưu tiên vận hành
 - Format ID: `T-{CATEGORY}-{SEQ}` (T-WEB-*, T-TELE-*, T-LARK-*)
 - Telegram/Lark chỉ nhận task mới khi toàn bộ P1 hoàn thành và P2 cơ bản ổn định
+
+### [T-WEB-JOBPOS-003] Rework delete UX for order job positions — ✅ DONE (2026-06-02)
+
+- Context: Admin order detail supports configuring recruitment positions per order, auto-calculating quantities from default position weights, showing total/difference, compacting the UI, and placing the module directly above candidates.
+- Result: order detail now separates available catalog positions from selected order positions. The visible list renders selected `order_positions` only, with an explicit add/select flow for catalog positions.
+- Delete UX: deleting a position saves quantity `0` through the existing API path, backend removes the `order_positions` row and clears affected candidate assignments, then UI removes the row from the selected list immediately.
+- Quantity edit UX: row quantity inputs no longer auto-save on blur. Admin can edit multiple rows locally, then use `Lưu thay đổi` or `Huỷ thay đổi`. `Tính lại theo tỷ trọng` now updates local pending quantities only.
+- Verification: user UAT passed; `npx tsc --noEmit` passed after implementation. Candidate assignment dropdown remains limited to selected positions with quantity > 0; totals/difference use selected positions only; recalculation does not re-add removed positions.

@@ -15,6 +15,7 @@ Before implementing:
 - State your assumptions explicitly. If uncertain, ask.
 - If multiple interpretations exist, present them - don't pick silently.
 - If a simpler approach exists, say so. Push back when warranted.
+- For product/UX decisions, research local context and external benchmarks before recommending; state confidence and open questions.
 - If something is unclear, stop. Name what's confusing. Ask.
 
 ## 2. Simplicity First
@@ -36,6 +37,14 @@ When a task asks for a capability but does not specify where it belongs in the p
 - Do not add new dashboard modules, KPI cards, nav items, inboxes, queues, or persistent panels without explicit user approval.
 - First report the proposed placement and tradeoff, then wait for confirmation before implementing.
 - For high-volume operational data, avoid dashboards by default; prefer dedicated list pages, filters, or workflows unless the user approves dashboard placement.
+
+### UX/UI design requires user approval before implementation
+
+For any feature that changes visible screens, forms, tables, cards, modals, navigation, or workflow layout, stop after proposing the UX/UI.
+
+- Present the intended placement, user flow, fields/actions, and responsive behavior before building.
+- Wait for explicit user approval of the UX/UI direction before implementing code.
+- Business-rule approval is not UX/UI approval. Treat schema/API approval and UI approval as separate gates.
 
 ## 3. Surgical Changes
 
@@ -74,6 +83,14 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 ---
 
 **These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
+
+---
+
+## Communication style
+
+- Focus only on high-value information.
+- Keep responses short and direct.
+- Avoid circular explanations, filler words, and unnecessary background.
 
 ---
 
@@ -216,3 +233,9 @@ Bất kỳ thay đổi nào với các file trên → trình bày rõ sẽ sửa
 | UI patterns, responsive, Tailwind conventions | `docs/ui-patterns.md` |
 | Quy tắc code chi tiết (process, data safety, security) | `docs/coding-rules.md` |
 | Hướng dẫn làm việc hằng ngày, workflow đa agent | `.claude/CLAUDE.md` |
+## Transcript hygiene — bắt buộc khi dùng tool
+
+- Không chạy lệnh in nội dung file/code/diff ra transcript như `cat`, `sed`, `grep -n`, `git diff` trừ khi user yêu cầu rõ ràng.
+- Ưu tiên audit bằng metadata và codegraph: danh sách file, symbol/context no-code, status/stat, pass/fail.
+- Nếu phải đọc code để sửa, đọc phạm vi tối thiểu qua tool và không quote lại trong chat; chỉ báo cáo file đã đọc/sửa, mục đích, kết quả.
+- Build/test chỉ báo cáo pass/fail và lỗi ngắn cần hành động; không paste output dài.

@@ -48,8 +48,8 @@ export default function CompanyDetailPage() {
   const [form, setForm] = useState({
     company_name: '', short_name: '', tax_code: '', legal_rep: '',
     legal_rep_title: '', address: '', phone: '', email: '',
-    industry: '', business_type: '', business_reg_authority: '', business_reg_date: '',
-    en_company_name: '', en_industry: '', en_business_type: '',
+    business_type: '', business_reg_authority: '', business_reg_date: '',
+    en_company_name: '', en_business_type: '',
     en_address: '', en_legal_rep: '', en_title: '',
   });
 
@@ -80,12 +80,10 @@ export default function CompanyDetailPage() {
           address: c.address ?? '',
           phone: c.phone ?? '',
           email: c.email ?? '',
-          industry: c.industry ?? '',
           business_type: c.business_type ?? '',
           business_reg_authority: c.business_reg_authority ?? '',
           business_reg_date: c.business_reg_date ?? '',
           en_company_name: c.en_company_name ?? '',
-          en_industry: c.en_industry ?? '',
           en_business_type: c.en_business_type ?? '',
           en_address: c.en_address ?? '',
           en_legal_rep: c.en_legal_rep ?? '',
@@ -125,12 +123,10 @@ export default function CompanyDetailPage() {
       address: form.address.trim() || null,
       phone: form.phone.trim() || null,
       email: form.email.trim() || null,
-      industry: form.industry.trim() || null,
       business_type: form.business_type.trim() || null,
       business_reg_authority: form.business_reg_authority.trim() || null,
       business_reg_date: form.business_reg_date.trim() || null,
       en_company_name: form.en_company_name.trim() || null,
-      en_industry: form.en_industry.trim() || null,
       en_business_type: form.en_business_type.trim() || null,
       en_address: form.en_address.trim() || null,
       en_legal_rep: form.en_legal_rep.trim() || null,
@@ -493,10 +489,7 @@ export default function CompanyDetailPage() {
               <div><label className="block text-xs text-gray-500 mb-1">SĐT</label><input type="text" value={form.phone} onChange={(e) => setField('phone', e.target.value)} className={inputCls} /></div>
               <div><label className="block text-xs text-gray-500 mb-1">Email</label><input type="text" value={form.email} onChange={(e) => setField('email', e.target.value)} className={inputCls} /></div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div><label className="block text-xs text-gray-500 mb-1">Ngành nghề</label><input type="text" value={form.industry} onChange={(e) => setField('industry', e.target.value)} className={inputCls} /></div>
-              <div><label className="block text-xs text-gray-500 mb-1">Loại hình DN</label><input type="text" value={form.business_type} onChange={(e) => setField('business_type', e.target.value)} className={inputCls} /></div>
-            </div>
+            <div><label className="block text-xs text-gray-500 mb-1">Loại hình DN</label><input type="text" value={form.business_type} onChange={(e) => setField('business_type', e.target.value)} className={inputCls} /></div>
             <div className="grid grid-cols-2 gap-3">
               <div><label className="block text-xs text-gray-500 mb-1">Cơ quan cấp ĐKKD</label><input type="text" value={form.business_reg_authority} onChange={(e) => setField('business_reg_authority', e.target.value)} className={inputCls} /></div>
               <div><label className="block text-xs text-gray-500 mb-1">Ngày cấp</label><input type="text" value={form.business_reg_date} onChange={(e) => setField('business_reg_date', e.target.value)} className={inputCls} /></div>
@@ -512,10 +505,7 @@ export default function CompanyDetailPage() {
           </div>
           <div className="p-4 space-y-3">
             <div><label className="block text-xs text-gray-500 mb-1">Company Name (EN)</label><input type="text" value={form.en_company_name} onChange={(e) => setField('en_company_name', e.target.value)} className={inputCls} /></div>
-            <div className="grid grid-cols-2 gap-3">
-              <div><label className="block text-xs text-gray-500 mb-1">Industry (EN)</label><input type="text" value={form.en_industry} onChange={(e) => setField('en_industry', e.target.value)} className={inputCls} /></div>
-              <div><label className="block text-xs text-gray-500 mb-1">Business Type (EN)</label><input type="text" value={form.en_business_type} onChange={(e) => setField('en_business_type', e.target.value)} className={inputCls} /></div>
-            </div>
+            <div><label className="block text-xs text-gray-500 mb-1">Business Type (EN)</label><input type="text" value={form.en_business_type} onChange={(e) => setField('en_business_type', e.target.value)} className={inputCls} /></div>
             <div><label className="block text-xs text-gray-500 mb-1">Address (EN)</label><input type="text" value={form.en_address} onChange={(e) => setField('en_address', e.target.value)} className={inputCls} /></div>
             <div className="grid grid-cols-2 gap-3">
               <div><label className="block text-xs text-gray-500 mb-1">Legal Rep (EN)</label><input type="text" value={form.en_legal_rep} onChange={(e) => setField('en_legal_rep', e.target.value)} className={inputCls} /></div>

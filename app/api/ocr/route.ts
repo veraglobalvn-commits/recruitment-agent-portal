@@ -10,7 +10,6 @@ interface OcrParsed {
   address: string;
   phone: string;
   email: string;
-  industry: string;
   regAuthority: string;
   regDate: string;
 }
@@ -48,7 +47,6 @@ async function extractWithOpenRouter(rawText: string): Promise<OcrParsed> {
   "address": "địa chỉ trụ sở chính đầy đủ",
   "phone": "số điện thoại",
   "email": "email",
-  "industry": "ngành nghề chính",
   "regAuthority": "cơ quan đăng ký",
   "regDate": "ngày đăng ký lần đầu (dd/mm/yyyy)"
 }
@@ -86,7 +84,6 @@ ${rawText}`,
     address: parsed.address ?? '',
     phone: parsed.phone ?? '',
     email: parsed.email ?? '',
-    industry: parsed.industry ?? '',
     regAuthority: parsed.regAuthority ?? '',
     regDate: parsed.regDate ?? '',
   };

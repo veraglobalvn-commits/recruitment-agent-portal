@@ -12,6 +12,7 @@ export interface Order {
   order_id: string;
   company: string | null;
   company_id: string | null;
+  industry_id?: string | null;
   en_company_name: string | null;
   total_labor: number | string;
   missing: number | string;
@@ -86,10 +87,25 @@ export interface Candidate {
 export interface JobPosition {
   id: string;
   industry: string;
+  industry_id: string | null;
   name: string;
+  name_vi: string | null;
+  name_en: string | null;
+  description_en: string | null;
+  default_weight_percent: number | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
+}
+
+export interface JobIndustry {
+  id: string;
+  name_vi: string;
+  name_en: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  positions?: JobPosition[];
 }
 
 export interface OrderPosition {
@@ -182,6 +198,7 @@ export interface CompanyOrderStat {
 export interface AdminOrder {
   id: string;
   company_id: string | null;
+  industry_id: string | null;
   company_name: string | null;
   en_company_name: string | null;
   job_type: string | null;

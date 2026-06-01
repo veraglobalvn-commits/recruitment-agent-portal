@@ -56,15 +56,19 @@ async function canReadOrderPositions(
 async function getOrderIndustry(auth: NonNullable<Awaited<ReturnType<typeof getAuthenticatedUser>>>, orderId: string) {
   const { data, error } = await auth.supabase
     .from('orders')
-    .select('id, companies!orders_company_id_fkey(industry, en_industry)')
+    .select('id, industry_id, industry:job_industries(id, name_vi, name_en)')
     .eq('id', orderId)
     .maybeSingle();
 
   if (error) throw new Error(error.message);
   if (!data) return null;
 
-  const company = (data as any).companies as { industry?: string | null; en_industry?: string | null } | null;
-  return (company?.industry || company?.en_industry || 'Chưa phân ngành').trim();
+  const industry = (data as any).industry as { id: string; name_vi: string; name_en?: string | null } | null;
+  return {
+    industry_id: (data as any).industry_id as string | null,
+    industry_name: industry?.name_vi ?? '',
+    industry,
+  };
 }
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
@@ -79,16 +83,21 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   }
 
   try {
-    const industry = await getOrderIndustry(auth, params.id);
-    if (!industry) return NextResponse.json({ error: 'Không tìm thấy đơn hàng' }, { status: 404 });
+    const orderIndustry = await getOrderIndustry(auth, params.id);
+    if (!orderIndustry) return NextResponse.json({ error: 'Không tìm thấy đơn hàng' }, { status: 404 });
 
-    const [positionsRes, quotasRes, candidatesRes] = await Promise.all([
+    const [industriesRes, positionsRes, quotasRes, candidatesRes] = await Promise.all([
       auth.supabase
+        .from('job_industries')
+        .select('*')
+        .eq('is_active', true)
+        .order('name_vi'),
+      orderIndustry.industry_id ? auth.supabase
         .from('job_positions')
         .select('*')
-        .eq('industry', industry)
+        .eq('industry_id', orderIndustry.industry_id)
         .eq('is_active', true)
-        .order('name'),
+        .order('name_vi') : Promise.resolve({ data: [], error: null }),
       auth.supabase
         .from('order_positions')
         .select('*, position:job_positions(*)')
@@ -100,6 +109,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
         .eq('order_id', params.id),
     ]);
 
+    if (industriesRes.error) throw new Error(industriesRes.error.message);
     if (positionsRes.error) throw new Error(positionsRes.error.message);
     if (quotasRes.error) throw new Error(quotasRes.error.message);
     if (candidatesRes.error) throw new Error(candidatesRes.error.message);
@@ -116,7 +126,10 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     }));
 
     return NextResponse.json({
-      industry,
+      industry: orderIndustry.industry_name,
+      industry_id: orderIndustry.industry_id,
+      order_industry: orderIndustry.industry,
+      industries: industriesRes.data ?? [],
       positions: positionsRes.data ?? [],
       order_positions: orderPositions,
     });
@@ -129,27 +142,35 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const auth = await getAdminUser(req);
   if (!auth) return unauthorizedResponse();
 
-  const body = await req.json() as { name?: string; industry?: string };
+  const body = await req.json() as { name?: string; industry_id?: string };
   const name = body.name?.trim();
   if (!name) return NextResponse.json({ error: 'Tên vị trí là bắt buộc' }, { status: 400 });
 
   try {
     const orderIndustry = await getOrderIndustry(auth, params.id);
-    const industry = (body.industry || orderIndustry || '').trim();
-    if (!industry) return NextResponse.json({ error: 'Ngành nghề là bắt buộc' }, { status: 400 });
+    const industryId = (body.industry_id || orderIndustry?.industry_id || '').trim();
+    if (!industryId) return NextResponse.json({ error: 'Ngành nghề là bắt buộc' }, { status: 400 });
+
+    const { data: industry, error: industryErr } = await auth.supabase
+      .from('job_industries')
+      .select('id, name_vi')
+      .eq('id', industryId)
+      .maybeSingle();
+    if (industryErr) return NextResponse.json({ error: industryErr.message }, { status: 500 });
+    if (!industry) return NextResponse.json({ error: 'Không tìm thấy ngành nghề' }, { status: 404 });
 
     const { data: existing } = await auth.supabase
       .from('job_positions')
       .select('*')
-      .eq('industry', industry)
-      .ilike('name', name)
+      .eq('industry_id', industry.id)
+      .ilike('name_vi', name)
       .maybeSingle();
 
     if (existing) return NextResponse.json({ data: existing });
 
     const { data, error } = await auth.supabase
       .from('job_positions')
-      .insert({ industry, name, is_active: true })
+      .insert({ industry_id: industry.id, industry: industry.name_vi, name, name_vi: name, is_active: true })
       .select()
       .single();
 
@@ -164,7 +185,72 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const auth = await getAdminUser(req);
   if (!auth) return unauthorizedResponse();
 
-  const body = await req.json() as { position_id?: string; quantity?: number };
+  const body = await req.json() as { industry_id?: string | null; position_id?: string; quantity?: number };
+  if ('industry_id' in body) {
+    const industryId = body.industry_id || null;
+    if (industryId) {
+      const { data: industry, error: industryErr } = await auth.supabase
+        .from('job_industries')
+        .select('id')
+        .eq('id', industryId)
+        .maybeSingle();
+      if (industryErr) return NextResponse.json({ error: industryErr.message }, { status: 500 });
+      if (!industry) return NextResponse.json({ error: 'Không tìm thấy ngành nghề' }, { status: 404 });
+    }
+
+    const { error: orderErr } = await auth.supabase
+      .from('orders')
+      .update({ industry_id: industryId })
+      .eq('id', params.id);
+    if (orderErr) return NextResponse.json({ error: orderErr.message }, { status: 500 });
+
+    if (industryId) {
+      const { data: validPositions, error: validErr } = await auth.supabase
+        .from('job_positions')
+        .select('id')
+        .eq('industry_id', industryId);
+      if (validErr) return NextResponse.json({ error: validErr.message }, { status: 500 });
+
+      const validIds = new Set((validPositions ?? []).map((position) => position.id));
+      const [currentQuotas, currentCandidates] = await Promise.all([
+        auth.supabase.from('order_positions').select('position_id').eq('order_id', params.id),
+        auth.supabase.from('candidates').select('position_id').eq('order_id', params.id).not('position_id', 'is', null),
+      ]);
+      if (currentQuotas.error) return NextResponse.json({ error: currentQuotas.error.message }, { status: 500 });
+      if (currentCandidates.error) return NextResponse.json({ error: currentCandidates.error.message }, { status: 500 });
+
+      const invalidQuotaIds = Array.from(new Set((currentQuotas.data ?? []).map((row) => row.position_id).filter((positionId) => !validIds.has(positionId))));
+      const invalidCandidateIds = Array.from(new Set((currentCandidates.data ?? []).map((row) => row.position_id).filter((positionId) => positionId && !validIds.has(positionId))));
+
+      if (invalidQuotaIds.length > 0) {
+        const { error: quotaErr } = await auth.supabase
+          .from('order_positions')
+          .delete()
+          .eq('order_id', params.id)
+          .in('position_id', invalidQuotaIds);
+        if (quotaErr) return NextResponse.json({ error: quotaErr.message }, { status: 500 });
+      }
+
+      if (invalidCandidateIds.length > 0) {
+        const { error: candidateErr } = await auth.supabase
+          .from('candidates')
+          .update({ position_id: null })
+          .eq('order_id', params.id)
+          .in('position_id', invalidCandidateIds);
+        if (candidateErr) return NextResponse.json({ error: candidateErr.message }, { status: 500 });
+      }
+    } else {
+      const [quotaRes, candidateRes] = await Promise.all([
+        auth.supabase.from('order_positions').delete().eq('order_id', params.id),
+        auth.supabase.from('candidates').update({ position_id: null }).eq('order_id', params.id),
+      ]);
+      if (quotaRes.error) return NextResponse.json({ error: quotaRes.error.message }, { status: 500 });
+      if (candidateRes.error) return NextResponse.json({ error: candidateRes.error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true });
+  }
+
   if (!body.position_id) return NextResponse.json({ error: 'position_id là bắt buộc' }, { status: 400 });
 
   const quantity = Number(body.quantity ?? 0);
@@ -173,12 +259,20 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
 
   if (quantity === 0) {
-    const { error } = await auth.supabase
-      .from('order_positions')
-      .delete()
-      .eq('order_id', params.id)
-      .eq('position_id', body.position_id);
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    const [quotaRes, candidateRes] = await Promise.all([
+      auth.supabase
+        .from('order_positions')
+        .delete()
+        .eq('order_id', params.id)
+        .eq('position_id', body.position_id),
+      auth.supabase
+        .from('candidates')
+        .update({ position_id: null })
+        .eq('order_id', params.id)
+        .eq('position_id', body.position_id),
+    ]);
+    if (quotaRes.error) return NextResponse.json({ error: quotaRes.error.message }, { status: 500 });
+    if (candidateRes.error) return NextResponse.json({ error: candidateRes.error.message }, { status: 500 });
     return NextResponse.json({ success: true, data: null });
   }
 

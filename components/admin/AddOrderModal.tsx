@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
-import type { AdminOrder, AgentOption } from '@/lib/types';
+import type { AdminOrder, AgentOption, JobIndustry } from '@/lib/types';
 import { fmtUSD } from '@/lib/formatters';
 import { fetchActiveAgents } from '@/lib/query-helpers';
 
@@ -20,6 +20,7 @@ interface CompanyOption {
 
 export default function AddOrderModal({ onClose, onSaved, prefillCompanyId }: AddOrderModalProps) {
   const [companies, setCompanies] = useState<CompanyOption[]>([]);
+  const [industries, setIndustries] = useState<JobIndustry[]>([]);
   const [agents, setAgents] = useState<AgentOption[]>([]);
   const [companySearch, setCompanySearch] = useState('');
   const [selectedCompany, setSelectedCompany] = useState<CompanyOption | null>(null);
@@ -27,6 +28,7 @@ export default function AddOrderModal({ onClose, onSaved, prefillCompanyId }: Ad
   const [defaultFeeVnd, setDefaultFeeVnd] = useState('18270000');
   const [defaultFeeUsd, setDefaultFeeUsd] = useState('1500');
   const [form, setForm] = useState({
+    industry_id: '',
     job_type: '',
     total_labor: '',
     salary_usd: '',
@@ -45,7 +47,9 @@ export default function AddOrderModal({ onClose, onSaved, prefillCompanyId }: Ad
         fetchActiveAgents(),
         supabase.from('policy_settings').select('key, value').in('key', ['default_fee_vnd', 'default_fee_usd']),
       ]);
+      const industryRes = await supabase.from('job_industries').select('*').eq('is_active', true).order('name_vi');
       setCompanies((compRes.data ?? []) as CompanyOption[]);
+      setIndustries((industryRes.data ?? []) as JobIndustry[]);
       setAgents(activeAgents);
       if (policyRes.data) {
         const map = Object.fromEntries((policyRes.data as { key: string; value: string }[]).map(r => [r.key, r.value]));
@@ -106,6 +110,7 @@ export default function AddOrderModal({ onClose, onSaved, prefillCompanyId }: Ad
 
   const handleSave = async (andView = false) => {
     if (!selectedCompany) { setError('Chọn công ty là bắt buộc'); return; }
+    if (!form.industry_id) { setError('Chọn ngành nghề tuyển dụng là bắt buộc'); return; }
     if (!form.job_type.trim()) { setError('Vị trí công việc là bắt buộc'); return; }
     setSaving(true);
     setError(null);
@@ -117,6 +122,7 @@ export default function AddOrderModal({ onClose, onSaved, prefillCompanyId }: Ad
       const payload = {
         id: orderId,
         company_id: selectedCompany.id,
+        industry_id: form.industry_id,
         company_name: selectedCompany.company_name,
         job_type: form.job_type.trim(),
         total_labor: laborCount,
@@ -211,6 +217,20 @@ export default function AddOrderModal({ onClose, onSaved, prefillCompanyId }: Ad
                 )}
               </>
             )}
+          </div>
+
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Ngành nghề tuyển dụng <span className="text-red-500">*</span></label>
+            <select
+              value={form.industry_id}
+              onChange={(e) => set('industry_id', e.target.value)}
+              className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 min-h-[44px] focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white"
+            >
+              <option value="">Chọn ngành nghề</option>
+              {industries.map((industry) => (
+                <option key={industry.id} value={industry.id}>{industry.name_vi}</option>
+              ))}
+            </select>
           </div>
 
           <div>
