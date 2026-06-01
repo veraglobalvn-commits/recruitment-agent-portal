@@ -259,8 +259,15 @@ export default function CandidateCard({
         </div>
 
         <div className="flex-1 min-w-0">
-          <div className="flex items-start gap-1 mb-0.5">
+          <div className="flex items-start gap-2 mb-0.5">
             <h3 className="font-bold text-gray-800 text-sm leading-tight flex-1 min-w-0 truncate">{candidate.full_name || <span className="text-red-400">N/A</span>}</h3>
+            <button
+              onClick={() => setEditing(true)}
+              className="shrink-0 text-xs text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg min-h-[44px] min-w-[44px] flex items-center justify-center"
+              aria-label="Edit candidate"
+            >
+              ✏️
+            </button>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             {candidate.candidate_confirmed ? (

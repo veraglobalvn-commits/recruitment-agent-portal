@@ -62,7 +62,6 @@ export default function OrderDetail() {
     fullName: string; orderId: string; ppNo: string;
     visaStatus: string | null; interviewStatus: string | null;
   } | null>(null);
-  const [pendingUpload, setPendingUpload] = useState<{ base64: string; agentId: string | null } | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [addForm, setAddForm] = useState({
     full_name: '', pp_no: '', dob: '', pp_doi: '', pp_doe: '',
@@ -380,10 +379,21 @@ export default function OrderDetail() {
       const idLd = `${addForm.pp_no.trim()}_${cleanName}`;
       const agentId = getEffectiveAgentId();
 
-      const { data: existing } = await supabase.from('candidates').select('id_ld, full_name, order_id').eq('id_ld', idLd).maybeSingle();
+      const { data: existing } = await supabase
+        .from('candidates')
+        .select('id_ld, full_name, order_id, pp_no, visa_status, interview_status')
+        .or(`id_ld.eq.${idLd},pp_no.eq.${addForm.pp_no.trim()}`)
+        .limit(1)
+        .maybeSingle();
       if (existing) {
-        setUploadMsg(`Candidate "${existing.full_name}" already exists in order ${existing.order_id}`);
-        setTimeout(() => setUploadMsg(null), 4000);
+        setDupWarning({
+          fullName: existing.full_name || 'Unknown',
+          orderId: existing.order_id || 'Unknown',
+          ppNo: existing.pp_no || addForm.pp_no.trim(),
+          visaStatus: existing.visa_status,
+          interviewStatus: existing.interview_status,
+        });
+        setShowAddForm(false);
         setAddSaving(false);
         return;
       }
@@ -473,7 +483,6 @@ export default function OrderDetail() {
               visaStatus: warn.existing.visa_status,
               interviewStatus: warn.existing.interview_status,
             });
-            setPendingUpload({ base64: compressedBase64, agentId });
             setIsUploading(false);
             if (fileInputRef.current) fileInputRef.current.value = '';
             return;
@@ -504,42 +513,6 @@ export default function OrderDetail() {
     };
     reader.readAsDataURL(file);
   };
-
-  const handleConfirmUpdate = useCallback(async () => {
-    if (!pendingUpload) return;
-    setIsUploading(true);
-    setDupWarning(null);
-    const { data: { session } } = await supabase.auth.getSession();
-    try {
-      const res = await fetch('/api/passport', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
-        },
-        body: JSON.stringify({
-          image_base64: pendingUpload.base64,
-          order_id: orderId,
-          agent_id: pendingUpload.agentId,
-          forceUpdate: true,
-        }),
-      });
-      setPendingUpload(null);
-      if (res.ok) {
-        sessionStorage.removeItem(`c_url_${orderId}`);
-        setUploadMsg('✅ Candidate information updated');
-        setTimeout(() => setUploadMsg(null), 3000);
-        fetchCandidates();
-      } else {
-        const errData = await res.json() as { error?: string };
-        setUploadMsg(`Error: ${errData.error || 'Unknown'}`);
-      }
-    } catch (err) {
-      setUploadMsg(`Error: ${err instanceof Error ? err.message : String(err)}`);
-    } finally {
-      setIsUploading(false);
-    }
-  }, [pendingUpload, orderId, fetchCandidates]);
 
   const handleVideoUploadClick = useCallback((candidateId: string) => {
     setVideoUploadingCandidate(candidateId);
@@ -943,21 +916,25 @@ export default function OrderDetail() {
                     {dupWarning.interviewStatus && `Interview: ${dupWarning.interviewStatus}`}
                   </p>
                 )}
-                <p className="text-sm text-gray-600 mt-2">Update with new passport info?</p>
+                <p className="text-sm text-gray-600 mt-2">Delete this candidate from that order before adding again.</p>
               </div>
             </div>
             <div className="flex gap-2">
               <button
-                onClick={() => { setDupWarning(null); setPendingUpload(null); }}
+                onClick={() => setDupWarning(null)}
                 className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 rounded-xl text-sm min-h-[44px]"
               >
                 Cancel
               </button>
               <button
-                onClick={handleConfirmUpdate}
-                className="flex-1 bg-amber-500 hover:bg-amber-600 text-white font-semibold py-3 rounded-xl text-sm min-h-[44px]"
+                onClick={() => {
+                  const existingOrderId = dupWarning.orderId;
+                  setDupWarning(null);
+                  router.push(`/order/${encodeURIComponent(existingOrderId)}`);
+                }}
+                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl text-sm min-h-[44px]"
               >
-                Update
+                Go to order
               </button>
             </div>
           </div>
@@ -979,14 +956,14 @@ export default function OrderDetail() {
               disabled={isUploading}
               className="flex items-center gap-2 px-4 py-2 bg-white rounded-full shadow-lg border border-gray-200 hover:bg-gray-50 transition-colors min-h-[44px] disabled:opacity-50"
             >
-              <span className="text-sm font-medium text-gray-700">Passport</span>
+              <span className="text-sm font-medium text-gray-700">Scan Passport</span>
               <span className="text-xl">🪪</span>
             </button>
             <button
               onClick={() => { setFabMenuOpen(false); setShowAddForm(true); }}
               className="flex items-center gap-2 px-4 py-2 bg-white rounded-full shadow-lg border border-gray-200 hover:bg-gray-50 transition-colors min-h-[44px]"
             >
-              <span className="text-sm font-medium text-gray-700">Add Candidate</span>
+              <span className="text-sm font-medium text-gray-700">Add Manually</span>
               <span className="text-xl">👤</span>
             </button>
           </div>

@@ -138,21 +138,48 @@ function generateIdLd(ppNo: string, fullName: string): string {
   return `${ppNo}_${cleanName}`;
 }
 
+async function resolveEffectiveAgentId(authResult: NonNullable<Awaited<ReturnType<typeof getAuthenticatedUser>>>) {
+  const { data: userData, error } = await authResult.supabase
+    .from('users')
+    .select('id, role, status, agency_id')
+    .eq('supabase_uid', authResult.user.id)
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  if (!userData || userData.status !== 'active') return null;
+  if (userData.role !== 'member') return userData.id as string;
+  if (!userData.agency_id) return null;
+
+  const { data: owner, error: ownerError } = await authResult.supabase
+    .from('users')
+    .select('id')
+    .eq('agency_id', userData.agency_id)
+    .eq('role', 'agent')
+    .eq('status', 'active')
+    .maybeSingle();
+
+  if (ownerError) throw new Error(ownerError.message);
+  return (owner?.id as string | undefined) ?? null;
+}
+
 export async function POST(req: NextRequest) {
   try {
     const authResult = await getAuthenticatedUser(req);
     if (!authResult) return unauthorizedResponse();
 
-    const { image_base64, order_id, agent_id, forceUpdate } = await req.json() as {
+    const { image_base64, order_id } = await req.json() as {
       image_base64: string;
       order_id: string;
-      agent_id: string | null;
+      agent_id?: string | null;
       forceUpdate?: boolean;
     };
 
     if (!image_base64 || !order_id) {
       return NextResponse.json({ error: 'image_base64 and order_id are required' }, { status: 400 });
     }
+
+    const effectiveAgentId = await resolveEffectiveAgentId(authResult);
+    if (!effectiveAgentId) return unauthorizedResponse('Tài khoản không hoạt động');
 
     const cleanBase64 = image_base64.replace(/[\s\n]+/g, '');
 
@@ -164,20 +191,21 @@ export async function POST(req: NextRequest) {
 
     const idLd = generateIdLd(parsed.PP_No, parsed.Full_Name);
 
-    // Kiểm tra trùng ứng viên (theo id_ld = passport + tên)
-    if (!forceUpdate) {
-      const { data: existing } = await supabaseAdmin
-        .from('candidates')
-        .select('id_ld, full_name, order_id, pp_no, visa_status, interview_status')
-        .eq('id_ld', idLd)
-        .maybeSingle();
+    // Duplicate candidates must be deleted first, then re-added to the target order.
+    const duplicateQuery = supabaseAdmin
+      .from('candidates')
+      .select('id_ld, full_name, order_id, pp_no, visa_status, interview_status')
+      .or(`id_ld.eq.${idLd}${parsed.PP_No ? `,pp_no.eq.${parsed.PP_No}` : ''}`)
+      .limit(1)
+      .maybeSingle();
+    const { data: existing, error: duplicateError } = await duplicateQuery;
 
-      if (existing) {
-        return NextResponse.json(
-          { duplicate: true, existing },
-          { status: 409 },
-        );
-      }
+    if (duplicateError) throw new Error(duplicateError.message);
+    if (existing) {
+      return NextResponse.json(
+        { duplicate: true, existing },
+        { status: 409 },
+      );
     }
 
     // Step 3: Save image to Supabase Storage
@@ -202,7 +230,7 @@ export async function POST(req: NextRequest) {
     const candidateData = {
       id_ld: idLd,
       order_id,
-      agent_id: agent_id || null,
+      agent_id: effectiveAgentId,
       full_name: parsed.Full_Name || null,
       pp_no: parsed.PP_No || null,
       dob: parsed.DOB || null,
@@ -216,7 +244,7 @@ export async function POST(req: NextRequest) {
 
     const { error: insertErr } = await supabaseAdmin
       .from('candidates')
-      .upsert(candidateData, { onConflict: 'id_ld' });
+      .insert(candidateData);
 
     if (insertErr) {
       console.error('[Passport] DB insert error:', insertErr);
@@ -230,7 +258,7 @@ export async function POST(req: NextRequest) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          agent_id: agent_id || '',
+          agent_id: effectiveAgentId,
           order_id,
           image_base64: cleanBase64,
           candidate_id: idLd,
